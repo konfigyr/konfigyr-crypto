@@ -1,9 +1,9 @@
-name: PR Check
+name: Build
 
 on:
-  pull_request:
+  push:
     branches:
-      - '**'
+      - 'main'
 
 jobs:
   build:
