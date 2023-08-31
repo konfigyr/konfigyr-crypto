@@ -1,0 +1,4 @@
+konfigyr:
+  crypto:
+    jdbc:
+      initialize-schema: embedded

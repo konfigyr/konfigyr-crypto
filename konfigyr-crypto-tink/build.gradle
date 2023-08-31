@@ -1,0 +1,4 @@
+dependencies {
+    api project(':konfigyr-crypto-api')
+    api 'com.google.crypto.tink:tink:1.10.0'
+}
