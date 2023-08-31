@@ -211,7 +211,6 @@ class RepostoryKeysetStoreTest {
 			.hasCauseInstanceOf(IOException.class)
 			.extracting("name")
 			.isEqualTo(definition.getName());
-		;
 
 		verify(provider).provide(encryptedKeyset.getKeyEncryptionKey());
 		verify(factory).create(kek, definition);

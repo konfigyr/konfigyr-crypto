@@ -142,7 +142,6 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 		return Optional.of(keysets.get(0));
 	}
 
-	@NonNull
 	@Override
 	public void write(@NonNull EncryptedKeyset keyset) {
 		transactionOperations.executeWithoutResult(status -> {
@@ -155,7 +154,6 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 		});
 	}
 
-	@NonNull
 	@Override
 	public void remove(@NonNull String name) {
 		transactionOperations.executeWithoutResult(status -> jdbcOperations.update(deleteKeysetQuery, pss -> {
@@ -170,7 +168,7 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 			ps.setString(3, keyset.getProvider());
 			ps.setString(4, keyset.getKeyEncryptionKey());
 
-			try (final var creator = lobHandler.getLobCreator()) {
+			try (var creator = lobHandler.getLobCreator()) {
 				creator.setBlobAsBytes(ps, 5, keyset.getData().array());
 			}
 
@@ -184,7 +182,7 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 			ps.setString(1, keyset.getProvider());
 			ps.setString(2, keyset.getKeyEncryptionKey());
 
-			try (final var creator = lobHandler.getLobCreator()) {
+			try (var creator = lobHandler.getLobCreator()) {
 				creator.setBlobAsBytes(ps, 3, keyset.getData().array());
 			}
 
