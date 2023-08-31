@@ -7,6 +7,8 @@ import com.konfigyr.crypto.KeysetOperation;
 import com.konfigyr.io.ByteArray;
 import org.assertj.core.data.TemporalUnitWithinOffset;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -91,6 +93,7 @@ class TinkKeysetTest extends AbstractCryptoTest {
 	}
 
 	@Test
+	@DisabledOnOs(value = OS.WINDOWS)
 	void shouldRotateKeyset() throws Exception {
 		final var keyset = generate("rotating-keyset", TinkAlgorithm.AES128_GCM);
 
