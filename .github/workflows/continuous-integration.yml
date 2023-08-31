@@ -24,3 +24,8 @@ jobs:
           distribution: temurin
       - name: Build with Gradle
         run: ./gradlew check
+      - name: Test Reports
+        uses: mikepenz/action-junit-report@v3
+        if: success() || failure()
+        with:
+          report_paths: '**/build/test-results/test/TEST-*.xml'
