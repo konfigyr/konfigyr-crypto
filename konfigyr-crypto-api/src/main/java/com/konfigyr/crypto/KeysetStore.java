@@ -102,7 +102,6 @@ public interface KeysetStore {
 	 * To create a new {@link Keyset} you would need to specify the identifier of the
 	 * {@link KeyEncryptionKey} that should be used to create one along with the name of
 	 * the {@link KeyEncryptionKeyProvider} that manages the {@literal KEK}.
-	 *
 	 * @param provider key encryption key provider name that manages the KEK, can't be
 	 * {@literal null}
 	 * @param kek key encryption key used to wrap or unwrap the private key material,
@@ -129,7 +128,6 @@ public interface KeysetStore {
 	 * To create a new {@link Keyset} you would need to specify the identifier of the
 	 * {@link KeyEncryptionKey} that should be used to create one along with the name of
 	 * the {@link KeyEncryptionKeyProvider} that manages the {@literal KEK}.
-	 *
 	 * @param kek key encryption key used to wrap or unwrap the private key material,
 	 * can't be {@literal null}.
 	 * @param definition definition to be used when creating a new keyset, can't be
