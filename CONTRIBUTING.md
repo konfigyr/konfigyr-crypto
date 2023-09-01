@@ -21,11 +21,8 @@ There are a few important things to keep in mind when submitting a pull request:
 * Expect feedback and to make changes to your contributions.
 * Unless it is a minor change:
   * It is best to discuss pull requests on an issue before doing work
-  * We expect the pull request to start with a https://github.blog/2019-02-14-introducing-draft-pull-requests/[draft pull request].
+  * We expect the pull request to start with a [draft pull request](https://github.blog/2019-02-14-introducing-draft-pull-requests).
     * The pull request should be as small as possible and focus on a single unit of change.
-    This ensures that we are collaborating together as soon as possible.
-    * Generally, this means do not introduce any new interfaces and as few classes as possible.
-    That may mean using an external library directly in a `Filter`.
     * We will discuss with you how to iterate once you have submitted the initial draft pull request.
 
 ## Squash commits

@@ -102,6 +102,7 @@ public interface KeysetStore {
 	 * To create a new {@link Keyset} you would need to specify the identifier of the
 	 * {@link KeyEncryptionKey} that should be used to create one along with the name of
 	 * the {@link KeyEncryptionKeyProvider} that manages the {@literal KEK}.
+	 *
 	 * @param provider key encryption key provider name that manages the KEK, can't be
 	 * {@literal null}
 	 * @param kek key encryption key used to wrap or unwrap the private key material,
@@ -117,7 +118,32 @@ public interface KeysetStore {
 	 * could not be created
 	 */
 	@NonNull
-	Keyset create(@NonNull String provider, @NonNull String kek, @NonNull KeysetDefinition definition);
+	default Keyset create(@NonNull String provider, @NonNull String kek, @NonNull KeysetDefinition definition) {
+		return create(kek(provider, kek), definition);
+	}
+
+	/**
+	 * Creates a new {@link Keyset} with a single primary key using the given
+	 * {@link Algorithm}
+	 * <p>
+	 * To create a new {@link Keyset} you would need to specify the identifier of the
+	 * {@link KeyEncryptionKey} that should be used to create one along with the name of
+	 * the {@link KeyEncryptionKeyProvider} that manages the {@literal KEK}.
+	 *
+	 * @param kek key encryption key used to wrap or unwrap the private key material,
+	 * can't be {@literal null}.
+	 * @param definition definition to be used when creating a new keyset, can't be
+	 * {@literal null}.
+	 * @throws com.konfigyr.crypto.CryptoException.ProviderNotFoundException when provider
+	 * with a given name does not exist
+	 * @throws com.konfigyr.crypto.CryptoException.KeyEncryptionKeyNotFoundException when
+	 * resolved provider could not resolve the {@link KeyEncryptionKey} with the given
+	 * identifier
+	 * @throws com.konfigyr.crypto.CryptoException.KeysetException when a {@link Keyset}
+	 * could not be created
+	 */
+	@NonNull
+	Keyset create(@NonNull KeyEncryptionKey kek, @NonNull KeysetDefinition definition);
 
 	/**
 	 * Locate the {@link Keyset} by the matching key name from this store.

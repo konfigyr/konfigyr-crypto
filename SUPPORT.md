@@ -11,4 +11,4 @@ much information as possible. Ideally, that would include a small sample project
 reproduces the problem.
 
 ### Gitter
-If you want to discuss something or have a question, the Konfigyr Plugin community chat in the [#konfigyr-plugin room on Gitter](https://gitter.im/konfigyr/konfigyr-plugin).
+If you want to discuss something or have a question, the Konfigyr Plugin community chat in the [#konfigyr-crypto room on Gitter](https://gitter.im/konfigyr/konfigyr-crypto).
