@@ -48,25 +48,16 @@ public final class RepostoryKeysetStore implements KeysetStore {
 	@Override
 	public Keyset create(@NonNull String provider, @NonNull String kek, @NonNull KeysetDefinition definition) {
 		final KeysetFactory factory = lookupFactory(definition);
-		final KeyEncryptionKey master = kek(provider, kek);
 
-		if (logger.isDebugEnabled()) {
-			logger.debug("Attempting to generate Keyset with [definition={}, kek={}]", definition, master);
-		}
+		return create(factory, kek(provider, kek), definition);
+	}
 
-		final Keyset keyset;
+	@NonNull
+	@Override
+	public Keyset create(@NonNull KeyEncryptionKey kek, @NonNull KeysetDefinition definition) {
+		final KeysetFactory factory = lookupFactory(definition);
 
-		try {
-			keyset = factory.create(master, definition);
-		}
-		catch (IOException e) {
-			throw new KeysetException(definition, "Fail to create keyset with name '" + definition.getName()
-					+ "', algorithm '" + definition.getAlgorithm() + "' using KEK '" + master + ".", e);
-		}
-
-		write(factory, keyset);
-
-		return keyset;
+		return create(factory, kek, definition);
 	}
 
 	@NonNull
@@ -168,6 +159,36 @@ public final class RepostoryKeysetStore implements KeysetStore {
 			.filter(it -> it.supports(encryptedKeyset))
 			.findFirst()
 			.orElseThrow(() -> new UnsupportedKeysetException(encryptedKeyset));
+	}
+
+	/**
+	 * Attempts to generate a new {@link Keyset keyset material} using the given
+	 * {@link KeysetFactory} and {@link KeysetDefinition}.
+	 * @param factory factory used to create the keyset, can't be {@literal null}
+	 * @param kek key encryption key for this DEK,, can't be {@literal null}
+	 * @param definition definition to be used when creating a new keyset, can't be
+	 * {@literal null}.
+	 * @return generated keyset
+	 */
+	protected @NonNull Keyset create(@NonNull KeysetFactory factory, @NonNull KeyEncryptionKey kek,
+			@NonNull KeysetDefinition definition) {
+		if (logger.isDebugEnabled()) {
+			logger.debug("Attempting to generate Keyset with [definition={}, kek={}]", definition, kek);
+		}
+
+		final Keyset keyset;
+
+		try {
+			keyset = factory.create(kek, definition);
+		}
+		catch (IOException e) {
+			throw new KeysetException(definition, "Fail to create keyset with name '" + definition.getName()
+					+ "', algorithm '" + definition.getAlgorithm() + "' using KEK '" + kek + ".", e);
+		}
+
+		write(factory, keyset);
+
+		return keyset;
 	}
 
 	/**
