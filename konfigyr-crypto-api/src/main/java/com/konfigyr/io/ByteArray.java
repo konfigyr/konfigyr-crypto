@@ -36,7 +36,6 @@ public record ByteArray(byte[] array) implements InputStreamSource, Serializable
 
 	/**
 	 * Creates a new {@link ByteArray} by copying the data from the given array of bytes.
-	 *
 	 * @param array byte array data
 	 */
 	public ByteArray(byte[] array) {

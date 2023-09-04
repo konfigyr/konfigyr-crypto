@@ -56,11 +56,11 @@ public interface KeysetDefinition {
 	Instant getNextRotationTime();
 
 	/**
-	 * Creates a new definition of the {@link Keyset} that should be created. The definition would use
-	 * a default value of 90 days for a rotation frequency.
-	 *
+	 * Creates a new definition of the {@link Keyset} that should be created. The
+	 * definition would use a default value of 90 days for a rotation frequency.
 	 * @param name name of the keyset, can't be {@literal null}
-	 * @param algorithm algorithm that should be used by the keyset, can't be {@literal null}
+	 * @param algorithm algorithm that should be used by the keyset, can't be
+	 * {@literal null}
 	 * @return keyset definition with a 90 days rotation frequency
 	 */
 	static KeysetDefinition of(@NonNull String name, @NonNull Algorithm algorithm) {
@@ -68,10 +68,11 @@ public interface KeysetDefinition {
 	}
 
 	/**
-	 * Creates a new definition of the {@link Keyset} that should be created with a custom rotation frequency.
-	 *
+	 * Creates a new definition of the {@link Keyset} that should be created with a custom
+	 * rotation frequency.
 	 * @param name name of the keyset, can't be {@literal null}
-	 * @param algorithm algorithm that should be used by the keyset, can't be {@literal null}
+	 * @param algorithm algorithm that should be used by the keyset, can't be
+	 * {@literal null}
 	 * @param rotationInterval rotation frequency of the keyset, can't be {@literal null}
 	 * @return keyset definition with a custom rotation frequency
 	 */
@@ -80,13 +81,14 @@ public interface KeysetDefinition {
 	}
 
 	/**
-	 * Creates a new definition of the {@link Keyset} that should be created with a custom rotation frequency and
-	 * next rotation time.
-	 *
+	 * Creates a new definition of the {@link Keyset} that should be created with a custom
+	 * rotation frequency and next rotation time.
 	 * @param name name of the keyset, can't be {@literal null}
-	 * @param algorithm algorithm that should be used by the keyset, can't be {@literal null}
+	 * @param algorithm algorithm that should be used by the keyset, can't be
+	 * {@literal null}
 	 * @param rotationInterval rotation frequency of the keyset, can't be {@literal null}
-	 * @param nextRotationTime timestamp when this keyset should be rotated, can't be {@literal null}
+	 * @param nextRotationTime timestamp when this keyset should be rotated, can't be
+	 * {@literal null}
 	 * @return keyset definition with a custom rotation frequency and time
 	 */
 	static KeysetDefinition of(@NonNull String name, @NonNull Algorithm algorithm, @NonNull Duration rotationInterval,
