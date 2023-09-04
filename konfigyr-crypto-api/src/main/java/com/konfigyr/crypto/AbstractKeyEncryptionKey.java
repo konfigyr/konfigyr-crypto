@@ -20,10 +20,22 @@ import java.util.Objects;
  **/
 public abstract class AbstractKeyEncryptionKey implements KeyEncryptionKey {
 
+	/**
+	 * Unique {@link KeyEncryptionKey} identifier.
+	 */
 	protected final String id;
 
+	/**
+	 * Name of the {@link KeyEncryptionKeyProvider} that owns the
+	 * {@link KeyEncryptionKey}.
+	 */
 	protected final String provider;
 
+	/**
+	 * Constructor used to set up the required {@link KeyEncryptionKey} identifiers.
+	 * @param id unique key identifier, can't be {@literal null}
+	 * @param provider key provider name, can't be {@literal null}
+	 */
 	protected AbstractKeyEncryptionKey(String id, String provider) {
 		this.id = id;
 		this.provider = provider;

@@ -10,7 +10,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * @author : vladimir.spasic@ebf.com
+ * @author : Vladimir Spasic
  * @since : 31.08.23, Thu
  **/
 class KeyEncryptionKeyProviderTest {

@@ -75,10 +75,17 @@ public class TinkKeyEncryptionKey extends AbstractKeyEncryptionKey {
 
 	}
 
+	/**
+	 * Builder class used to construct a Tink based {@link KeyEncryptionKey}.
+	 */
 	public static final class Builder {
 
 		private final String provider;
 
+		/**
+		 * Creates a new builder with the {@link com.konfigyr.crypto.KeyEncryptionKeyProvider} name.
+		 * @param provider key provider name
+		 */
 		private Builder(String provider) {
 			this.provider = provider;
 		}

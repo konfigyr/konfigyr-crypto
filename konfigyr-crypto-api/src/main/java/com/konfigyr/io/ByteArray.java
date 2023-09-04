@@ -34,6 +34,11 @@ public record ByteArray(byte[] array) implements InputStreamSource, Serializable
 
 	private static final ByteArray EMPTY = new ByteArray(new byte[0]);
 
+	/**
+	 * Creates a new {@link ByteArray} by copying the data from the given array of bytes.
+	 *
+	 * @param array byte array data
+	 */
 	public ByteArray(byte[] array) {
 		this.array = Arrays.copyOf(array, array.length);
 	}
@@ -49,6 +54,7 @@ public record ByteArray(byte[] array) implements InputStreamSource, Serializable
 
 	/**
 	 * Creates a new {@link ByteArray} instance from the given {@link ByteBuffer}.
+	 * @param buffer byte buffer to be wrapped, can't be {@literal null}
 	 * @return byte array, never {@literal null}
 	 */
 	@NonNull
@@ -58,16 +64,21 @@ public record ByteArray(byte[] array) implements InputStreamSource, Serializable
 
 	/**
 	 * Creates a new {@link ByteArray} instance from the given {@link DataBuffer}.
+	 * @param buffer data buffer to be wrapped, can't be {@literal null}
 	 * @return byte array, never {@literal null}
 	 */
 	@NonNull
 	public static ByteArray from(@NonNull DataBuffer buffer) {
-		return from(buffer.asByteBuffer());
+		final ByteBuffer bb = ByteBuffer.allocate(buffer.capacity());
+		buffer.toByteBuffer(bb);
+
+		return new ByteArray(bb.array());
 	}
 
 	/**
 	 * Creates a new {@link ByteArray} instance from the given string. The string is
 	 * converted to bytes using the {@link StandardCharsets#UTF_8} charset.
+	 * @param data raw string to be wrapped, can't be {@literal null}
 	 * @return byte array, never {@literal null}
 	 */
 	@NonNull
@@ -78,6 +89,9 @@ public record ByteArray(byte[] array) implements InputStreamSource, Serializable
 	/**
 	 * Creates a new {@link ByteArray} instance from the given string. The string is
 	 * converted to bytes using the given {@link StandardCharsets} charset.
+	 * @param data raw string to be wrapped, can't be {@literal null}
+	 * @param charset character encoding used to encode the string, can't be
+	 * {@literal null}
 	 * @return byte array, never {@literal null}
 	 */
 	@NonNull
@@ -89,6 +103,7 @@ public record ByteArray(byte[] array) implements InputStreamSource, Serializable
 	 * Creates a new {@link ByteArray} instance from the given Base64 URL Safe encoded
 	 * string.
 	 * @return byte array, never {@literal null}
+	 * @param data Base64 encoded string to be wrapped, can't be {@literal null}
 	 * @throws IllegalArgumentException when the Base64 string is invalid
 	 */
 	@NonNull

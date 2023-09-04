@@ -11,7 +11,7 @@ import java.util.Set;
  * Simple implementation of the {@link KeyEncryptionKeyProvider} that contains a list of
  * {@link KeyEncryptionKey Key Encryption Keys} for which it is responsible for.
  *
- * @author : vladimir.spasic@ebf.com
+ * @author : Vladimir Spasic
  * @since : 31.08.23, Thu
  **/
 class SimpleKeyEncryptionKeyProvider implements KeyEncryptionKeyProvider {

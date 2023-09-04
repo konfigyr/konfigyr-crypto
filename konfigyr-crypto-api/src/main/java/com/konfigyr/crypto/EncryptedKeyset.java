@@ -121,6 +121,9 @@ public class EncryptedKeyset implements InputStreamSource, Serializable {
 		return builder(keyset).keyEncryptionKey(keyset.getKeyEncryptionKey()).build(data);
 	}
 
+	/**
+	 * Builder class used to create new instances of the {@link EncryptedKeyset}.
+	 */
 	@RequiredArgsConstructor(access = AccessLevel.PRIVATE)
 	public static final class Builder {
 
