@@ -1,0 +1,53 @@
+name: Publish Artifacts
+
+on:
+  release:
+    types: [created]
+
+permissions:
+  actions: write
+
+jobs:
+  build:
+    name: Build
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        jdk: [17]
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Set up JDK ${{ matrix.jdk }}
+        uses: spring-io/spring-gradle-build-action@v2
+        with:
+          java-version: ${{ matrix.jdk }}
+          distribution: temurin
+      - name: Build with Gradle
+        run: ./gradlew check
+      - name: Test Reports
+        uses: mikepenz/action-junit-report@v3
+        if: success() || failure()
+        with:
+          report_paths: '**/build/test-results/test/TEST-*.xml'
+
+  publish:
+    name: Sign and Publish Artifact
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Set up JDK
+        uses: spring-io/spring-gradle-build-action@v2
+        with:
+          java-version: 17
+          distribution: temurin
+      - name: Gradle Publish
+        env:
+          GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
+          GPG_SIGNING_SECRET: ${{ secrets.GPG_SIGNING_SECRET }}
+          OSSRH_USERNAME: ${{ secrets.OSSRH_USERNAME }}
+          OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
+        run: ./gradlew publish --stacktrace

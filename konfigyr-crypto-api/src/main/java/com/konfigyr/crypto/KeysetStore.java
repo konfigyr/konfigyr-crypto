@@ -14,7 +14,7 @@ import java.util.Optional;
  * <li>Key rotation</li>
  * </ul>
  *
- * <h3>Key selection</h3>
+ * <h2>Key selection</h2>
  *
  * Library should provide a way for developers to choose which cryptographic algorithms
  * should they use within their application. This is defined by the
@@ -31,7 +31,7 @@ import java.util.Optional;
  * this does not happen by introducing a list of {@link KeysetOperation} that one
  * {@link Keyset} can perform.
  *
- * <h3>Key storage</h3>
+ * <h2>Key storage</h2>
  *
  * Choosing where {@link Keyset cryptographic keys} are stored within the application is
  * not easy task. This library provides a way to define your custom storage of
@@ -49,9 +49,10 @@ import java.util.Optional;
  * to your application in a secure way and that you never store it in the same place where
  * you store your {@link EncryptedKeyset eDEKs}.
  *
- * <h3>Key rotation</h3> It is important to understand that your {@link Keyset Data
- * Encryption Keys} should be changed (or rotated) based on a number of different
- * criteria:
+ * <h2>Key rotation</h2>
+ *
+ * It is important to understand that your {@link Keyset Data Encryption Keys} should be
+ * changed (or rotated) based on a number of different criteria:
  * <ul>
  * <li>If the previous key is known (or suspected) to have been compromised</li>
  * <li>After a specified period of time has elapsed (known as the crypto period)</li>

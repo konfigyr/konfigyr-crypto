@@ -32,7 +32,7 @@ import org.springframework.lang.Nullable;
 public interface Keyset extends KeysetDefinition {
 
 	/**
-	 * @return key encryption key that generated this keyset, never {@link null}.
+	 * @return key encryption key that generated this keyset, never {@literal null}.
 	 */
 	@NonNull
 	KeyEncryptionKey getKeyEncryptionKey();

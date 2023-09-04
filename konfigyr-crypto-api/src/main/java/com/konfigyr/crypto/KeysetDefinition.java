@@ -23,7 +23,7 @@ public interface KeysetDefinition {
 
 	/**
 	 * Name that uniquely identifies the {@link KeysetDefinition}.
-	 * @return keyset name, never {@link null}.
+	 * @return keyset name, never {@literal null}.
 	 */
 	@NonNull
 	String getName();
@@ -32,7 +32,7 @@ public interface KeysetDefinition {
 	 * Cryptographic algorithm that is used by this key set to perform
 	 * {@link KeysetOperation operations}.
 	 * @return algorithm that is used by this {@link KeysetDefinition}, never
-	 * {@link null}.
+	 * {@literal null}.
 	 * @see Algorithm
 	 */
 	@NonNull
@@ -40,7 +40,7 @@ public interface KeysetDefinition {
 
 	/**
 	 * Interval that defines the key rotation frequency.
-	 * @return rotation frequency, never {@link null}.
+	 * @return rotation frequency, never {@literal null}.
 	 * @see Keyset#rotate()
 	 */
 	@NonNull
@@ -49,20 +49,48 @@ public interface KeysetDefinition {
 	/**
 	 * Time when this keyset should be rotated. This would mean that the current primary
 	 * key would be exchanged with a new one.
-	 * @return next rotation time, never {@link null}.
+	 * @return next rotation time, never {@literal null}.
 	 * @see Keyset#rotate()
 	 */
 	@NonNull
 	Instant getNextRotationTime();
 
+	/**
+	 * Creates a new definition of the {@link Keyset} that should be created. The
+	 * definition would use a default value of 90 days for a rotation frequency.
+	 * @param name name of the keyset, can't be {@literal null}
+	 * @param algorithm algorithm that should be used by the keyset, can't be
+	 * {@literal null}
+	 * @return keyset definition with a 90 days rotation frequency
+	 */
 	static KeysetDefinition of(@NonNull String name, @NonNull Algorithm algorithm) {
 		return of(name, algorithm, Duration.ofDays(90));
 	}
 
+	/**
+	 * Creates a new definition of the {@link Keyset} that should be created with a custom
+	 * rotation frequency.
+	 * @param name name of the keyset, can't be {@literal null}
+	 * @param algorithm algorithm that should be used by the keyset, can't be
+	 * {@literal null}
+	 * @param rotationInterval rotation frequency of the keyset, can't be {@literal null}
+	 * @return keyset definition with a custom rotation frequency
+	 */
 	static KeysetDefinition of(@NonNull String name, @NonNull Algorithm algorithm, @NonNull Duration rotationInterval) {
 		return of(name, algorithm, rotationInterval, Instant.now().plus(rotationInterval));
 	}
 
+	/**
+	 * Creates a new definition of the {@link Keyset} that should be created with a custom
+	 * rotation frequency and next rotation time.
+	 * @param name name of the keyset, can't be {@literal null}
+	 * @param algorithm algorithm that should be used by the keyset, can't be
+	 * {@literal null}
+	 * @param rotationInterval rotation frequency of the keyset, can't be {@literal null}
+	 * @param nextRotationTime timestamp when this keyset should be rotated, can't be
+	 * {@literal null}
+	 * @return keyset definition with a custom rotation frequency and time
+	 */
 	static KeysetDefinition of(@NonNull String name, @NonNull Algorithm algorithm, @NonNull Duration rotationInterval,
 			@NonNull Instant nextRotationTime) {
 		return new SimpleKeysetDefinition(name, algorithm, rotationInterval, nextRotationTime);

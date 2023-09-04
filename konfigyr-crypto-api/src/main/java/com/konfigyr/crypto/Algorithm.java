@@ -23,13 +23,13 @@ import java.util.Set;
 public interface Algorithm extends Serializable {
 
 	/**
-	 * @return algorithm name, never {@link null}.
+	 * @return algorithm name, never {@literal null}.
 	 */
 	@NonNull
 	String name();
 
 	/**
-	 * @return key type used by the algorithm, never {@link null}.
+	 * @return key type used by the algorithm, never {@literal null}.
 	 */
 	@NonNull
 	KeyType type();
@@ -37,7 +37,7 @@ public interface Algorithm extends Serializable {
 	/**
 	 * Collection of {@link KeysetOperation operations} this {@link Algorithm} can
 	 * perform.
-	 * @return supported operations, never {@link null}.
+	 * @return supported operations, never {@literal null}.
 	 */
 	@NonNull
 	Set<KeysetOperation> operations();

@@ -19,10 +19,26 @@ import java.util.Set;
  **/
 public interface KeyEncryptionKeyProvider {
 
+	/**
+	 * Creates a new instance of the {@link KeyEncryptionKeyProvider} with a given name a
+	 * collection of {@link KeyEncryptionKey} which it owns.
+	 * @param name provider name, can't be {@literal null}
+	 * @param keys keys that the provider should own, can't be {@literal null}
+	 * @return encryption key provider, never {@literal null}
+	 */
+	@NonNull
 	static KeyEncryptionKeyProvider of(String name, KeyEncryptionKey... keys) {
 		return new SimpleKeyEncryptionKeyProvider(name, Set.of(keys));
 	}
 
+	/**
+	 * Creates a new instance of the {@link KeyEncryptionKeyProvider} with a given name a
+	 * collection of {@link KeyEncryptionKey} which it owns.
+	 * @param name provider name, can't be {@literal null}
+	 * @param keys keys that the provider should own, can't be {@literal null}
+	 * @return encryption key provider, never {@literal null}
+	 */
+	@NonNull
 	static KeyEncryptionKeyProvider of(String name, Collection<KeyEncryptionKey> keys) {
 		return new SimpleKeyEncryptionKeyProvider(name, keys);
 	}
@@ -31,7 +47,7 @@ public interface KeyEncryptionKeyProvider {
 	 * Name is considered as the main identifier of a provider. When using multiple
 	 * provider implementations within one application it is important that the names are
 	 * unique.
-	 * @return provider name, never {@link null}
+	 * @return provider name, never {@literal null}
 	 */
 	@NonNull
 	String getName();
@@ -41,7 +57,7 @@ public interface KeyEncryptionKeyProvider {
 	 * {@link EncryptedKeyset}.
 	 * @param encryptedKeyset keyset for which the KEK should be provided, can't be
 	 * {@literal null}
-	 * @return the KEK for this keyset, never {@link null}
+	 * @return the KEK for this keyset, never {@literal null}
 	 * @throws com.konfigyr.crypto.CryptoException.KeyEncryptionKeyNotFoundException when
 	 * the provider could not resolve the {@link KeyEncryptionKey} with the given
 	 * identifier
@@ -54,7 +70,7 @@ public interface KeyEncryptionKeyProvider {
 	 * Retrieves and constructs the {@link KeyEncryptionKey} used to decrypt or encrypt
 	 * the Data Encryption Keys by the provider name.
 	 * @param id the identifier of the {@link KeyEncryptionKey}, can't be {@literal null}
-	 * @return matching key encryption key, never {@link null}
+	 * @return matching key encryption key, never {@literal null}
 	 * @throws com.konfigyr.crypto.CryptoException.KeyEncryptionKeyNotFoundException when
 	 * the provider could not resolve the {@link KeyEncryptionKey} with the given
 	 * identifier

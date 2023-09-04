@@ -16,7 +16,7 @@ import java.io.IOException;
  * <p>
  * Before the start of the implementation of this interface it is important to consider
  * how should your cryptographic library implement the {@link Keyset}, {@link Algorithm}
- * and {@link KeysetFactory interfaces.
+ * and {@link KeysetFactory} interfaces.
  * <p>
  * What is it that can be used to unique identify both a {@link KeysetDefinition} and
  * {@link EncryptedKeyset} uniqely to your cryptographic library?
@@ -62,6 +62,7 @@ public interface KeysetFactory {
 	 * @param kek Key encryption key used to wrap or unwrap the private key material,
 	 * can't be {@literal null}.
 	 * @param definition definition of a keyset to be created, can't be {@literal null}
+	 * @return generated keyset, never {@literal null}
 	 * @throws IOException when there is an issue while generating the private key
 	 * material.
 	 */
@@ -71,6 +72,7 @@ public interface KeysetFactory {
 	 * Creates a new {@link EncryptedKeyset} that should be stored by the
 	 * {@link KeysetRepository}.
 	 * @param keyset keyset to be wrapped, can't be {@literal null}
+	 * @return encrytped keyset, never {@literal null}
 	 * @throws IOException when there is an issue while wrapping the private key material.
 	 */
 	EncryptedKeyset create(@NonNull Keyset keyset) throws IOException;
@@ -81,6 +83,7 @@ public interface KeysetFactory {
 	 * @param kek Key encryption key used to unwrap the encrypted private key material,
 	 * can't be {@literal null}.
 	 * @param encryptedKeyset encrypted keyset to be unwrapped, can't be {@literal null}
+	 * @return decrypted keyset, never {@literal null}
 	 * @throws IOException when there is an issue while unwrapping the encrypted private
 	 * key material.
 	 */
