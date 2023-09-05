@@ -62,8 +62,13 @@ public class TinkKeysetFactory implements KeysetFactory {
 			throw new CryptoException.UnsupportedAlgorithmException(definition.getAlgorithm(), e);
 		}
 
-		return new TinkKeyset(definition.getName(), (TinkAlgorithm) definition.getAlgorithm(), kek, handle,
-				definition.getRotationInterval(), definition.getNextRotationTime());
+		return TinkKeyset.builder(handle)
+			.name(definition.getName())
+			.algorithm((TinkAlgorithm) definition.getAlgorithm())
+			.keyEncryptionKey(kek)
+			.rotationInterval(definition.getRotationInterval())
+			.nextRotationTime(definition.getNextRotationTime())
+			.build();
 	}
 
 	@NonNull
@@ -102,8 +107,13 @@ public class TinkKeysetFactory implements KeysetFactory {
 			throw new CryptoException.UnwrappingException(name, kek, e);
 		}
 
-		return new TinkKeyset(name, TinkAlgorithm.valueOf(encryptedKeyset.getAlgorithm()), kek, handle,
-				encryptedKeyset.getRotationInterval(), encryptedKeyset.getNextRotationTime());
+		return TinkKeyset.builder(handle)
+			.name(name)
+			.algorithm(TinkAlgorithm.valueOf(encryptedKeyset.getAlgorithm()))
+			.keyEncryptionKey(kek)
+			.rotationInterval(encryptedKeyset.getRotationInterval())
+			.nextRotationTime(encryptedKeyset.getNextRotationTime())
+			.build();
 	}
 
 	@RequiredArgsConstructor(staticName = "adapt")

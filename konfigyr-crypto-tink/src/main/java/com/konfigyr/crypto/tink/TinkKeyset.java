@@ -1,10 +1,11 @@
 package com.konfigyr.crypto.tink;
 
 import com.google.crypto.tink.*;
+import com.google.crypto.tink.proto.KeysetInfo;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.konfigyr.crypto.*;
+import com.konfigyr.crypto.Key;
 import com.konfigyr.io.ByteArray;
-import lombok.Builder;
 import lombok.Value;
 import org.springframework.lang.NonNull;
 import org.springframework.lang.Nullable;
@@ -14,16 +15,19 @@ import org.springframework.util.ClassUtils;
 import java.security.GeneralSecurityException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 
 import static com.konfigyr.crypto.CryptoException.KeysetOperationException;
 
 /**
+ * Implementation of the {@link Keyset} that uses the Tink {@link KeysetHandle} to perform
+ * cryptographic operations.
+ *
  * @author : Vladimir Spasic
  * @since : 21.08.23, Mon
  **/
 @Value
-@Builder
 class TinkKeyset implements Keyset {
 
 	@NonNull
@@ -37,6 +41,9 @@ class TinkKeyset implements Keyset {
 
 	@NonNull
 	KeysetHandle handle;
+
+	@NonNull
+	List<Key> keys;
 
 	@NonNull
 	Duration rotationInterval;
@@ -133,15 +140,12 @@ class TinkKeyset implements Keyset {
 			throw new CryptoException.KeysetException(name, "Failed to rotate keyset", e);
 		}
 
-		final Instant nextRotationTime = Instant.now().plus(rotationInterval);
-
-		return TinkKeyset.builder()
+		return TinkKeyset.builder(handle)
 			.name(name)
 			.algorithm(algorithm)
 			.keyEncryptionKey(keyEncryptionKey)
-			.handle(handle)
 			.rotationInterval(rotationInterval)
-			.nextRotationTime(nextRotationTime)
+			.nextRotationTime(Instant.now().plus(rotationInterval))
 			.build();
 	}
 
@@ -213,6 +217,69 @@ class TinkKeyset implements Keyset {
 		catch (InvalidProtocolBufferException e) {
 			throw new IllegalStateException("Failed to parse Tink key template data", e);
 		}
+	}
+
+	static Builder builder(KeysetHandle handle) {
+		return new Builder(handle);
+	}
+
+	static final class Builder {
+
+		private final KeysetHandle handle;
+
+		private String name;
+
+		private TinkAlgorithm algorithm;
+
+		private KeyEncryptionKey keyEncryptionKey;
+
+		private Duration rotationInterval;
+
+		private Instant nextRotationTime;
+
+		private Builder(KeysetHandle handle) {
+			Assert.state(handle.size() > 0, "Can not create Tink Keyset with an empty key set handle");
+
+			this.handle = handle;
+		}
+
+		Builder name(String name) {
+			this.name = name;
+			return this;
+		}
+
+		Builder algorithm(TinkAlgorithm algorithm) {
+			this.algorithm = algorithm;
+			return this;
+		}
+
+		Builder keyEncryptionKey(KeyEncryptionKey keyEncryptionKey) {
+			this.keyEncryptionKey = keyEncryptionKey;
+			return this;
+		}
+
+		Builder rotationInterval(Duration rotationInterval) {
+			this.rotationInterval = rotationInterval;
+			return this;
+		}
+
+		Builder nextRotationTime(Instant nextRotationTime) {
+			this.nextRotationTime = nextRotationTime;
+			return this;
+		}
+
+		TinkKeyset build() {
+			final KeysetInfo info = handle.getKeysetInfo();
+
+			final List<Key> keys = info.getKeyInfoList()
+				.stream()
+				.map(it -> TinkKey.from(algorithm.type(), info, it))
+				.map(Key.class::cast)
+				.toList();
+
+			return new TinkKeyset(name, algorithm, keyEncryptionKey, handle, keys, rotationInterval, nextRotationTime);
+		}
+
 	}
 
 }

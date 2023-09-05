@@ -5,7 +5,7 @@ import org.gradle.api.provider.Property;
 import org.gradle.api.provider.ProviderFactory;
 
 /**
- * @author : vladimir.spasic@ebf.com
+ * @author : Vladimir Spasic
  * @since : 04.09.23, Mon
  **/
 public abstract class DeployExtension {
