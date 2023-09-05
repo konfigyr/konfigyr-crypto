@@ -6,6 +6,9 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import com.konfigyr.crypto.*;
 import com.konfigyr.crypto.Key;
 import com.konfigyr.io.ByteArray;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import lombok.Value;
 import org.springframework.lang.NonNull;
 import org.springframework.lang.Nullable;
@@ -28,6 +31,7 @@ import static com.konfigyr.crypto.CryptoException.KeysetOperationException;
  * @since : 21.08.23, Mon
  **/
 @Value
+@RequiredArgsConstructor(access = AccessLevel.PRIVATE)
 class TinkKeyset implements Keyset {
 
 	@NonNull
@@ -40,6 +44,7 @@ class TinkKeyset implements Keyset {
 	KeyEncryptionKey keyEncryptionKey;
 
 	@NonNull
+	@Getter(value = AccessLevel.PACKAGE)
 	KeysetHandle handle;
 
 	@NonNull
@@ -238,6 +243,8 @@ class TinkKeyset implements Keyset {
 		private Instant nextRotationTime;
 
 		private Builder(KeysetHandle handle) {
+			Assert.notNull(handle, "Tink keyset can not be null");
+			Assert.notNull(handle.getKeysetInfo(), "Tink keyset information can not be null");
 			Assert.state(handle.size() > 0, "Can not create Tink Keyset with an empty key set handle");
 
 			this.handle = handle;
@@ -269,6 +276,12 @@ class TinkKeyset implements Keyset {
 		}
 
 		TinkKeyset build() {
+			Assert.hasText(name, "Keyset name can not be blank");
+			Assert.notNull(algorithm, "Keyset algorithm can not be null");
+			Assert.notNull(keyEncryptionKey, "Keyset key encryption key can not be null");
+			Assert.notNull(rotationInterval, "Keyset rotation interval can not be null");
+			Assert.notNull(nextRotationTime, "Keyset next rotation time can not be null");
+
 			final KeysetInfo info = handle.getKeysetInfo();
 
 			final List<Key> keys = info.getKeyInfoList()

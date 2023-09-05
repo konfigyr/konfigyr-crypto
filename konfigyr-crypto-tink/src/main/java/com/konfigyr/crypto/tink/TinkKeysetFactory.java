@@ -81,8 +81,10 @@ public class TinkKeysetFactory implements KeysetFactory {
 		final ByteArrayOutputStream os = new ByteArrayOutputStream();
 
 		try {
-			((TinkKeyset) keyset).getHandle()
-				.write(BinaryKeysetWriter.withOutputStream(os), KeyEncryptionKeyAdapter.adapt(keyset.getName(), kek));
+			((TinkKeyset) keyset).getHandle().write(
+					BinaryKeysetWriter.withOutputStream(os),
+					KeyEncryptionKeyAdapter.adapt(keyset.getName(), kek)
+			);
 		}
 		catch (GeneralSecurityException e) {
 			throw new CryptoException.WrappingException(keyset.getName(), kek, e);
