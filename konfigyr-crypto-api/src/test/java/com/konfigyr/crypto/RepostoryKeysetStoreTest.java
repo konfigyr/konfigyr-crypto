@@ -7,6 +7,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.cache.concurrent.ConcurrentMapCache;
 import org.springframework.lang.NonNull;
 
 import java.io.IOException;
@@ -36,6 +37,9 @@ class RepostoryKeysetStoreTest {
 	Keyset keyset;
 
 	@Spy
+	KeysetCache cache = new SpringKeysetCache(new ConcurrentMapCache("tesst-cache"));
+
+	@Spy
 	KeysetRepository repository = new InMemoryKeysetRepository();
 
 	EncryptedKeyset encryptedKeyset;
@@ -49,7 +53,7 @@ class RepostoryKeysetStoreTest {
 			.keyEncryptionKey("test-kek")
 			.build(ByteArray.fromString("encrypted material"));
 
-		store = new RepostoryKeysetStore(repository, List.of(factory), List.of(provider));
+		store = new RepostoryKeysetStore(cache, repository, List.of(factory), List.of(provider));
 	}
 
 	@Test
@@ -64,6 +68,8 @@ class RepostoryKeysetStoreTest {
 			.isEqualTo(keyset);
 
 		assertThat(repository.read(definition.getName())).hasValue(encryptedKeyset);
+
+		assertThat(cache.get(definition.getName(), () -> null)).isEqualTo(encryptedKeyset);
 
 		verify(factory).create(keyset);
 		verify(factory).create(kek, definition);
@@ -81,8 +87,25 @@ class RepostoryKeysetStoreTest {
 
 		assertThat(store.read(definition.getName())).isEqualTo(keyset);
 
+		assertThat(cache.get(definition.getName(), () -> null)).isEqualTo(encryptedKeyset);
+
 		verify(factory).create(kek, encryptedKeyset);
 		verify(repository).read(definition.getName());
+	}
+
+	@Test
+	void shouldReadKeysetFromCache() throws IOException {
+		doReturn(encryptedKeyset.getProvider()).when(provider).getName();
+		doReturn(kek).when(provider).provide(encryptedKeyset);
+		doReturn(true).when(factory).supports(encryptedKeyset);
+		doReturn(keyset).when(factory).create(kek, encryptedKeyset);
+
+		cache.put(encryptedKeyset.getName(), encryptedKeyset);
+
+		assertThat(store.read(definition.getName())).isEqualTo(keyset);
+
+		verify(factory).create(kek, encryptedKeyset);
+		verifyNoInteractions(repository);
 	}
 
 	@Test
@@ -94,8 +117,11 @@ class RepostoryKeysetStoreTest {
 
 		assertThat(repository.read(definition.getName())).hasValue(encryptedKeyset);
 
+		assertThat(cache.get(definition.getName(), () -> null)).isEqualTo(encryptedKeyset);
+
 		verify(factory).create(keyset);
 		verify(repository).write(encryptedKeyset);
+		verify(cache).put(definition.getName(), encryptedKeyset);
 	}
 
 	@Test
@@ -115,11 +141,14 @@ class RepostoryKeysetStoreTest {
 
 		assertThatNoException().isThrownBy(() -> store.rotate(definition.getName()));
 
+		assertThat(cache.get(definition.getName(), () -> null)).isEqualTo(rotatedEncryptedKeyset);
+
 		verify(keyset).rotate();
 		verify(factory).create(kek, encryptedKeyset);
 		verify(factory).create(rotated);
 		verify(repository).read(definition.getName());
 		verify(repository).write(rotatedEncryptedKeyset);
+		verify(cache).put(definition.getName(), rotatedEncryptedKeyset);
 	}
 
 	@Test
@@ -132,9 +161,12 @@ class RepostoryKeysetStoreTest {
 
 		assertThatNoException().isThrownBy(() -> store.rotate(keyset));
 
+		assertThat(cache.get(definition.getName(), () -> null)).isEqualTo(encryptedKeyset);
+
 		verify(keyset).rotate();
 		verify(factory).create(rotated);
 		verify(repository).write(encryptedKeyset);
+		verify(cache).put(definition.getName(), encryptedKeyset);
 	}
 
 	@Test
@@ -144,6 +176,7 @@ class RepostoryKeysetStoreTest {
 		assertThatNoException().isThrownBy(() -> store.remove(keyset));
 
 		verify(repository).remove(definition.getName());
+		verify(cache).evict(definition.getName());
 	}
 
 	@Test
@@ -151,6 +184,7 @@ class RepostoryKeysetStoreTest {
 		assertThatNoException().isThrownBy(() -> store.remove(definition.getName()));
 
 		verify(repository).remove(definition.getName());
+		verify(cache).evict(definition.getName());
 	}
 
 	@Test
