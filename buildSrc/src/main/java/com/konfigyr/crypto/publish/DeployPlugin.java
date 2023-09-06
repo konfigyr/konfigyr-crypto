@@ -20,7 +20,7 @@ import javax.annotation.Nonnull;
 import java.net.URI;
 
 /**
- * @author : vladimir.spasic@ebf.com
+ * @author : Vladimir Spasic
  * @since : 04.09.23, Mon
  **/
 public class DeployPlugin implements Plugin<Project> {

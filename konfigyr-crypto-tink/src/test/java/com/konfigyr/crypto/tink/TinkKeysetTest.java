@@ -1,9 +1,6 @@
 package com.konfigyr.crypto.tink;
 
-import com.google.crypto.tink.KeysetHandle;
-import com.konfigyr.crypto.CryptoException;
-import com.konfigyr.crypto.Keyset;
-import com.konfigyr.crypto.KeysetOperation;
+import com.konfigyr.crypto.*;
 import com.konfigyr.io.ByteArray;
 import org.assertj.core.data.TemporalUnitWithinOffset;
 import org.junit.jupiter.api.Test;
@@ -13,8 +10,7 @@ import org.junit.jupiter.api.condition.OS;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.*;
 
 class TinkKeysetTest extends AbstractCryptoTest {
 
@@ -96,8 +92,9 @@ class TinkKeysetTest extends AbstractCryptoTest {
 	@DisabledOnOs(value = OS.WINDOWS)
 	void shouldRotateKeyset() throws Exception {
 		final var keyset = generate("rotating-keyset", TinkAlgorithm.AES128_GCM);
+		final var rotated = keyset.rotate();
 
-		assertThat(keyset.rotate()).isNotNull()
+		assertThatObject(rotated).isNotNull()
 			.isNotEqualTo(keyset)
 			.isInstanceOf(TinkKeyset.class)
 			.returns(keyset.getName(), Keyset::getName)
@@ -107,11 +104,14 @@ class TinkKeysetTest extends AbstractCryptoTest {
 			.satisfies(it -> assertThat(it.getNextRotationTime()).isAfter(keyset.getNextRotationTime())
 				.isCloseTo(Instant.now().plus(it.getRotationInterval()),
 						new TemporalUnitWithinOffset(1, ChronoUnit.SECONDS)))
-			.satisfies(it -> assertThat(it).extracting(TinkKeyset.class::cast)
-				.extracting(TinkKeyset::getHandle)
-				.returns(2, KeysetHandle::size)
-				.extracting(KeysetHandle::getKeysetInfo)
-				.isNotEqualTo(((TinkKeyset) keyset).getHandle().getKeysetInfo()));
+			.satisfies(it -> assertThat(it.getKeys()).isNotNull()
+				.hasSize(2)
+				.extracting(Key::getType, Key::getStatus, Key::isPrimary)
+				.containsExactlyInAnyOrder(tuple(KeyType.OCTET, KeyStatus.ENABLED, true),
+						tuple(KeyType.OCTET, KeyStatus.ENABLED, false)))
+			.satisfies(it -> assertThat(it.getKey(keyset.getKeys().get(0).getId())).isPresent()
+				.get()
+				.returns(false, Key::isPrimary));
 	}
 
 	@Test

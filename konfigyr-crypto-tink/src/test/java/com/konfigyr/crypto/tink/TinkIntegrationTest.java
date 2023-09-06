@@ -1,10 +1,7 @@
 package com.konfigyr.crypto.tink;
 
 import com.google.crypto.tink.KeysetHandle;
-import com.konfigyr.crypto.CryptoException;
-import com.konfigyr.crypto.Keyset;
-import com.konfigyr.crypto.KeysetDefinition;
-import com.konfigyr.crypto.KeysetStore;
+import com.konfigyr.crypto.*;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
@@ -74,19 +71,29 @@ public class TinkIntegrationTest {
 	@Test
 	@Order(2)
 	void shouldGenerateKeyset() {
-		assertThatNoException().isThrownBy(() -> store.create("aes-provider", "aes-kek", definition));
+		assertThatObject(store.create("aes-provider", "aes-kek", definition)).isInstanceOf(TinkKeyset.class)
+			.returns(definition.getName(), Keyset::getName)
+			.returns(definition.getAlgorithm(), Keyset::getAlgorithm)
+			.returns(store.kek("aes-provider", "aes-kek"), Keyset::getKeyEncryptionKey)
+			.returns(definition.getRotationInterval(), Keyset::getRotationInterval)
+			.returns(definition.getNextRotationTime(), Keyset::getNextRotationTime)
+			.satisfies(it -> assertThat(it.getKeys()).isNotNull()
+				.hasSize(1)
+				.extracting(Key::getType, Key::getStatus, Key::isPrimary)
+				.containsExactly(tuple(KeyType.OCTET, KeyStatus.ENABLED, true)));
 	}
 
 	@Test
 	@Order(3)
 	void shouldWriteKeyset() throws Exception {
-		final var keyset = TinkKeyset.builder()
+		final var handle = KeysetHandle.generateNew(TinkUtils.keyTemplateForAlgorithm(TinkAlgorithm.ED25519));
+
+		final var keyset = TinkKeyset.builder(handle)
 			.name("singing-key")
 			.algorithm(TinkAlgorithm.ED25519)
 			.keyEncryptionKey(store.kek("kms-provider", TinkIntegrationConfiguration.KMS_KEY_URI))
 			.rotationInterval(Duration.ofDays(180))
 			.nextRotationTime(Instant.now().plus(Duration.ofDays(180)))
-			.handle(KeysetHandle.generateNew(TinkUtils.keyTemplateForAlgorithm(TinkAlgorithm.ED25519)))
 			.build();
 
 		assertThatNoException().isThrownBy(() -> store.write(keyset));
@@ -97,13 +104,17 @@ public class TinkIntegrationTest {
 	void shouldReadKeyset() {
 		final var kek = store.kek("aes-provider", "aes-kek");
 
-		assertThat(store.read(definition.getName())).isNotNull()
+		assertThatObject(store.read(definition.getName())).isNotNull()
 			.isInstanceOf(TinkKeyset.class)
 			.returns(definition.getName(), Keyset::getName)
 			.returns(definition.getAlgorithm(), Keyset::getAlgorithm)
 			.returns(kek, Keyset::getKeyEncryptionKey)
 			.returns(definition.getRotationInterval(), Keyset::getRotationInterval)
-			.returns(definition.getNextRotationTime(), Keyset::getNextRotationTime);
+			.returns(definition.getNextRotationTime(), Keyset::getNextRotationTime)
+			.satisfies(it -> assertThat(it.stream()).isNotNull()
+				.hasSize(1)
+				.extracting(Key::getType, Key::getStatus, Key::isPrimary)
+				.containsExactly(tuple(KeyType.OCTET, KeyStatus.ENABLED, true)));
 	}
 
 	@Test
@@ -111,12 +122,13 @@ public class TinkIntegrationTest {
 	void shouldReadCustomKeyset() {
 		final var kek = store.kek("kms-provider", TinkIntegrationConfiguration.KMS_KEY_URI);
 
-		assertThat(store.read("singing-key")).isNotNull()
+		assertThatObject(store.read("singing-key")).isNotNull()
 			.isInstanceOf(TinkKeyset.class)
 			.returns("singing-key", Keyset::getName)
 			.returns(TinkAlgorithm.ED25519, Keyset::getAlgorithm)
 			.returns(kek, Keyset::getKeyEncryptionKey)
-			.returns(Duration.ofDays(180), Keyset::getRotationInterval);
+			.returns(Duration.ofDays(180), Keyset::getRotationInterval)
+			.returns(1, Keyset::size);
 	}
 
 	@Test
@@ -124,11 +136,15 @@ public class TinkIntegrationTest {
 	void shouldRotateKeyset() {
 		final var keyset = store.read(definition.getName());
 
-		assertThat(keyset).extracting("handle").extracting(KeysetHandle.class::cast).returns(1, KeysetHandle::size);
+		assertThatObject(keyset).returns(1, Keyset::size)
+			.extracting("handle")
+			.extracting(KeysetHandle.class::cast)
+			.returns(1, KeysetHandle::size);
 
 		assertThatNoException().isThrownBy(() -> store.rotate(definition.getName()));
 
-		assertThat(store.read(definition.getName())).isNotEqualTo(keyset)
+		assertThatObject(store.read(definition.getName())).isNotEqualTo(keyset)
+			.returns(2, Keyset::size)
 			.extracting("handle")
 			.extracting(KeysetHandle.class::cast)
 			.returns(2, KeysetHandle::size);

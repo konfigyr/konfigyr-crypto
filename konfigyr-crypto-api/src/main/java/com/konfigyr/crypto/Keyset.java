@@ -4,9 +4,14 @@ import com.konfigyr.io.ByteArray;
 import org.springframework.lang.NonNull;
 import org.springframework.lang.Nullable;
 
+import java.util.Iterator;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Stream;
+
 /**
  * Keyset, or also known as a Data Encryption Key, represents a non-empty list of
- * cryptographic keys, with one designated primary key which can be rotated.
+ * {@link Key cryptographic keys}, with one designated primary key which can be rotated.
  * <p>
  * Keys in a {@link Keyset} get a unique identifier and, depending on the implementation,
  * a key status which allows to disable keys without removing them from a {@link Keyset}.
@@ -28,14 +33,33 @@ import org.springframework.lang.Nullable;
  *
  * @author : Vladimir Spasic
  * @since : 21.08.23, Mon
+ * @see Key
+ * @see KeysetFactory
  **/
-public interface Keyset extends KeysetDefinition {
+public interface Keyset extends KeysetDefinition, Iterable<Key> {
 
 	/**
 	 * @return key encryption key that generated this keyset, never {@literal null}.
 	 */
 	@NonNull
 	KeyEncryptionKey getKeyEncryptionKey();
+
+	/**
+	 * @return collection of {@link Key keys} contained within this {@link Keyset}, never
+	 * {@literal null}.
+	 */
+	@NonNull
+	List<Key> getKeys();
+
+	/**
+	 * Retrieves a single {@link Key} by its identifier from this {@link Keyset}.
+	 * @param id key identifier, can't be {@literal null}
+	 * @return matching key or an empty {@link Optional}
+	 */
+	@NonNull
+	default Optional<Key> getKey(@NonNull String id) {
+		return getKeys().stream().filter(key -> id.equals(key.getId())).findFirst();
+	}
 
 	/**
 	 * Encrypt the byte buffer.
@@ -109,5 +133,28 @@ public interface Keyset extends KeysetDefinition {
 	 */
 	@NonNull
 	Keyset rotate();
+
+	/**
+	 * Returns the number of {@link Key keys} that are present in this {@link Keyset}.
+	 * @return the keyset size.
+	 */
+	default int size() {
+		return getKeys().size();
+	}
+
+	@NonNull
+	@Override
+	default Iterator<Key> iterator() {
+		return getKeys().iterator();
+	}
+
+	/**
+	 * Returns a sequential stream of {@link Key keys} from this {@link Keyset}.
+	 * @return key stream, never {@literal null}
+	 */
+	@NonNull
+	default Stream<Key> stream() {
+		return getKeys().stream();
+	}
 
 }

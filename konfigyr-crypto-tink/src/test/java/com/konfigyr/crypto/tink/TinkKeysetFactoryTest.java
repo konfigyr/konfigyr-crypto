@@ -13,8 +13,7 @@ import java.security.GeneralSecurityException;
 import java.time.Duration;
 import java.util.Set;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -82,7 +81,7 @@ class TinkKeysetFactoryTest extends AbstractCryptoTest {
 
 	@Test
 	void shouldCreateTinkKeyset() throws Exception {
-		assertThat(generate("tink-key", TinkAlgorithm.AES128_EAX)).isNotNull()
+		assertThatObject(generate("tink-key", TinkAlgorithm.AES128_EAX)).isNotNull()
 			.isInstanceOf(TinkKeyset.class)
 			.returns("tink-key", Keyset::getName)
 			.returns(TinkAlgorithm.AES128_EAX, Keyset::getAlgorithm);
