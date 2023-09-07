@@ -32,6 +32,8 @@ public final class RepostoryKeysetStore implements KeysetStore {
 
 	private final Logger logger = LoggerFactory.getLogger(getClass());
 
+	private final KeysetCache cache;
+
 	private final KeysetRepository repository;
 
 	private final List<KeysetFactory> factories;
@@ -101,6 +103,8 @@ public final class RepostoryKeysetStore implements KeysetStore {
 		catch (IOException e) {
 			throw new KeysetException(name, "Could not remove encrypted keyset with name: " + name, e);
 		}
+
+		cache.evict(name);
 	}
 
 	@Override
@@ -123,12 +127,14 @@ public final class RepostoryKeysetStore implements KeysetStore {
 			logger.debug("Looking up encrypted keyset with name: {}", name);
 		}
 
-		try {
-			return repository.read(name).orElseThrow(() -> new KeysetNotFoundException(name));
-		}
-		catch (IOException e) {
-			throw new KeysetException(name, "Could not read encrypted keyset with name: " + name, e);
-		}
+		return cache.get(name, () -> {
+			try {
+				return repository.read(name).orElseThrow(() -> new KeysetNotFoundException(name));
+			}
+			catch (IOException e) {
+				throw new KeysetException(name, "Could not read encrypted keyset with name: " + name, e);
+			}
+		});
 	}
 
 	/**
@@ -244,6 +250,8 @@ public final class RepostoryKeysetStore implements KeysetStore {
 			throw new KeysetException(keyset.getName(),
 					"Could not write encrypted keyset with name: " + keyset.getName(), e);
 		}
+
+		cache.put(encryptedKeyset.getName(), encryptedKeyset);
 	}
 
 	/**

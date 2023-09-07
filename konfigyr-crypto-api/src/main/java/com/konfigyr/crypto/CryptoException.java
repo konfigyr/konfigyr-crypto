@@ -298,6 +298,13 @@ public abstract class CryptoException extends RuntimeException {
 
 	}
 
+	/**
+	 * Exception thrown when the {@link Keyset} is being encrypted, or wrapped, by the
+	 * responsible {@link KeyEncryptionKey}.
+	 * <p>
+	 * This exception contains both the name of {@link Keyset} and the actual
+	 * {@link KeyEncryptionKey} values for which this exception has been thrown.
+	 */
 	@Getter
 	public static class WrappingException extends KeysetException {
 
@@ -318,6 +325,13 @@ public abstract class CryptoException extends RuntimeException {
 
 	}
 
+	/**
+	 * Exception thrown when the {@link EncryptedKeyset} is being decrypted, or unwrapped,
+	 * by the responsible {@link KeyEncryptionKey}.
+	 * <p>
+	 * This exception contains both the name of {@link EncryptedKeyset} and the actual
+	 * {@link KeyEncryptionKey} values for which this exception has been thrown.
+	 */
 	@Getter
 	public static class UnwrappingException extends KeysetException {
 

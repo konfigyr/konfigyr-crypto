@@ -63,7 +63,14 @@ public class TinkKeyEncryptionKey extends AbstractKeyEncryptionKey {
 		}
 	}
 
-	public static Builder builder(String provider) {
+	/**
+	 * Creates a new {@link Builder Tink KEK Builder} instance with the name of the
+	 * {@link com.konfigyr.crypto.KeyEncryptionKeyProvider} that would own the
+	 * {@link KeyEncryptionKey} that is being built.
+	 * @param provider name of the {@link com.konfigyr.crypto.KeyEncryptionKeyProvider}.
+	 * @return Tink KEK builder, never {@literal null}
+	 */
+	public static @NonNull Builder builder(String provider) {
 		Assert.hasText(provider, "Key Encryption Key provider name can not be blank");
 		return new Builder(provider);
 	}

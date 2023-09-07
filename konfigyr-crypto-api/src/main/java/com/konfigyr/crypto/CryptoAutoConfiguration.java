@@ -4,6 +4,8 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.cache.Cache;
+import org.springframework.cache.support.NoOpCache;
 import org.springframework.context.annotation.Bean;
 
 /**
@@ -31,10 +33,15 @@ public class CryptoAutoConfiguration {
 	}
 
 	@Bean
-	KeysetStore repositoryKeysetStore(KeysetRepository repository, ObjectProvider<KeysetFactory> factories,
-			ObjectProvider<KeyEncryptionKeyProvider> providers) {
-		return new RepostoryKeysetStore(repository, factories.orderedStream().toList(),
-				providers.orderedStream().toList());
+	KeysetStore repositoryKeysetStore(KeysetRepository repository, ObjectProvider<KeysetCache> cache,
+			ObjectProvider<KeysetFactory> factories, ObjectProvider<KeyEncryptionKeyProvider> providers) {
+		return new RepostoryKeysetStore(cache.getIfAvailable(CryptoAutoConfiguration::createNoopKeysetCache),
+				repository, factories.orderedStream().toList(), providers.orderedStream().toList());
+	}
+
+	private static KeysetCache createNoopKeysetCache() {
+		final Cache delegate = new NoOpCache("noop-keyset-cache");
+		return new SpringKeysetCache(delegate);
 	}
 
 }

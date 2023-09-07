@@ -109,6 +109,7 @@ public interface KeysetStore {
 	 * can't be {@literal null}.
 	 * @param definition definition to be used when creating a new keyset, can't be
 	 * {@literal null}.
+	 * @return the generate {@link Keyset}, never {@literal null}
 	 * @throws com.konfigyr.crypto.CryptoException.ProviderNotFoundException when provider
 	 * with a given name does not exist
 	 * @throws com.konfigyr.crypto.CryptoException.KeyEncryptionKeyNotFoundException when
@@ -133,6 +134,7 @@ public interface KeysetStore {
 	 * can't be {@literal null}.
 	 * @param definition definition to be used when creating a new keyset, can't be
 	 * {@literal null}.
+	 * @return the generate {@link Keyset}, never {@literal null}
 	 * @throws com.konfigyr.crypto.CryptoException.ProviderNotFoundException when provider
 	 * with a given name does not exist
 	 * @throws com.konfigyr.crypto.CryptoException.KeyEncryptionKeyNotFoundException when
