@@ -11,10 +11,16 @@ repositories {
 
 dependencies {
 	implementation gradleApi()
+
+	implementation 'io.github.gradle-nexus:publish-plugin:1.3.0'
 }
 
 gradlePlugin {
 	plugins {
+		sonatype {
+			id = 'com.konfigyr.crypto.sonatype'
+			implementationClass = 'com.konfigyr.crypto.publish.SonatypePlugin'
+		}
 		deploy {
 			id = 'com.konfigyr.crypto.deploy'
 			implementationClass = 'com.konfigyr.crypto.publish.DeployPlugin'

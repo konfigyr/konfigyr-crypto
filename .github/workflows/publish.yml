@@ -26,11 +26,6 @@ jobs:
           distribution: temurin
       - name: Build with Gradle
         run: ./gradlew check
-      - name: Test Reports
-        uses: mikepenz/action-junit-report@v3
-        if: success() || failure()
-        with:
-          report_paths: '**/build/test-results/test/TEST-*.xml'
 
   publish:
     name: Sign and Publish Artifact
@@ -50,4 +45,4 @@ jobs:
           GPG_SIGNING_SECRET: ${{ secrets.GPG_SIGNING_SECRET }}
           OSSRH_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
-        run: ./gradlew publish --stacktrace
+        run: ./gradlew publish release --stacktrace

@@ -2,8 +2,6 @@ package com.konfigyr.crypto.publish;
 
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
-import org.gradle.api.artifacts.dsl.RepositoryHandler;
-import org.gradle.api.artifacts.repositories.MavenArtifactRepository;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginExtension;
 import org.gradle.api.publish.Publication;
@@ -17,7 +15,6 @@ import org.gradle.plugins.signing.SigningExtension;
 import org.gradle.plugins.signing.SigningPlugin;
 
 import javax.annotation.Nonnull;
-import java.net.URI;
 
 /**
  * @author : Vladimir Spasic
@@ -30,11 +27,10 @@ public class DeployPlugin implements Plugin<Project> {
 		project.getPlugins().apply(MavenPublishPlugin.class);
 		project.getPlugins().apply(SigningPlugin.class);
 
-		project.getExtensions().create(DeployExtension.NAME, DeployExtension.class,
-				project.getObjects(), project.getProviders());
+		final DeployExtension extension = DeployExtension.resolve(project);
 
 		customizeJavaPlugin(project);
-		customizePublishExtension(project);
+		customizePublishExtension(project, extension);
 	}
 
 	private void customizeJavaPlugin(Project project) {
@@ -45,50 +41,22 @@ public class DeployPlugin implements Plugin<Project> {
 		});
 	}
 
-	private void customizePublishExtension(Project project) {
+	private void customizePublishExtension(Project project, DeployExtension extension) {
 		final PublishingExtension publishing = project.getExtensions().getByType(PublishingExtension.class);
-		publishing.repositories(repositories -> customizeRepositories(repositories, project));
 
 		final MavenPublication publication = publishing.getPublications().create("maven", MavenPublication.class);
 		publication.from(project.getComponents().findByName("java"));
 		publication.versionMapping(this::customizeVersionMappings);
 
 		customizePom(publication.getPom(), project);
-		customizeSigningExtension(publication, project);
+		customizeSigningExtension(publication, project, extension);
 	}
 
-	private void customizeSigningExtension(Publication publication, Project project) {
-		final DeployExtension extension = project.getExtensions().getByType(DeployExtension.class);
-
+	private void customizeSigningExtension(Publication publication, Project project, DeployExtension extension) {
 		if (extension.hasSigningCredentials()) {
 			final SigningExtension signing = project.getExtensions().getByType(SigningExtension.class);
 			signing.sign(publication);
 			signing.useInMemoryPgpKeys(extension.signingKey().get(), extension.signingSecret().get());
-		}
-	}
-
-	private void customizeRepositories(RepositoryHandler repositories, Project project) {
-		final DeployExtension extension = project.getExtensions().getByType(DeployExtension.class);
-
-		repositories.maven(repository -> {
-			repository.setName("oss-sonatype-snapshot");
-			repository.setUrl(URI.create("https://s01.oss.sonatype.org/content/repositories/snapshots/"));
-			customizeRepositoryCredentials(repository, extension);
-		});
-
-		repositories.maven(repository -> {
-			repository.setName("oss-sonatype-release");
-			repository.setUrl(URI.create("https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"));
-			customizeRepositoryCredentials(repository, extension);
-		});
-	}
-
-	private void customizeRepositoryCredentials(MavenArtifactRepository repository, DeployExtension extension) {
-		if (extension.hasRepositoryCredentials()) {
-			repository.credentials(credentials -> {
-				credentials.setUsername(extension.repositoryUsername().get());
-				credentials.setPassword(extension.repositoryPassword().get());
-			});
 		}
 	}
 
