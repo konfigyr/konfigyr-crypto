@@ -40,17 +40,10 @@ public class JdbcKeysetDataSourceScriptDatabaseInitializer extends DataSourceScr
 
 	private static List<String> resolveSchemaLocations(DataSource dataSource, JdbcKeysetProperties properties) {
 		PlatformPlaceholderDatabaseDriverResolver resolver = new PlatformPlaceholderDatabaseDriverResolver();
-
-		for (final DatabaseDriver driver : DatabaseDriver.values()) {
-			if (DatabaseDriver.ORACLE != driver) {
-				resolver = resolver.withDriverPlatform(driver, "default");
-			}
-		}
-
+		resolver = resolver.withDriverPlatform(DatabaseDriver.MARIADB, "mysql");
 		if (StringUtils.hasText(properties.getPlatform())) {
 			return resolver.resolveAll(properties.getPlatform(), properties.getSchema());
 		}
-
 		return resolver.resolveAll(dataSource, properties.getSchema());
 	}
 

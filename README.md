@@ -170,7 +170,6 @@ Keyset repository is a simple interface which goal is to implement how should an
 Konfigyr Crypto comes with the following implementations of the `KeysetRepository` which you can use:
 * [JDBC](konfigyr-crypto-jdbc)
 
-
 ## Building from Source
 Konfigyr Crypto uses a Gradle-based build system. In the instructions below, `./gradlew` is invoked from the root of the source tree and serves as a cross-platform, self-contained bootstrap mechanism for the build.
 

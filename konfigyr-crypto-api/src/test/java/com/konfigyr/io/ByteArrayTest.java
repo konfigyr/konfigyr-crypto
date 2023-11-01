@@ -11,7 +11,7 @@ import java.nio.charset.StandardCharsets;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * @author : vladimir.spasic.86@gmail.com
+ * @author : Vladimir Spasic
  * @since : 01.09.22, Thu
  **/
 class ByteArrayTest {
