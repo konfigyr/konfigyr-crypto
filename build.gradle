@@ -1,8 +1,8 @@
 plugins {
-    id 'idea'
-    id 'io.freefair.lombok' version '8.4' apply(false)
-    id 'io.spring.javaformat' version '0.0.39' apply(false)
-    id 'io.spring.dependency-management' version '1.1.0' apply(false)
+	id 'idea'
+	id 'io.freefair.lombok' version '8.4' apply(false)
+	id 'io.spring.javaformat' version '0.0.39' apply(false)
+	id 'io.spring.dependency-management' version '1.1.0' apply(false)
 	id 'com.konfigyr.crypto.sonatype' apply(false)
 	id 'com.konfigyr.crypto.deploy' apply(false)
 }
@@ -15,57 +15,57 @@ allprojects {
 }
 
 subprojects {
-    apply plugin: 'idea'
-    apply plugin: 'checkstyle'
-    apply plugin: 'java-library'
-    apply plugin: 'io.freefair.lombok'
-    apply plugin: 'io.spring.javaformat'
-    apply plugin: 'io.spring.dependency-management'
+	apply plugin: 'idea'
+	apply plugin: 'checkstyle'
+	apply plugin: 'java-library'
+	apply plugin: 'io.freefair.lombok'
+	apply plugin: 'io.spring.javaformat'
+	apply plugin: 'io.spring.dependency-management'
 	apply plugin: 'com.konfigyr.crypto.deploy'
 
-    ext {
-        set('springVersion', '3.1.2')
-    }
+	ext {
+		set('springVersion', '3.1.2')
+	}
 
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
+	sourceCompatibility = JavaVersion.VERSION_17
+	targetCompatibility = JavaVersion.VERSION_17
 
-    repositories {
-        mavenCentral()
-        mavenLocal()
-    }
+	repositories {
+		mavenCentral()
+		mavenLocal()
+	}
 
-    idea {
-        module {
-            outputDir = compileJava.destinationDirectory.asFile.get()
-            testOutputDir = compileTestJava.destinationDirectory.asFile.get()
-        }
-    }
+	idea {
+		module {
+			outputDir = compileJava.destinationDirectory.asFile.get()
+			testOutputDir = compileTestJava.destinationDirectory.asFile.get()
+		}
+	}
 
-    dependencies {
+	dependencies {
 		implementation 'com.google.code.findbugs:jsr305:3.0.2'
 
-        checkstyle 'io.spring.javaformat:spring-javaformat-checkstyle:0.0.39'
+		checkstyle 'io.spring.javaformat:spring-javaformat-checkstyle:0.0.39'
 
-        annotationProcessor 'org.springframework.boot:spring-boot-autoconfigure-processor'
-        annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+		annotationProcessor 'org.springframework.boot:spring-boot-autoconfigure-processor'
+		annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 
-        testImplementation 'org.springframework.boot:spring-boot-starter-test'
-        testImplementation 'org.springframework.boot:spring-boot-starter-validation'
-    }
+		testImplementation 'org.springframework.boot:spring-boot-starter-test'
+		testImplementation 'org.springframework.boot:spring-boot-starter-validation'
+	}
 
-    dependencyManagement {
-        imports {
-            mavenBom "org.springframework.boot:spring-boot-dependencies:${springVersion}"
-        }
-    }
+	dependencyManagement {
+		imports {
+			mavenBom "org.springframework.boot:spring-boot-dependencies:${springVersion}"
+		}
+	}
 
 	java {
 		withJavadocJar()
 		withSourcesJar()
 	}
 
-    test {
-        useJUnitPlatform()
-    }
+	test {
+		useJUnitPlatform()
+	}
 }
