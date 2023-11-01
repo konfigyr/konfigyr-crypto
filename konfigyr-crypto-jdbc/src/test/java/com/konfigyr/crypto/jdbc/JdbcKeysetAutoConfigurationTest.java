@@ -69,6 +69,7 @@ class JdbcKeysetAutoConfigurationTest {
 		runner.withBean(DataSource.class, () -> dataSource)
 			.withBean(PlatformTransactionManager.class, () -> txManager)
 			.withBean(ConversionService.class, GenericConversionService::new)
+			.withPropertyValues("konfigyr.crypto.jdbc.platform=h2")
 			.run(ctx -> assertThat(ctx).hasNotFailed()
 				.hasSingleBean(JdbcKeysetAutoConfiguration.class)
 				.hasSingleBean(JdbcKeysetRepository.class)

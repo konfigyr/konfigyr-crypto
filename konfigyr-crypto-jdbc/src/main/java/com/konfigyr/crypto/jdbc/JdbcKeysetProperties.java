@@ -24,11 +24,8 @@ public class JdbcKeysetProperties {
 	/**
 	 * Platform to use in initialization scripts if the <code>@@platform@@</code>
 	 * placeholder is used.
-	 * <p>
-	 * The value is set to {@literal default} and should only be changed to
-	 * {@literal oracle}.
 	 */
-	private String platform = "default";
+	private String platform;
 
 	/**
 	 * Database schema initialization mode.
