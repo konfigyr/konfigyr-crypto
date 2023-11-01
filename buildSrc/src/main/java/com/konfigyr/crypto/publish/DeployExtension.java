@@ -1,5 +1,6 @@
 package com.konfigyr.crypto.publish;
 
+import org.gradle.api.Project;
 import org.gradle.api.model.ObjectFactory;
 import org.gradle.api.provider.Property;
 import org.gradle.api.provider.ProviderFactory;
@@ -19,7 +20,9 @@ public abstract class DeployExtension {
 	private final Property<String> repositoryUsername;
 
 	private final Property<String> repositoryPassword;
-
+	static DeployExtension resolve(Project project) {
+		return project.getRootProject().getExtensions().getByType(DeployExtension.class);
+	}
 	public DeployExtension(ObjectFactory factory, ProviderFactory providers) {
 		signingKey = factory.property(String.class).value(providers.environmentVariable("GPG_SIGNING_KEY"));
 		signingSecret = factory.property(String.class).value(providers.environmentVariable("GPG_SIGNING_SECRET"));
