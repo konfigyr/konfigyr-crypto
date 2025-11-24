@@ -1,7 +1,7 @@
 package com.konfigyr.crypto;
 
 import lombok.Value;
-import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.NullMarked;
 
 import java.io.Serial;
 import java.io.Serializable;
@@ -17,21 +17,15 @@ import java.time.Instant;
  * @see KeysetFactory#create(KeyEncryptionKey, KeysetDefinition)
  **/
 @Value
+@NullMarked
 class SimpleKeysetDefinition implements KeysetDefinition, Serializable {
 
 	@Serial
 	private static final long serialVersionUID = 283753676517870624L;
 
-	@NonNull
 	String name;
-
-	@NonNull
 	Algorithm algorithm;
-
-	@NonNull
 	Duration rotationInterval;
-
-	@NonNull
 	Instant nextRotationTime;
 
 }

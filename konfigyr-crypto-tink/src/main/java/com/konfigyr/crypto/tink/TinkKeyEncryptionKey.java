@@ -14,7 +14,6 @@ import com.konfigyr.crypto.AbstractKeyEncryptionKey;
 import com.konfigyr.crypto.KeyEncryptionKey;
 import com.konfigyr.crypto.Keyset;
 import com.konfigyr.io.ByteArray;
-import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.springframework.util.Assert;
 
@@ -180,7 +179,7 @@ public class TinkKeyEncryptionKey extends AbstractKeyEncryptionKey {
 				throw new IllegalArgumentException("Failed to create AES Key Encryption Key with id: " + id, e);
 			}
 
-			return new TinkKeyEncryptionKey(id, provider, SingletonAeadFactory.of(primitive));
+			return new TinkKeyEncryptionKey(id, provider, new SingletonAeadFactory(primitive));
 		}
 
 		/**
@@ -275,15 +274,12 @@ public class TinkKeyEncryptionKey extends AbstractKeyEncryptionKey {
 			Assert.hasText(id, "Key encryption key identifier can't be blank");
 			Assert.notNull(handle, "Keyset handle can't be null");
 
-			return new TinkKeyEncryptionKey(id, provider, KeysetHandleAeadFactory.of(handle));
+			return new TinkKeyEncryptionKey(id, provider, new KeysetHandleAeadFactory(handle));
 		}
 
 	}
 
-	@RequiredArgsConstructor(staticName = "of")
-	private static class SingletonAeadFactory implements AeadFactory {
-
-		private final Aead aead;
+	private record SingletonAeadFactory(Aead aead) implements AeadFactory {
 
 		@Override
 		public Aead get() {
@@ -292,10 +288,7 @@ public class TinkKeyEncryptionKey extends AbstractKeyEncryptionKey {
 
 	}
 
-	@RequiredArgsConstructor(staticName = "of")
-	private static class KeysetHandleAeadFactory implements AeadFactory {
-
-		private final KeysetHandle handle;
+	private record KeysetHandleAeadFactory(KeysetHandle handle) implements AeadFactory {
 
 		@Override
 		public Aead get() throws GeneralSecurityException {

@@ -3,13 +3,13 @@ package com.konfigyr.crypto.tink;
 import com.google.crypto.tink.*;
 import com.konfigyr.crypto.*;
 import com.konfigyr.io.ByteArray;
-import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NullMarked;
 import org.springframework.util.Assert;
+import org.springframework.util.StreamUtils;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 
 /**
@@ -70,22 +70,26 @@ public class TinkKeysetFactory implements KeysetFactory {
 	}
 
 	@Override
-	public EncryptedKeyset create(Keyset keyset) throws IOException {
+	public EncryptedKeyset create(Keyset keyset) {
 		Assert.isInstanceOf(TinkKeyset.class, keyset,
 				"This keyset factory only supports Tink keysets," + "you have passed: " + keyset.getClass());
 
 		final KeyEncryptionKey kek = keyset.getKeyEncryptionKey();
-		final ByteArrayOutputStream os = new ByteArrayOutputStream();
+		final ByteArray cipher;
 
 		try {
-			((TinkKeyset) keyset).getHandle()
-				.write(BinaryKeysetWriter.withOutputStream(os), KeyEncryptionKeyAdapter.adapt(keyset.getName(), kek));
-		}
-		catch (GeneralSecurityException e) {
+			final String serialized = TinkJsonProtoKeysetFormat.serializeEncryptedKeyset(
+				((TinkKeyset) keyset).getHandle(),
+				new KeyEncryptionKeyAdapter(keyset.getName(), kek),
+					null
+			);
+
+			cipher = ByteArray.fromString(serialized, StandardCharsets.UTF_8);
+		} catch (GeneralSecurityException e) {
 			throw new CryptoException.WrappingException(keyset.getName(), kek, e);
 		}
 
-		return EncryptedKeyset.from(keyset, new ByteArray(os.toByteArray()));
+		return EncryptedKeyset.from(keyset, cipher);
 	}
 
 	@Override
@@ -96,10 +100,12 @@ public class TinkKeysetFactory implements KeysetFactory {
 		final InputStream cipher = encryptedKeyset.getInputStream();
 
 		try {
-			handle = KeysetHandle.read(BinaryKeysetReader.withInputStream(cipher),
-					KeyEncryptionKeyAdapter.adapt(name, kek));
-		}
-		catch (GeneralSecurityException e) {
+			handle = TinkJsonProtoKeysetFormat.parseEncryptedKeyset(
+				StreamUtils.copyToString(cipher, StandardCharsets.UTF_8),
+				new KeyEncryptionKeyAdapter(name, kek),
+				null
+			);
+		} catch (GeneralSecurityException e) {
 			throw new CryptoException.UnwrappingException(name, kek, e);
 		}
 
@@ -112,33 +118,26 @@ public class TinkKeysetFactory implements KeysetFactory {
 			.build();
 	}
 
-	@RequiredArgsConstructor(staticName = "adapt")
-	private static class KeyEncryptionKeyAdapter implements Aead {
+	private record KeyEncryptionKeyAdapter(String keyset, KeyEncryptionKey kek) implements Aead {
 
-		private final String keyset;
-
-		private final KeyEncryptionKey kek;
-
-		@Override
-		public byte[] encrypt(byte[] plaintext, byte[] associatedData) {
-			try {
-				return kek.wrap(new ByteArray(plaintext)).array();
+			@Override
+			public byte[] encrypt(byte[] plaintext, byte[] associatedData) {
+				try {
+					return kek.wrap(new ByteArray(plaintext)).array();
+				} catch (IOException e) {
+					throw new CryptoException.WrappingException(keyset, kek, e);
+				}
 			}
-			catch (IOException e) {
-				throw new CryptoException.WrappingException(keyset, kek, e);
+
+			@Override
+			public byte[] decrypt(byte[] ciphertext, byte[] associatedData) {
+				try {
+					return kek.unwrap(new ByteArray(ciphertext)).array();
+				} catch (IOException e) {
+					throw new CryptoException.UnwrappingException(keyset, kek, e);
+				}
 			}
+
 		}
-
-		@Override
-		public byte[] decrypt(byte[] ciphertext, byte[] associatedData) {
-			try {
-				return kek.unwrap(new ByteArray(ciphertext)).array();
-			}
-			catch (IOException e) {
-				throw new CryptoException.UnwrappingException(keyset, kek, e);
-			}
-		}
-
-	}
 
 }

@@ -2,10 +2,7 @@ package com.konfigyr.crypto.tink;
 
 import com.google.crypto.tink.KeysetHandle;
 import com.konfigyr.crypto.*;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
+import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
@@ -26,6 +23,7 @@ public class TinkIntegrationTest {
 
 	@Test
 	@Order(1)
+	@DisplayName("should retrieve configured key encryption key providers")
 	void shouldRetrieveProviders() {
 		assertThat(store.provider("aes-provider")).isPresent()
 			.get()
@@ -47,6 +45,7 @@ public class TinkIntegrationTest {
 
 	@Test
 	@Order(1)
+	@DisplayName("should retrieve configured key encryption keys")
 	void shouldRetrieveKeyEncryptionKeys() {
 		assertThat(store.kek("aes-provider", "random-kek")).isNotNull();
 		assertThat(store.kek("aes-provider", "aes-kek")).isNotNull();
@@ -70,6 +69,7 @@ public class TinkIntegrationTest {
 
 	@Test
 	@Order(2)
+	@DisplayName("should generate keyset using supported Tink algorithm")
 	void shouldGenerateKeyset() {
 		assertThatObject(store.create("aes-provider", "aes-kek", definition)).isInstanceOf(TinkKeyset.class)
 			.returns(definition.getName(), Keyset::getName)
@@ -85,6 +85,7 @@ public class TinkIntegrationTest {
 
 	@Test
 	@Order(3)
+	@DisplayName("should wrap and write keyset in the repository")
 	void shouldWriteKeyset() throws Exception {
 		final var handle = KeysetHandle.generateNew(TinkUtils.keyTemplateForAlgorithm(TinkAlgorithm.ED25519));
 
@@ -101,6 +102,7 @@ public class TinkIntegrationTest {
 
 	@Test
 	@Order(4)
+	@DisplayName("should read and unwrap keyset from the repository")
 	void shouldReadKeyset() {
 		final var kek = store.kek("aes-provider", "aes-kek");
 
@@ -119,6 +121,7 @@ public class TinkIntegrationTest {
 
 	@Test
 	@Order(4)
+	@DisplayName("should read keyset that uses a KMS key encryption key provider")
 	void shouldReadCustomKeyset() {
 		final var kek = store.kek("kms-provider", TinkIntegrationConfiguration.KMS_KEY_URI);
 
@@ -133,6 +136,7 @@ public class TinkIntegrationTest {
 
 	@Test
 	@Order(5)
+	@DisplayName("should rotate Tink keyset and store it in the repository")
 	void shouldRotateKeyset() {
 		final var keyset = store.read(definition.getName());
 
@@ -152,11 +156,12 @@ public class TinkIntegrationTest {
 
 	@Test
 	@Order(6)
+	@DisplayName("should remove keyset from the repository")
 	void shouldRemoveKeyset() {
 		assertThatNoException().isThrownBy(() -> store.remove(definition.getName()));
 
-		assertThatThrownBy(() -> store.read(definition.getName()))
-			.isInstanceOf(CryptoException.KeysetNotFoundException.class);
+		assertThatExceptionOfType(CryptoException.KeysetNotFoundException.class)
+			.isThrownBy(() -> store.read(definition.getName()));
 	}
 
 }

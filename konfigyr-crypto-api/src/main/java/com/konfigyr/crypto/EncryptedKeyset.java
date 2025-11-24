@@ -4,8 +4,9 @@ import com.konfigyr.io.ByteArray;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.Value;
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.NullUnmarked;
 import org.springframework.core.io.InputStreamSource;
-import org.jspecify.annotations.NonNull;
 import org.springframework.util.Assert;
 
 import java.io.InputStream;
@@ -32,6 +33,7 @@ import java.time.Instant;
  * @see KeysetRepository
  **/
 @Value
+@NullMarked
 @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
 public class EncryptedKeyset implements InputStreamSource, Serializable {
 
@@ -41,47 +43,38 @@ public class EncryptedKeyset implements InputStreamSource, Serializable {
 	/**
 	 * Unique keyset name.
 	 */
-	@NonNull
 	String name;
 
 	/**
 	 * Algorithm name that is used by this keyset.
 	 */
-	@NonNull
 	String algorithm;
 
 	/**
-	 * {@link KeyEncryptionKeyProvider} name that supplied the {@link KeyEncryptionKey} to
-	 * encrypt this keyset.
+	 * {@link KeyEncryptionKeyProvider} name that supplied the {@link KeyEncryptionKey} to encrypt this keyset.
 	 */
-	@NonNull
 	String provider;
 
 	/**
 	 * The identifier of the {@link KeyEncryptionKey} used to wrap and unwrap this keyset.
 	 */
-	@NonNull
 	String keyEncryptionKey;
 
 	/**
 	 * Encrypted key material that was wrapped by the {@link KeyEncryptionKey}.
 	 */
-	@NonNull
 	ByteArray data;
 
 	/**
 	 * Rotation frequency for the keyset.
 	 */
-	@NonNull
 	Duration rotationInterval;
 
 	/**
 	 * Timestamp when the next key rotation should occur.
 	 */
-	@NonNull
 	Instant nextRotationTime;
 
-	@NonNull
 	@Override
 	public InputStream getInputStream() {
 		return data.getInputStream();
@@ -91,18 +84,18 @@ public class EncryptedKeyset implements InputStreamSource, Serializable {
 	 * Creates a new empty instance of the {@link EncryptedKeyset.Builder}.
 	 * @return encrypted keyset builder, never {@literal  null}
 	 */
-	public static @NonNull Builder builder() {
+	public static Builder builder() {
 		return new Builder();
 	}
 
 	/**
-	 * Creates a new instance of the {@link EncryptedKeyset.Builder} and populates the
-	 * builder with the data from the given {@link KeysetDefinition}.
-	 * @param definition definition from which the builder would be created, can't be
-	 * {@literal null}
+	 * Creates a new instance of the {@link EncryptedKeyset.Builder} and populates the builder with the
+	 * data from the given {@link KeysetDefinition}.
+	 *
+	 * @param definition definition from which the builder would be created, can't be {@literal null}
 	 * @return encrypted keyset builder based on this definition, never {@literal  null}
 	 */
-	public static @NonNull Builder builder(@NonNull KeysetDefinition definition) {
+	public static Builder builder(KeysetDefinition definition) {
 		return builder().name(definition.getName())
 			.algorithm(definition.getAlgorithm().name())
 			.rotationInterval(definition.getRotationInterval())
@@ -110,20 +103,21 @@ public class EncryptedKeyset implements InputStreamSource, Serializable {
 	}
 
 	/**
-	 * Creates a new instance of the {@link EncryptedKeyset} from the given {@link Keyset}
-	 * and encrypted key material represented by the {@link ByteArray}.
-	 * @param keyset keyset that is encrypted by the {@link KeyEncryptionKey}, can't be
-	 * {@literal null}
+	 * Creates a new instance of the {@link EncryptedKeyset} from the given {@link Keyset} and encrypted
+	 * key material represented by the {@link ByteArray}.
+	 *
+	 * @param keyset keyset that is encrypted by the {@link KeyEncryptionKey}, can't be {@literal null}
 	 * @param data encrypted private key material, can't be {@literal null}
 	 * @return encrypted keyset, never {@literal  null}
 	 */
-	public static @NonNull EncryptedKeyset from(@NonNull Keyset keyset, @NonNull ByteArray data) {
+	public static EncryptedKeyset from(Keyset keyset, ByteArray data) {
 		return builder(keyset).keyEncryptionKey(keyset.getKeyEncryptionKey()).build(data);
 	}
 
 	/**
 	 * Builder class used to create new instances of the {@link EncryptedKeyset}.
 	 */
+	@NullUnmarked
 	@RequiredArgsConstructor(access = AccessLevel.PRIVATE)
 	public static final class Builder {
 
@@ -141,6 +135,7 @@ public class EncryptedKeyset implements InputStreamSource, Serializable {
 
 		/**
 		 * Specify the name of the {@link EncryptedKeyset}.
+		 *
 		 * @param name keyset name, can't be {@literal null}
 		 * @return builder
 		 */
@@ -151,6 +146,7 @@ public class EncryptedKeyset implements InputStreamSource, Serializable {
 
 		/**
 		 * Specify the {@link Algorithm} that is used by the {@link Keyset}.
+		 *
 		 * @param algorithm algorithm name, can't be {@literal null}
 		 * @return builder
 		 */
@@ -161,6 +157,7 @@ public class EncryptedKeyset implements InputStreamSource, Serializable {
 
 		/**
 		 * Specify the name of the {@link Algorithm} that is used by the {@link Keyset}.
+		 *
 		 * @param algorithm algorithm name, can't be {@literal null}
 		 * @return builder
 		 */
@@ -170,8 +167,8 @@ public class EncryptedKeyset implements InputStreamSource, Serializable {
 		}
 
 		/**
-		 * Specify the name of the {@link KeyEncryptionKeyProvider} that owns the
-		 * {@link KeyEncryptionKey}.
+		 * Specify the name of the {@link KeyEncryptionKeyProvider} that owns the {@link KeyEncryptionKey}.
+		 *
 		 * @param provider KEK provider name, can't be {@literal null}
 		 * @return builder
 		 */
@@ -181,8 +178,8 @@ public class EncryptedKeyset implements InputStreamSource, Serializable {
 		}
 
 		/**
-		 * Specify the identifier of the {@link KeyEncryptionKey} used to wrap and unwrap
-		 * the {@link Keyset}.
+		 * Specify the identifier of the {@link KeyEncryptionKey} used to wrap and unwrap the {@link Keyset}.
+		 *
 		 * @param kekIdentifier KEK identifier, can't be {@literal null}
 		 * @return builder
 		 */
@@ -192,9 +189,9 @@ public class EncryptedKeyset implements InputStreamSource, Serializable {
 		}
 
 		/**
-		 * Specify the {@link KeyEncryptionKey} used to wrap and unwrap the
-		 * {@link Keyset}. This method would extract the identifier of the KEK as well as
-		 * the {@link KeyEncryptionKeyProvider} name.
+		 * Specify the {@link KeyEncryptionKey} used to wrap and unwrap the {@link Keyset}. This method would
+		 * extract the identifier of the KEK as well as the {@link KeyEncryptionKeyProvider} name.
+		 *
 		 * @param kek KEK, can't be {@literal null}
 		 * @return builder
 		 */
@@ -206,6 +203,7 @@ public class EncryptedKeyset implements InputStreamSource, Serializable {
 
 		/**
 		 * Specify the rotation frequency of the {@link EncryptedKeyset} in milliseconds.
+		 *
 		 * @param rotationInterval rotation frequency, can't be {@literal null}
 		 * @return builder
 		 */
@@ -215,6 +213,7 @@ public class EncryptedKeyset implements InputStreamSource, Serializable {
 
 		/**
 		 * Specify the rotation frequency of the {@link EncryptedKeyset}.
+		 *
 		 * @param rotationInterval rotation frequency, can't be {@literal null}
 		 * @return builder
 		 */
@@ -225,8 +224,8 @@ public class EncryptedKeyset implements InputStreamSource, Serializable {
 
 		/**
 		 * Specify the next rotation time of the {@link EncryptedKeyset}.
-		 * @param nextRotationTime next rotation time of the keyset, can't be
-		 * {@literal null}
+		 *
+		 * @param nextRotationTime next rotation time of the keyset, can't be {@literal null}
 		 * @return builder
 		 */
 		public Builder nextRotationTime(long nextRotationTime) {
@@ -235,8 +234,8 @@ public class EncryptedKeyset implements InputStreamSource, Serializable {
 
 		/**
 		 * Specify the next rotation time of the {@link EncryptedKeyset}.
-		 * @param nextRotationTime next rotation time of the keyset, can't be
-		 * {@literal null}
+		 *
+		 * @param nextRotationTime next rotation time of the keyset, can't be {@literal null}
 		 * @return builder
 		 */
 		public Builder nextRotationTime(Instant nextRotationTime) {
@@ -245,13 +244,14 @@ public class EncryptedKeyset implements InputStreamSource, Serializable {
 		}
 
 		/**
-		 * Creates a new instance of the {@link EncryptedKeyset} using the given
-		 * {@link ByteArray} as the encrypted key material from the {@link Keyset}.
-		 * @param data encrypted key material, can not be {@literal null}
+		 * Creates a new instance of the {@link EncryptedKeyset} using the given {@link ByteArray} as the
+		 * encrypted key material from the {@link Keyset}.
+		 *
+		 * @param data encrypted key material, cannot be {@literal null}
 		 * @return encrypted keyset
-		 * @throws IllegalArgumentException when encrypted keyset can not be built
+		 * @throws IllegalArgumentException when required data to create encrypted keyset is not set
 		 */
-		public @NonNull EncryptedKeyset build(ByteArray data) {
+		public EncryptedKeyset build(ByteArray data) {
 			Assert.hasText(name, "Keyset name can not be blank");
 			Assert.hasText(algorithm, "Keyset algorithm can not be blank");
 			Assert.hasText(provider, "KEK provider name can not be blank");
