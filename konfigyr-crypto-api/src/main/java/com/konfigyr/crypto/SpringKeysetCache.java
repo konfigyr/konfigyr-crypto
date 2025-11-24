@@ -1,8 +1,9 @@
 package com.konfigyr.crypto;
 
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 import org.springframework.cache.Cache;
-import org.springframework.lang.NonNull;
 
 import java.util.function.Supplier;
 
@@ -13,13 +14,14 @@ import java.util.function.Supplier;
  * @author : Vladimir Spasic
  * @since : 06.09.23, Wed
  **/
+@NullMarked
 @RequiredArgsConstructor
 public class SpringKeysetCache implements KeysetCache {
 
 	private final Cache cache;
 
 	@Override
-	public synchronized EncryptedKeyset get(@NonNull String key, @NonNull Supplier<EncryptedKeyset> supplier) {
+	public synchronized EncryptedKeyset get(String key, Supplier<@Nullable EncryptedKeyset> supplier) {
 		EncryptedKeyset encryptedKeyset = cache.get(key, EncryptedKeyset.class);
 
 		if (encryptedKeyset != null) {
@@ -39,12 +41,12 @@ public class SpringKeysetCache implements KeysetCache {
 	}
 
 	@Override
-	public synchronized void put(@NonNull String key, @NonNull EncryptedKeyset keyset) {
+	public synchronized void put(String key, EncryptedKeyset keyset) {
 		cache.put(key, keyset);
 	}
 
 	@Override
-	public synchronized void evict(@NonNull String key) {
+	public synchronized void evict(String key) {
 		cache.evict(key);
 	}
 

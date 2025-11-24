@@ -5,5 +5,5 @@ dependencies {
     compileOnly("org.springframework.boot:spring-boot-starter-jdbc")
 
     testImplementation("org.hsqldb:hsqldb")
-	testImplementation("org.springframework.boot:spring-boot-starter-jdbc")
+	testImplementation("org.springframework.boot:spring-boot-starter-jdbc-test")
 }

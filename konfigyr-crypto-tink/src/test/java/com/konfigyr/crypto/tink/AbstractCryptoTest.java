@@ -34,20 +34,23 @@ public abstract class AbstractCryptoTest {
 
 	protected static <T extends CryptoException.KeysetException> Consumer<Throwable> assertKeysetException(
 			Class<T> type, String name) {
-		return throwable -> assertThat(throwable).isInstanceOf(type)
+		return throwable -> assertThat(throwable)
+			.isInstanceOf(type)
 			.asInstanceOf(InstanceOfAssertFactories.type(type))
 			.returns(name, CryptoException.KeysetException::getName);
 	}
 
-	protected static <T extends CryptoException.KeysetException> Consumer<Throwable> assertOperationException(
-			String key, KeysetOperation operation) {
+	protected static Consumer<Throwable> assertOperationException(String key, KeysetOperation operation) {
 		return assertOperationException(CryptoException.KeysetOperationException.class, key, operation);
 	}
 
-	protected static <T extends CryptoException.KeysetException> Consumer<Throwable> assertOperationException(
+	protected static <T extends CryptoException.KeysetOperationException> Consumer<Throwable> assertOperationException(
 			Class<T> type, String key, KeysetOperation operation) {
-		return throwable -> assertThat(throwable).satisfies(assertKeysetException(type, key))
-			.extracting("attemptedOperation")
+
+		return throwable -> assertThat(throwable)
+			.satisfies(assertKeysetException(type, key))
+			.asInstanceOf(InstanceOfAssertFactories.type(CryptoException.KeysetOperationException.class))
+			.extracting(CryptoException.KeysetOperationException::attemptedOperation)
 			.isEqualTo(operation);
 	}
 

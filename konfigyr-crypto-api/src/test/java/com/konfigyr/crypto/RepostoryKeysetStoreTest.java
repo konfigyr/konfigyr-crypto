@@ -1,6 +1,7 @@
 package com.konfigyr.crypto;
 
 import com.konfigyr.io.ByteArray;
+import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -8,7 +9,6 @@ import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.cache.concurrent.ConcurrentMapCache;
-import org.springframework.lang.NonNull;
 
 import java.io.IOException;
 import java.util.List;

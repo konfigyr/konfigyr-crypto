@@ -3,7 +3,7 @@ package com.konfigyr.crypto.tink;
 import com.konfigyr.crypto.Algorithm;
 import com.konfigyr.crypto.KeyType;
 import com.konfigyr.crypto.KeysetOperation;
-import org.springframework.lang.NonNull;
+import org.jspecify.annotations.NonNull;
 
 import java.util.Set;
 

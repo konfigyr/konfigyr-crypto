@@ -3,6 +3,7 @@ package com.konfigyr.crypto.tink;
 import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.KeyTemplate;
 import com.google.crypto.tink.KeysetHandle;
+import com.google.crypto.tink.RegistryConfiguration;
 import com.google.crypto.tink.aead.KmsAeadKeyManager;
 import com.google.crypto.tink.aead.KmsEnvelopeAeadKeyManager;
 import com.google.crypto.tink.proto.AesGcmKeyFormat;
@@ -14,7 +15,7 @@ import com.konfigyr.crypto.KeyEncryptionKey;
 import com.konfigyr.crypto.Keyset;
 import com.konfigyr.io.ByteArray;
 import lombok.RequiredArgsConstructor;
-import org.springframework.lang.NonNull;
+import org.jspecify.annotations.NonNull;
 import org.springframework.util.Assert;
 
 import javax.crypto.SecretKey;
@@ -298,7 +299,7 @@ public class TinkKeyEncryptionKey extends AbstractKeyEncryptionKey {
 
 		@Override
 		public Aead get() throws GeneralSecurityException {
-			return handle.getPrimitive(Aead.class);
+			return handle.getPrimitive(RegistryConfiguration.get(), Aead.class);
 		}
 
 	}

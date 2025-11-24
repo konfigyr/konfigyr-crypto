@@ -1,5 +1,6 @@
 package com.konfigyr.crypto;
 
+import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -7,6 +8,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.cache.Cache;
 import org.springframework.cache.support.NoOpCache;
 import org.springframework.context.annotation.Bean;
+
+import java.util.List;
 
 /**
  * Autoconfiguration class used to create the {@link KeysetStore}. This configuration
@@ -33,15 +36,24 @@ public class CryptoAutoConfiguration {
 	}
 
 	@Bean
-	KeysetStore repositoryKeysetStore(KeysetRepository repository, ObjectProvider<KeysetCache> cache,
-			ObjectProvider<KeysetFactory> factories, ObjectProvider<KeyEncryptionKeyProvider> providers) {
-		return new RepostoryKeysetStore(cache.getIfAvailable(CryptoAutoConfiguration::createNoopKeysetCache),
-				repository, factories.orderedStream().toList(), providers.orderedStream().toList());
+	KeysetStore repositoryKeysetStore(
+			KeysetRepository repository,
+			ObjectProvider<@NonNull KeysetCache> cache,
+			ObjectProvider<@NonNull KeysetFactory> factories,
+			ObjectProvider<@NonNull KeyEncryptionKeyProvider> providers
+	) {
+		final KeysetCache keysetCache = cache.getIfAvailable(CryptoAutoConfiguration::createNoopKeysetCache);
+
+		return new RepostoryKeysetStore(keysetCache, repository, collect(factories), collect(providers));
 	}
 
 	private static KeysetCache createNoopKeysetCache() {
 		final Cache delegate = new NoOpCache("noop-keyset-cache");
 		return new SpringKeysetCache(delegate);
+	}
+
+	private static <T> List<T> collect(ObjectProvider<@NonNull T> provider) {
+		return provider.orderedStream().toList();
 	}
 
 }

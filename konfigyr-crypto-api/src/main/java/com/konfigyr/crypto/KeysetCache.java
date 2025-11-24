@@ -1,6 +1,7 @@
 package com.konfigyr.crypto;
 
-import org.springframework.lang.NonNull;
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 import java.util.function.Supplier;
 
@@ -10,6 +11,7 @@ import java.util.function.Supplier;
  * @author : Vladimir Spasic
  * @since : 06.09.23, Wed
  **/
+@NullMarked
 public interface KeysetCache {
 
 	/**
@@ -25,7 +27,7 @@ public interface KeysetCache {
 	 * present in the cache, can't be {@literal null}
 	 * @return cached encrypted keyset, never {@literal null}
 	 */
-	EncryptedKeyset get(@NonNull String key, @NonNull Supplier<EncryptedKeyset> supplier);
+	EncryptedKeyset get(String key, Supplier<@Nullable EncryptedKeyset> supplier);
 
 	/**
 	 * Stores the {@link EncryptedKeyset} value with the specified key in this cache.
@@ -34,13 +36,13 @@ public interface KeysetCache {
 	 * @param keyset the {@link EncryptedKeyset} value to be associated with the specified
 	 * key
 	 */
-	void put(@NonNull String key, @NonNull EncryptedKeyset keyset);
+	void put(String key, EncryptedKeyset keyset);
 
 	/**
 	 * Evicts the {@link EncryptedKeyset} for this key from this cache if it is present.
 	 * @param key the key for which the {@link EncryptedKeyset} is to be evicted, can't be
 	 * {@literal null}
 	 */
-	void evict(@NonNull String key);
+	void evict(String key);
 
 }

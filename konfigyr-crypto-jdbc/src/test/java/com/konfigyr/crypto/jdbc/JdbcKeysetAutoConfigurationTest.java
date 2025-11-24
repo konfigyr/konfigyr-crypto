@@ -2,6 +2,7 @@ package com.konfigyr.crypto.jdbc;
 
 import com.konfigyr.crypto.KeysetRepository;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -35,6 +36,7 @@ class JdbcKeysetAutoConfigurationTest {
 	}
 
 	@Test
+	@DisplayName("should not register JDBC repository when data source is missing")
 	void shouldNotApplyConfigurationDueToMissingDataSourceBean() {
 		runner.run(ctx -> assertThat(ctx).hasNotFailed()
 			.doesNotHaveBean(JdbcKeysetAutoConfiguration.class)
@@ -43,6 +45,7 @@ class JdbcKeysetAutoConfigurationTest {
 	}
 
 	@Test
+	@DisplayName("should not register JDBC repository when transaction manager is missing")
 	void shouldNotApplyConfigurationDueToMissingTransactionManagerBean() {
 		runner.withBean(DataSource.class, () -> dataSource)
 			.run(ctx -> assertThat(ctx).hasNotFailed()
@@ -52,6 +55,7 @@ class JdbcKeysetAutoConfigurationTest {
 	}
 
 	@Test
+	@DisplayName("should not register JDBC repository when one is already defined")
 	void shouldNotApplyConfigurationDueToDeclaredRepositoryBean() {
 		final var repository = Mockito.mock(KeysetRepository.class);
 
@@ -65,6 +69,7 @@ class JdbcKeysetAutoConfigurationTest {
 	}
 
 	@Test
+	@DisplayName("should register JDBC repository and schema initializer")
 	void shouldApplyConfiguration() {
 		runner.withBean(DataSource.class, () -> dataSource)
 			.withBean(PlatformTransactionManager.class, () -> txManager)
@@ -77,11 +82,12 @@ class JdbcKeysetAutoConfigurationTest {
 	}
 
 	@Test
+	@DisplayName("should not initialize database schema when disabled")
 	void shouldNotRegisterInitializerOnCondition() {
 		runner.withBean(DataSource.class, () -> dataSource)
 			.withBean(PlatformTransactionManager.class, () -> txManager)
 			.withBean(ConversionService.class, GenericConversionService::new)
-			.withPropertyValues("spring.session.jdbc.initialize-schema=never")
+			.withPropertyValues("konfigyr.crypto.jdbc.initialize-schema=never")
 			.run(ctx -> assertThat(ctx).hasNotFailed()
 				.hasSingleBean(JdbcKeysetAutoConfiguration.class)
 				.hasSingleBean(JdbcKeysetRepository.class)
@@ -89,6 +95,7 @@ class JdbcKeysetAutoConfigurationTest {
 	}
 
 	@Test
+	@DisplayName("should not register schema initializer when one is already defined")
 	void shouldNotRegisterInitializerIfAlreadyDefined() {
 		final var initializer = Mockito.mock(JdbcKeysetDataSourceScriptDatabaseInitializer.class);
 

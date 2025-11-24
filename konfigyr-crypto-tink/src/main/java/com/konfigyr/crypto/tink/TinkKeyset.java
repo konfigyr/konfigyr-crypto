@@ -10,8 +10,8 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Value;
-import org.springframework.lang.NonNull;
-import org.springframework.lang.Nullable;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.util.Assert;
 import org.springframework.util.ClassUtils;
 
@@ -199,7 +199,7 @@ class TinkKeyset implements Keyset {
 		final T primitive;
 
 		try {
-			primitive = handle.getPrimitive(type);
+			primitive = handle.getPrimitive(RegistryConfiguration.get(), type);
 		}
 		catch (GeneralSecurityException e) {
 			throw new CryptoException.KeysetException(name,

@@ -1,7 +1,7 @@
 package com.konfigyr.crypto;
 
 import com.konfigyr.io.ByteArray;
-import org.springframework.lang.NonNull;
+import org.jspecify.annotations.NullMarked;
 
 import java.io.IOException;
 
@@ -28,43 +28,41 @@ import java.io.IOException;
  * @author : Vladimir Spasic
  * @since : 26.08.23, Sat
  **/
+@NullMarked
 public interface KeyEncryptionKey {
 
 	/**
 	 * The identifier of this {@link KeyEncryptionKey KEK}.
+	 *
 	 * @return the key identifier, never {@literal null}
 	 */
-	@NonNull
 	String getId();
 
 	/**
-	 * The identifier of the {@link KeyEncryptionKeyProvider} that provided the
-	 * {@link KeyEncryptionKey KEK}.
+	 * The identifier of the {@link KeyEncryptionKeyProvider} that provided the {@link KeyEncryptionKey KEK}.
+	 *
 	 * @return the key provider identifier, never {@literal null}
 	 */
-	@NonNull
 	String getProvider();
 
 	/**
-	 * Wraps or encrypts the {@link Keyset} private material. The encryption algorithm
-	 * that used to encrypt the data depends on the implementation of the
-	 * {@link KeyEncryptionKey}.
+	 * Wraps or encrypts the {@link Keyset} private material. The encryption algorithm that used to encrypt the
+	 * data depends on the implementation of the {@link KeyEncryptionKey}.
+	 *
 	 * @param data private keyset material, can't be {@literal null}
 	 * @return encrypted private keyset material, never {@literal null}
 	 * @throws IOException when there is an issue while wrapping the private key material.
 	 */
-	@NonNull
-	ByteArray wrap(@NonNull ByteArray data) throws IOException;
+	ByteArray wrap(ByteArray data) throws IOException;
 
 	/**
-	 * Unwraps or decrypts the {@link EncryptedKeyset} and returns the decrypted
-	 * {@link ByteArray} containing the private keyset material.
+	 * Unwraps or decrypts the {@link EncryptedKeyset} and returns the decrypted {@link ByteArray} containing
+	 * the private keyset material.
+	 *
 	 * @param data encrypted keyset material to be unwrapped, can't be {@literal null}
 	 * @return decrypted private keyset material, never {@literal null}
-	 * @throws IOException when there is an issue while unwrapping the encrypted private
-	 * key material.
+	 * @throws IOException when there is an issue while unwrapping the encrypted private key material.
 	 */
-	@NonNull
-	ByteArray unwrap(@NonNull ByteArray data) throws IOException;
+	ByteArray unwrap(ByteArray data) throws IOException;
 
 }

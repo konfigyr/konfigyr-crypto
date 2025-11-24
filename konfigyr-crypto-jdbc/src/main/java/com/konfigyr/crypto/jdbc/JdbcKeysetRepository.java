@@ -6,13 +6,11 @@ import com.konfigyr.io.ByteArray;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcOperations;
-import org.springframework.jdbc.support.lob.DefaultLobHandler;
-import org.springframework.jdbc.support.lob.LobHandler;
-import org.springframework.lang.NonNull;
-import org.springframework.lang.Nullable;
 import org.springframework.transaction.support.TransactionOperations;
 import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
@@ -110,8 +108,6 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 
 	private String deleteKeysetQuery;
 
-	private LobHandler lobHandler = new DefaultLobHandler();
-
 	private final JdbcOperations jdbcOperations;
 
 	private final TransactionOperations transactionOperations;
@@ -119,7 +115,6 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 	@Override
 	public void afterPropertiesSet() {
 		Assert.hasText(tableName, "Table name for encrypted keysets can not be blank");
-		Assert.notNull(lobHandler, "Lob handler can not be null");
 
 		listKeysetsQuery = sql(listKeysetsQuery, GET_KEYSET_QUERY);
 		keysetExistsQuery = sql(keysetExistsQuery, KEYSET_EXISTS_QUERY);
@@ -156,9 +151,10 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 
 	@Override
 	public void remove(@NonNull String name) {
-		transactionOperations.executeWithoutResult(status -> jdbcOperations.update(deleteKeysetQuery, pss -> {
-			pss.setString(1, name);
-		}));
+		transactionOperations.executeWithoutResult(
+			status -> jdbcOperations.update(deleteKeysetQuery,
+				pss -> pss.setString(1, name)
+		));
 	}
 
 	private void create(EncryptedKeyset keyset) {
@@ -167,11 +163,7 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 			ps.setString(2, keyset.getAlgorithm());
 			ps.setString(3, keyset.getProvider());
 			ps.setString(4, keyset.getKeyEncryptionKey());
-
-			try (var creator = lobHandler.getLobCreator()) {
-				creator.setBlobAsBytes(ps, 5, keyset.getData().array());
-			}
-
+			ps.setBytes(5, keyset.getData().array());
 			ps.setLong(6, keyset.getRotationInterval().toMillis());
 			ps.setLong(7, keyset.getNextRotationTime().toEpochMilli());
 		});
@@ -181,11 +173,7 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 		jdbcOperations.update(updateKeysetQuery, ps -> {
 			ps.setString(1, keyset.getProvider());
 			ps.setString(2, keyset.getKeyEncryptionKey());
-
-			try (var creator = lobHandler.getLobCreator()) {
-				creator.setBlobAsBytes(ps, 3, keyset.getData().array());
-			}
-
+			ps.setBytes(3, keyset.getData().array());
 			ps.setLong(4, keyset.getRotationInterval().toMillis());
 			ps.setLong(5, keyset.getNextRotationTime().toEpochMilli());
 			ps.setString(6, keyset.getName());
@@ -213,8 +201,6 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 	}
 
 	private EncryptedKeyset convert(ResultSet rs) throws SQLException {
-		final byte[] data = lobHandler.getBlobAsBytes(rs, "KEYSET_DATA");
-
 		return EncryptedKeyset.builder()
 			.name(rs.getString("KEYSET_NAME"))
 			.algorithm(rs.getString("KEYSET_ALGORITHM"))
@@ -222,7 +208,7 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 			.keyEncryptionKey(rs.getString("KEYSET_KEK"))
 			.rotationInterval(rs.getLong("ROTATION_INTERVAL"))
 			.nextRotationTime(rs.getLong("NEXT_ROTATION_TIME"))
-			.build(new ByteArray(data));
+			.build(new ByteArray(rs.getBytes("KEYSET_DATA")));
 	}
 
 }

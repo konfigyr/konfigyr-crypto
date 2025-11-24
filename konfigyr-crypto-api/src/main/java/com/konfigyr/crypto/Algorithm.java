@@ -1,6 +1,6 @@
 package com.konfigyr.crypto;
 
-import org.springframework.lang.NonNull;
+import org.jspecify.annotations.NullMarked;
 
 import java.io.Serializable;
 import java.util.Set;
@@ -20,26 +20,28 @@ import java.util.Set;
  * @author : Vladimir Spasic
  * @since : 21.08.23, Mon
  **/
+@NullMarked
 public interface Algorithm extends Serializable {
 
 	/**
+	 * Returns the name of the algorithm that is used to perform cryptographic operations.
+	 *
 	 * @return algorithm name, never {@literal null}.
 	 */
-	@NonNull
 	String name();
 
 	/**
+	 * The type of the key material that is used by the algorithm.
+	 *
 	 * @return key type used by the algorithm, never {@literal null}.
 	 */
-	@NonNull
 	KeyType type();
 
 	/**
-	 * Collection of {@link KeysetOperation operations} this {@link Algorithm} can
-	 * perform.
+	 * Collection of {@link KeysetOperation operations} this {@link Algorithm} can perform.
+	 *
 	 * @return supported operations, never {@literal null}.
 	 */
-	@NonNull
 	Set<KeysetOperation> operations();
 
 }
