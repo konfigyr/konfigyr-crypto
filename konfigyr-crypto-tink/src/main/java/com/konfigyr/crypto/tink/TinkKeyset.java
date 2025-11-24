@@ -67,12 +67,10 @@ class TinkKeyset implements Keyset {
 		try {
 			if (KeyType.OCTET == algorithm.type()) {
 				encrypted = primitive(handle, Aead.class).encrypt(data.array(), associatedData);
-			}
-			else {
+			} else {
 				encrypted = primitive(publicKeysetHandle(), HybridEncrypt.class).encrypt(data.array(), associatedData);
 			}
-		}
-		catch (GeneralSecurityException e) {
+		} catch (GeneralSecurityException e) {
 			throw new KeysetOperationException(name, KeysetOperation.ENCRYPT, e);
 		}
 
@@ -161,13 +159,15 @@ class TinkKeyset implements Keyset {
 		if (o == null || getClass() != o.getClass())
 			return false;
 		TinkKeyset that = (TinkKeyset) o;
+
 		return name.equals(that.name) && algorithm.equals(that.algorithm)
 				&& keyEncryptionKey.equals(that.keyEncryptionKey)
-				&& handle.getKeysetInfo().equals(that.handle.getKeysetInfo())
+				&& handle.equalsKeyset(that.getHandle())
 				&& rotationInterval.equals(that.rotationInterval) && nextRotationTime.equals(that.nextRotationTime);
 	}
 
 	@Override
+	@SuppressWarnings("deprecation")
 	public int hashCode() {
 		return Objects.hash(name, algorithm, keyEncryptionKey, handle.getKeysetInfo(), rotationInterval,
 				nextRotationTime);
@@ -242,6 +242,7 @@ class TinkKeyset implements Keyset {
 
 		private Instant nextRotationTime;
 
+		@SuppressWarnings("deprecation")
 		private Builder(KeysetHandle handle) {
 			Assert.notNull(handle, "Tink keyset can not be null");
 			Assert.notNull(handle.getKeysetInfo(), "Tink keyset information can not be null");
@@ -275,6 +276,7 @@ class TinkKeyset implements Keyset {
 			return this;
 		}
 
+		@SuppressWarnings("deprecation")
 		TinkKeyset build() {
 			Assert.hasText(name, "Keyset name can not be blank");
 			Assert.notNull(algorithm, "Keyset algorithm can not be null");

@@ -10,6 +10,7 @@ import com.konfigyr.io.ByteArray;
 import org.assertj.core.api.ThrowingConsumer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.platform.commons.util.ReflectionUtils;
@@ -51,6 +52,7 @@ class TinkKeyEncryptionKeyTest extends AbstractCryptoTest {
 	}
 
 	@Test
+	@DisplayName("should generate random key encryption keys")
 	void shouldGenerateRandomKek() {
 		final var kek = builder.generate("test-kek");
 
@@ -61,6 +63,7 @@ class TinkKeyEncryptionKeyTest extends AbstractCryptoTest {
 	}
 
 	@Test
+	@DisplayName("should generate key encryption key from a secret key")
 	void shouldGenerateSecretKek() {
 		final var kek = builder.from("test-kek", new SecretKeySpec(Random.randBytes(16), "AES"));
 
@@ -71,6 +74,7 @@ class TinkKeyEncryptionKeyTest extends AbstractCryptoTest {
 	}
 
 	@Test
+	@DisplayName("should generate key encryption key from a KMS URI")
 	void shouldCreateKmsKek() throws GeneralSecurityException {
 		doReturn(true).when(kms).doesSupport("test-kek-uri");
 		doReturn(aead).when(kms).getAead("test-kek-uri");
@@ -87,6 +91,7 @@ class TinkKeyEncryptionKeyTest extends AbstractCryptoTest {
 	}
 
 	@Test
+	@DisplayName("should generate key encryption key from a KMS URI with DEK enveloping")
 	void shouldCreateEnvelopeKmsKek() throws GeneralSecurityException {
 		doReturn(true).when(kms).doesSupport("test-kek-uri");
 		doReturn(aead).when(kms).getAead("test-kek-uri");
@@ -104,6 +109,7 @@ class TinkKeyEncryptionKeyTest extends AbstractCryptoTest {
 	}
 
 	@Test
+	@DisplayName("should fail to create key encryption key from invalid secret key")
 	void shouldFailToCreateKekFromInvalidSecretKey() {
 		assertThatThrownBy(() -> builder.from("test-kek", ByteArray.empty()))
 			.isInstanceOf(IllegalArgumentException.class)
@@ -112,6 +118,7 @@ class TinkKeyEncryptionKeyTest extends AbstractCryptoTest {
 	}
 
 	@Test
+	@DisplayName("should fail to create key encryption key from invalid KMS URI")
 	void shouldFailToCreateKmsKekDueToUnsupportedKmsClient() {
 		final var kek = builder.kms("test-kek-uri");
 
@@ -124,6 +131,7 @@ class TinkKeyEncryptionKeyTest extends AbstractCryptoTest {
 	}
 
 	@Test
+	@DisplayName("should fail to create key encryption key from invalid KMS URI with DEK enveloping")
 	void shouldFailToCreateEnvelopKmsKekDueToUnsupportedKmsClient() {
 		final var kek = builder.kms("test-kek-uri", "AES128_GCM");
 
@@ -136,6 +144,7 @@ class TinkKeyEncryptionKeyTest extends AbstractCryptoTest {
 	}
 
 	@Test
+	@DisplayName("should fail to create key encryption key from invalid DEK template")
 	void shouldFailToCreateEnvelopKmsKekDueToUnsupportedDEKTemplate() {
 		assertThatThrownBy(() -> builder.kms("test-kek-uri", "DEK_TEMPLATE"))
 			.isInstanceOf(IllegalArgumentException.class)

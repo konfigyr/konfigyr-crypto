@@ -3,6 +3,7 @@ package com.konfigyr.crypto.tink;
 import com.konfigyr.crypto.*;
 import com.konfigyr.io.ByteArray;
 import org.assertj.core.data.TemporalUnitWithinOffset;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledOnOs;
 import org.junit.jupiter.api.condition.OS;
@@ -15,6 +16,7 @@ import static org.assertj.core.api.Assertions.*;
 class TinkKeysetTest extends AbstractCryptoTest {
 
 	@Test
+	@DisplayName("should perform encryption using tink AEAD primitive")
 	void shouldPerformAeadEncryptionOperation() throws Exception {
 		final var keyset = generate("test", TinkAlgorithm.AES128_GCM);
 		final var cypher = keyset.encrypt(DATA);
@@ -30,6 +32,7 @@ class TinkKeysetTest extends AbstractCryptoTest {
 	}
 
 	@Test
+	@DisplayName("should perform encryption using tink AEAD primitive using context")
 	void shouldPerformAeadEncryptionOperationWithContext() throws Exception {
 		final var keyset = generate("test", TinkAlgorithm.AES128_CTR_HMAC_SHA256);
 		final var cypher = keyset.encrypt(DATA, CONTEXT);
@@ -45,6 +48,7 @@ class TinkKeysetTest extends AbstractCryptoTest {
 	}
 
 	@Test
+	@DisplayName("should perform encryption using tink HybridEncrypt primitive")
 	void shouldPerformHybridEncryptionOperation() throws Exception {
 		final var keyset = generate("test", TinkAlgorithm.DHKEM_X25519_HKDF_SHA256_HKDF_SHA256_AES_128_GCM);
 		final var cypher = keyset.encrypt(DATA);
@@ -61,6 +65,7 @@ class TinkKeysetTest extends AbstractCryptoTest {
 	}
 
 	@Test
+	@DisplayName("should perform encryption using tink HybridEncrypt primitive using context")
 	void shouldPerformHybridEncryptionOperationWithContext() throws Exception {
 		final var keyset = generate("test", TinkAlgorithm.ECIES_P256_HKDF_HMAC_SHA256_AES128_GCM);
 		final var cypher = keyset.encrypt(DATA, CONTEXT);
@@ -76,6 +81,7 @@ class TinkKeysetTest extends AbstractCryptoTest {
 	}
 
 	@Test
+	@DisplayName("should perform signing operation")
 	void shouldPerformSigningOperation() throws Exception {
 		final var keyset = generate("test", TinkAlgorithm.ECDSA_P256);
 		final var signature = keyset.sign(DATA);
@@ -90,6 +96,7 @@ class TinkKeysetTest extends AbstractCryptoTest {
 
 	@Test
 	@DisabledOnOs(value = OS.WINDOWS)
+	@DisplayName("should rotate keyset by adding a new key in the Tink keyset handle")
 	void shouldRotateKeyset() throws Exception {
 		final var keyset = generate("rotating-keyset", TinkAlgorithm.AES128_GCM);
 		final var rotated = keyset.rotate();
@@ -115,6 +122,7 @@ class TinkKeysetTest extends AbstractCryptoTest {
 	}
 
 	@Test
+	@DisplayName("should fail to perform unsupported keyset operation")
 	void shouldFailToPerformUnsupportedOperation() {
 		assertThatThrownBy(() -> generate("test", TinkAlgorithm.ECDSA_P256).encrypt(DATA))
 			.satisfies(assertOperationException(CryptoException.UnsupportedKeysetOperationException.class, "test",

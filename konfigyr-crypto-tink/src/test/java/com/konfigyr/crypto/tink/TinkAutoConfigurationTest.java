@@ -2,6 +2,7 @@ package com.konfigyr.crypto.tink;
 
 import com.konfigyr.crypto.KeysetFactory;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -19,6 +20,7 @@ class TinkAutoConfigurationTest {
 	}
 
 	@Test
+	@DisplayName("should not register the Tink keyset factory if one is already present")
 	void shouldNotApplyConfigurationDueToDeclaredFactoryBean() {
 		final var factory = Mockito.mock(KeysetFactory.class);
 
@@ -31,6 +33,7 @@ class TinkAutoConfigurationTest {
 	}
 
 	@Test
+	@DisplayName("should register the Tink keyset factory")
 	void shouldApplyConfiguration() {
 		runner.run(ctx -> assertThat(ctx).hasNotFailed()
 			.hasSingleBean(TinkAutoConfiguration.class)

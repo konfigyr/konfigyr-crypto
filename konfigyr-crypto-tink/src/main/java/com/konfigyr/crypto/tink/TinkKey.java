@@ -6,6 +6,7 @@ import com.konfigyr.crypto.Key;
 import com.konfigyr.crypto.KeyStatus;
 import com.konfigyr.crypto.KeyType;
 import lombok.Value;
+import org.jspecify.annotations.NullMarked;
 
 /**
  * Implementation of the {@link Key} that contains public key information obtained from
@@ -15,6 +16,7 @@ import lombok.Value;
  * @since : 05.09.23, Tue
  **/
 @Value
+@NullMarked
 class TinkKey implements Key {
 
 	String id;
