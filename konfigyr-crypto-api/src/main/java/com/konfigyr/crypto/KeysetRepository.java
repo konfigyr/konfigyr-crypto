@@ -1,6 +1,6 @@
 package com.konfigyr.crypto;
 
-import org.springframework.lang.NonNull;
+import org.jspecify.annotations.NullMarked;
 
 import java.io.IOException;
 import java.util.Optional;
@@ -14,29 +14,32 @@ import java.util.Optional;
  * @see EncryptedKeyset
  * @see KeysetStore
  **/
+@NullMarked
 public interface KeysetRepository {
 
 	/**
 	 * Locate the {@link EncryptedKeyset} by the matching key name from this repository.
+	 *
 	 * @param name key name, can't be {@literal null}
 	 * @return matching {@link Keyset} or an empty {@link Optional}.
 	 * @throws IOException if there is an issue while reading the encrypted keyset
 	 */
-	@NonNull
-	Optional<EncryptedKeyset> read(@NonNull String name) throws IOException;
+	Optional<EncryptedKeyset> read(String name) throws IOException;
 
 	/**
 	 * Writes the data of the {@link EncryptedKeyset} to the repository.
+	 *
 	 * @param keyset encrypted keyset to be written, can't be {@literal null}
 	 * @throws IOException if there is an issue while writing the encrypted keyset
 	 */
-	void write(@NonNull EncryptedKeyset keyset) throws IOException;
+	void write(EncryptedKeyset keyset) throws IOException;
 
 	/**
 	 * Deletes the {@link EncryptedKeyset} by the matching key name from the repository.
+	 *
 	 * @param name encrypted keyset name to be removed, can't be {@literal null}
 	 * @throws IOException if there is an issue while removing the encrypted keyset
 	 */
-	void remove(@NonNull String name) throws IOException;
+	void remove(String name) throws IOException;
 
 }

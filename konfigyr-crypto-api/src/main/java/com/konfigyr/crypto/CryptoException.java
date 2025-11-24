@@ -1,7 +1,7 @@
 package com.konfigyr.crypto;
 
 import lombok.Getter;
-import org.springframework.lang.NonNull;
+import org.jspecify.annotations.NonNull;
 
 import java.io.Serial;
 import java.util.Collection;
@@ -214,7 +214,8 @@ public abstract class CryptoException extends RuntimeException {
 	 */
 	public static class KeysetOperationException extends KeysetException {
 
-		static final long serialVersionUID = SERIAL;
+		@Serial
+		private static final long serialVersionUID = SERIAL;
 
 		private final KeysetOperation attemptedOperation;
 

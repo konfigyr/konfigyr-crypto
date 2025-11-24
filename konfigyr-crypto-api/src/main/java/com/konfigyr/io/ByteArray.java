@@ -1,8 +1,8 @@
 package com.konfigyr.io;
 
+import org.jspecify.annotations.NullMarked;
 import org.springframework.core.io.InputStreamSource;
 import org.springframework.core.io.buffer.DataBuffer;
-import org.springframework.lang.NonNull;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -18,7 +18,7 @@ import java.util.Base64;
  * Utility class that serves as an immutable wrapper around a byte array.
  * <p>
  * Wraps a bytearray, so it prevents callers from modifying its contents. It does this by
- * making a copy upon initialization, and also makes a copy if the underlying bytes are
+ * making a copy upon initialization and also makes a copy if the underlying bytes are
  * read.
  * <p>
  * This class also provides a way to encode the byte array into a plain or Base64 encoded
@@ -27,6 +27,7 @@ import java.util.Base64;
  * @author : Vladimir Spasic
  * @since : 01.09.22, Thu
  **/
+@NullMarked
 public record ByteArray(byte[] array) implements InputStreamSource, Serializable {
 
 	@Serial
@@ -36,6 +37,7 @@ public record ByteArray(byte[] array) implements InputStreamSource, Serializable
 
 	/**
 	 * Creates a new {@link ByteArray} by copying the data from the given array of bytes.
+	 *
 	 * @param array byte array data
 	 */
 	public ByteArray(byte[] array) {
@@ -44,30 +46,30 @@ public record ByteArray(byte[] array) implements InputStreamSource, Serializable
 
 	/**
 	 * Creates a new empty {@link ByteArray} instance.
+	 *
 	 * @return empty byte array, never {@literal null}
 	 */
-	@NonNull
 	public static ByteArray empty() {
 		return EMPTY;
 	}
 
 	/**
 	 * Creates a new {@link ByteArray} instance from the given {@link ByteBuffer}.
+	 *
 	 * @param buffer byte buffer to be wrapped, can't be {@literal null}
 	 * @return byte array, never {@literal null}
 	 */
-	@NonNull
-	public static ByteArray from(@NonNull ByteBuffer buffer) {
+	public static ByteArray from(ByteBuffer buffer) {
 		return new ByteArray(buffer.array());
 	}
 
 	/**
 	 * Creates a new {@link ByteArray} instance from the given {@link DataBuffer}.
+	 *
 	 * @param buffer data buffer to be wrapped, can't be {@literal null}
 	 * @return byte array, never {@literal null}
 	 */
-	@NonNull
-	public static ByteArray from(@NonNull DataBuffer buffer) {
+	public static ByteArray from(DataBuffer buffer) {
 		final ByteBuffer bb = ByteBuffer.allocate(buffer.capacity());
 		buffer.toByteBuffer(bb);
 
@@ -75,50 +77,48 @@ public record ByteArray(byte[] array) implements InputStreamSource, Serializable
 	}
 
 	/**
-	 * Creates a new {@link ByteArray} instance from the given string. The string is
-	 * converted to bytes using the {@link StandardCharsets#UTF_8} charset.
+	 * Creates a new {@link ByteArray} instance from the given string. The string is converted to bytes using
+	 * the {@link StandardCharsets#UTF_8} charset.
+	 *
 	 * @param data raw string to be wrapped, can't be {@literal null}
 	 * @return byte array, never {@literal null}
 	 */
-	@NonNull
-	public static ByteArray fromString(@NonNull String data) {
+	public static ByteArray fromString(String data) {
 		return fromString(data, StandardCharsets.UTF_8);
 	}
 
 	/**
-	 * Creates a new {@link ByteArray} instance from the given string. The string is
-	 * converted to bytes using the given {@link StandardCharsets} charset.
+	 * Creates a new {@link ByteArray} instance from the given string. The string is converted to bytes using
+	 * the given {@link StandardCharsets} charset.
+	 *
 	 * @param data raw string to be wrapped, can't be {@literal null}
-	 * @param charset character encoding used to encode the string, can't be
-	 * {@literal null}
+	 * @param charset character encoding used to encode the string, can't be {@literal null}
 	 * @return byte array, never {@literal null}
 	 */
-	@NonNull
-	public static ByteArray fromString(@NonNull String data, @NonNull Charset charset) {
+	public static ByteArray fromString(String data, Charset charset) {
 		return new ByteArray(data.getBytes(charset));
 	}
 
 	/**
-	 * Creates a new {@link ByteArray} instance from the given Base64 URL Safe encoded
-	 * string.
+	 * Creates a new {@link ByteArray} instance from the given Base64 URL Safe encoded string.
+	 *
 	 * @return byte array, never {@literal null}
 	 * @param data Base64 encoded string to be wrapped, can't be {@literal null}
 	 * @throws IllegalArgumentException when the Base64 string is invalid
 	 */
-	@NonNull
 	public static ByteArray fromBase64String(String data) {
 		return new ByteArray(Base64.getUrlDecoder().decode(data));
 	}
 
 	/**
 	 * Returns a copy of the byte array contents.
+	 *
 	 * @return byte array contents.
 	 */
 	public byte[] array() {
 		return Arrays.copyOf(array, array.length);
 	}
 
-	@NonNull
 	@Override
 	public InputStream getInputStream() {
 		return new ByteArrayInputStream(array());
@@ -126,6 +126,7 @@ public record ByteArray(byte[] array) implements InputStreamSource, Serializable
 
 	/**
 	 * Encodes the contents of this byte array into a Base64 URL Safe string.
+	 *
 	 * @return Base64 URL encoded string, never {@literal null}.
 	 */
 	public String encode() {
@@ -133,12 +134,12 @@ public record ByteArray(byte[] array) implements InputStreamSource, Serializable
 	}
 
 	/**
-	 * Checks if the underlying byte array contents are empty. This is performed by
-	 * checking the size of the contents.
-	 * @return is the array empty
+	 * Checks if the underlying byte array contents are empty. This is performed by checking the size of the contents.
+	 *
+	 * @return {@code true} if the array empty, {@code false} otherwise.
 	 */
 	public boolean isEmpty() {
-		return array == null || array.length == 0;
+		return array.length == 0;
 	}
 
 	/**

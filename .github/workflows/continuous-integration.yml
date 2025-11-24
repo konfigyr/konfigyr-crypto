@@ -25,6 +25,9 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v5
 
+      - name: Generate and submit dependency graph
+        uses: gradle/actions/dependency-submission@v5
+
       - name: Build
         run: ./gradlew --no-daemon --no-parallel --continue build
 

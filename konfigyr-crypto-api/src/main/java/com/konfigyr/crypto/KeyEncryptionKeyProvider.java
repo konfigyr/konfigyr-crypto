@@ -1,6 +1,6 @@
 package com.konfigyr.crypto;
 
-import org.springframework.lang.NonNull;
+import org.jspecify.annotations.NonNull;
 
 import java.util.Collection;
 import java.util.Set;

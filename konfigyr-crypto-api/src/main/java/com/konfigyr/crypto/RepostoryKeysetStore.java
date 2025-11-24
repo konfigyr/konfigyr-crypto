@@ -1,9 +1,9 @@
 package com.konfigyr.crypto;
 
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.NullMarked;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.lang.NonNull;
 
 import java.io.IOException;
 import java.util.List;
@@ -27,8 +27,9 @@ import static com.konfigyr.crypto.CryptoException.*;
  * @author : Vladimir Spasic
  * @since : 26.08.23, Sat
  **/
+@NullMarked
 @RequiredArgsConstructor
-public final class RepostoryKeysetStore implements KeysetStore {
+public class RepostoryKeysetStore implements KeysetStore {
 
 	private final Logger logger = LoggerFactory.getLogger(getClass());
 
@@ -40,31 +41,27 @@ public final class RepostoryKeysetStore implements KeysetStore {
 
 	private final List<KeyEncryptionKeyProvider> providers;
 
-	@NonNull
 	@Override
-	public Optional<KeyEncryptionKeyProvider> provider(@NonNull String provider) {
+	public Optional<KeyEncryptionKeyProvider> provider(String provider) {
 		return providers.stream().filter(it -> Objects.equals(provider, it.getName())).findFirst();
 	}
 
-	@NonNull
 	@Override
-	public Keyset create(@NonNull String provider, @NonNull String kek, @NonNull KeysetDefinition definition) {
+	public Keyset create(String provider, String kek, KeysetDefinition definition) {
 		final KeysetFactory factory = lookupFactory(definition);
 
 		return create(factory, kek(provider, kek), definition);
 	}
 
-	@NonNull
 	@Override
-	public Keyset create(@NonNull KeyEncryptionKey kek, @NonNull KeysetDefinition definition) {
+	public Keyset create(KeyEncryptionKey kek, KeysetDefinition definition) {
 		final KeysetFactory factory = lookupFactory(definition);
 
 		return create(factory, kek, definition);
 	}
 
-	@NonNull
 	@Override
-	public Keyset read(@NonNull String name) {
+	public Keyset read(String name) {
 		final EncryptedKeyset encryptedKeyset = lookupKeyset(name);
 		final KeysetFactory factory = lookupFactory(encryptedKeyset);
 
@@ -72,14 +69,14 @@ public final class RepostoryKeysetStore implements KeysetStore {
 	}
 
 	@Override
-	public void write(@NonNull Keyset keyset) {
+	public void write(Keyset keyset) {
 		final KeysetFactory factory = lookupFactory(keyset);
 
 		write(factory, keyset);
 	}
 
 	@Override
-	public void rotate(@NonNull String name) {
+	public void rotate(String name) {
 		final EncryptedKeyset encryptedKeyset = lookupKeyset(name);
 		final KeysetFactory factory = lookupFactory(encryptedKeyset);
 
@@ -87,12 +84,12 @@ public final class RepostoryKeysetStore implements KeysetStore {
 	}
 
 	@Override
-	public void rotate(@NonNull Keyset keyset) {
+	public void rotate(Keyset keyset) {
 		rotate(lookupFactory(keyset), keyset);
 	}
 
 	@Override
-	public void remove(@NonNull String name) {
+	public void remove(String name) {
 		if (logger.isDebugEnabled()) {
 			logger.debug("Removing encrypted keyset data with name: {}", name);
 		}
@@ -108,7 +105,7 @@ public final class RepostoryKeysetStore implements KeysetStore {
 	}
 
 	@Override
-	public void remove(@NonNull Keyset keyset) {
+	public void remove(Keyset keyset) {
 		remove(keyset.getName());
 	}
 
@@ -122,7 +119,7 @@ public final class RepostoryKeysetStore implements KeysetStore {
 	 * @return matching keyset from the repository
 	 * @throws KeysetNotFoundException when no such keyset exists in the repository
 	 */
-	protected @NonNull EncryptedKeyset lookupKeyset(@NonNull String name) {
+	protected EncryptedKeyset lookupKeyset(String name) {
 		if (logger.isDebugEnabled()) {
 			logger.debug("Looking up encrypted keyset with name: {}", name);
 		}
@@ -145,7 +142,7 @@ public final class RepostoryKeysetStore implements KeysetStore {
 	 * @return supported keyset factor
 	 * @throws UnsupportedKeysetException when no factory supports the definition
 	 */
-	protected @NonNull KeysetFactory lookupFactory(@NonNull KeysetDefinition definition) {
+	protected KeysetFactory lookupFactory(KeysetDefinition definition) {
 		return factories.stream()
 			.filter(it -> it.supports(definition))
 			.findFirst()
@@ -160,7 +157,7 @@ public final class RepostoryKeysetStore implements KeysetStore {
 	 * @return supported keyset factor
 	 * @throws UnsupportedKeysetException when no factory supports the keyset
 	 */
-	protected @NonNull KeysetFactory lookupFactory(@NonNull EncryptedKeyset encryptedKeyset) {
+	protected KeysetFactory lookupFactory(EncryptedKeyset encryptedKeyset) {
 		return factories.stream()
 			.filter(it -> it.supports(encryptedKeyset))
 			.findFirst()
@@ -176,8 +173,7 @@ public final class RepostoryKeysetStore implements KeysetStore {
 	 * {@literal null}.
 	 * @return generated keyset
 	 */
-	protected @NonNull Keyset create(@NonNull KeysetFactory factory, @NonNull KeyEncryptionKey kek,
-			@NonNull KeysetDefinition definition) {
+	protected Keyset create(KeysetFactory factory, KeyEncryptionKey kek, KeysetDefinition definition) {
 		if (logger.isDebugEnabled()) {
 			logger.debug("Attempting to generate Keyset with [definition={}, kek={}]", definition, kek);
 		}
@@ -205,7 +201,7 @@ public final class RepostoryKeysetStore implements KeysetStore {
 	 * be {@literal null}
 	 * @return decrypted keyset
 	 */
-	protected @NonNull Keyset read(@NonNull KeysetFactory factory, @NonNull EncryptedKeyset encryptedKeyset) {
+	protected Keyset read(KeysetFactory factory, EncryptedKeyset encryptedKeyset) {
 		if (logger.isDebugEnabled()) {
 			logger.debug("Reading encrypted keyset data with name: {}", encryptedKeyset.getName());
 		}
@@ -229,7 +225,7 @@ public final class RepostoryKeysetStore implements KeysetStore {
 	 * @param factory factory used to encrypt the keyset, can't be {@literal null}
 	 * @param keyset keyset material to be written, can't be {@literal null}
 	 */
-	protected void write(@NonNull KeysetFactory factory, @NonNull Keyset keyset) {
+	protected void write(KeysetFactory factory, Keyset keyset) {
 		final EncryptedKeyset encryptedKeyset;
 
 		try {
@@ -261,7 +257,7 @@ public final class RepostoryKeysetStore implements KeysetStore {
 	 * @param factory factory used to encrypt the keyset, can't be {@literal null}
 	 * @param keyset keyset to be rotated, can't be {@literal null}
 	 */
-	protected void rotate(@NonNull KeysetFactory factory, @NonNull Keyset keyset) {
+	protected void rotate(KeysetFactory factory, Keyset keyset) {
 		if (logger.isDebugEnabled()) {
 			logger.debug("Attempting to rotate keyset with name: {}", keyset.getName());
 		}

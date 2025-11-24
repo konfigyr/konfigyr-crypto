@@ -1,6 +1,6 @@
 package com.konfigyr.crypto;
 
-import org.springframework.lang.NonNull;
+import org.jspecify.annotations.NullMarked;
 
 import java.util.Map;
 import java.util.Optional;
@@ -13,25 +13,23 @@ import java.util.concurrent.ConcurrentHashMap;
  * @author : Vladimir Spasic
  * @since : 27.08.23, Sun
  **/
+@NullMarked
 public class InMemoryKeysetRepository implements KeysetRepository {
 
 	private final Map<String, EncryptedKeyset> store = new ConcurrentHashMap<>();
 
-	@NonNull
 	@Override
-	public Optional<EncryptedKeyset> read(@NonNull String name) {
+	public Optional<EncryptedKeyset> read(String name) {
 		return Optional.ofNullable(store.get(name));
 	}
 
-	@NonNull
 	@Override
-	public void write(@NonNull EncryptedKeyset keyset) {
+	public void write(EncryptedKeyset keyset) {
 		store.put(keyset.getName(), keyset);
 	}
 
-	@NonNull
 	@Override
-	public void remove(@NonNull String name) {
+	public void remove(String name) {
 		store.remove(name);
 	}
 

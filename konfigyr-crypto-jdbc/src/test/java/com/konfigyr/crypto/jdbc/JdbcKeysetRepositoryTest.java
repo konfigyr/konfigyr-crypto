@@ -2,12 +2,13 @@ package com.konfigyr.crypto.jdbc;
 
 import com.konfigyr.crypto.*;
 import com.konfigyr.io.ByteArray;
+import org.jspecify.annotations.NonNull;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
+import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.lang.NonNull;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -17,8 +18,8 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNoException;
 
-@SpringBootTest(classes = JdbcKeysetRepositoryTest.Config.class)
 @AutoConfigureTestDatabase
+@SpringBootTest(classes = JdbcKeysetRepositoryTest.Config.class)
 class JdbcKeysetRepositoryTest {
 
 	private static final KeysetDefinition definition = KeysetDefinition.of("test", TestAlgorithm.ENCRYPTION,
@@ -28,6 +29,7 @@ class JdbcKeysetRepositoryTest {
 	KeysetRepository repository;
 
 	@Test
+	@DisplayName("should manage Keysets in a database")
 	void shouldManageKeysets() throws IOException {
 		assertThat(repository.read(definition.getName())).isEmpty();
 

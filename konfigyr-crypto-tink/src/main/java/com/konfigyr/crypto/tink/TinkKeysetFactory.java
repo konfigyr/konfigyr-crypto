@@ -4,7 +4,7 @@ import com.google.crypto.tink.*;
 import com.konfigyr.crypto.*;
 import com.konfigyr.io.ByteArray;
 import lombok.RequiredArgsConstructor;
-import org.springframework.lang.NonNull;
+import org.jspecify.annotations.NullMarked;
 import org.springframework.util.Assert;
 
 import java.io.ByteArrayOutputStream;
@@ -14,13 +14,11 @@ import java.security.GeneralSecurityException;
 
 /**
  * Implementation of the {@link KeysetFactory} that integrates
- * <a href="https://developers.google.com/tink/">Google Tink</a> library in the Konfigyr
- * {@link KeysetStore}.
+ * <a href="https://developers.google.com/tink/">Google Tink</a> library in the Konfigyr {@link KeysetStore}.
  * <p>
- * It produces the {@link TinkKeyset} implementation that would be using the
- * {@link KeysetHandle} as the underlying store of cryptographic keys. To generate a new
- * {@link TinkKeyset} it is required to use a {@link TinkAlgorithm} when defining which
- * type of keys should be generated and which Tink Primitives can be used to perform
+ * It produces the {@link TinkKeyset} implementation that would be using the {@link KeysetHandle} as the underlying
+ * store of cryptographic keys. To generate a new {@link TinkKeyset} it is required to use a {@link TinkAlgorithm}
+ * when defining which type of keys should be generated and which Tink Primitives can be used to perform
  * specified {@link KeysetOperation key operations}.
  * <p>
  * When encrypting or decrypting the {@link KeysetHandle} a {@link BinaryKeysetReader} and
@@ -31,10 +29,11 @@ import java.security.GeneralSecurityException;
  * @see TinkAlgorithm
  * @see TinkKeyset
  **/
+@NullMarked
 public class TinkKeysetFactory implements KeysetFactory {
 
 	@Override
-	public boolean supports(@NonNull EncryptedKeyset encryptedKeyset) {
+	public boolean supports(EncryptedKeyset encryptedKeyset) {
 		for (TinkAlgorithm algorithm : TinkAlgorithm.values()) {
 			if (algorithm.name().equals(encryptedKeyset.getAlgorithm())) {
 				return true;
@@ -44,13 +43,12 @@ public class TinkKeysetFactory implements KeysetFactory {
 	}
 
 	@Override
-	public boolean supports(@NonNull KeysetDefinition definition) {
+	public boolean supports(KeysetDefinition definition) {
 		return TinkUtils.isSupportedAlgorithm(definition.getAlgorithm());
 	}
 
-	@NonNull
 	@Override
-	public Keyset create(@NonNull KeyEncryptionKey kek, @NonNull KeysetDefinition definition) {
+	public Keyset create(KeyEncryptionKey kek, KeysetDefinition definition) {
 		final KeyTemplate template = TinkUtils.keyTemplateForAlgorithm(definition.getAlgorithm());
 
 		final KeysetHandle handle;
@@ -71,9 +69,8 @@ public class TinkKeysetFactory implements KeysetFactory {
 			.build();
 	}
 
-	@NonNull
 	@Override
-	public EncryptedKeyset create(@NonNull Keyset keyset) throws IOException {
+	public EncryptedKeyset create(Keyset keyset) throws IOException {
 		Assert.isInstanceOf(TinkKeyset.class, keyset,
 				"This keyset factory only supports Tink keysets," + "you have passed: " + keyset.getClass());
 
@@ -91,9 +88,8 @@ public class TinkKeysetFactory implements KeysetFactory {
 		return EncryptedKeyset.from(keyset, new ByteArray(os.toByteArray()));
 	}
 
-	@NonNull
 	@Override
-	public Keyset create(@NonNull KeyEncryptionKey kek, @NonNull EncryptedKeyset encryptedKeyset) throws IOException {
+	public Keyset create(KeyEncryptionKey kek, EncryptedKeyset encryptedKeyset) throws IOException {
 		final KeysetHandle handle;
 
 		final String name = encryptedKeyset.getName();

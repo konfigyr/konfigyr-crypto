@@ -41,8 +41,6 @@ subprojects {
     }
 
 	dependencies {
-        implementation("com.google.code.findbugs:jsr305:3.0.2")
-
 		annotationProcessor("org.springframework.boot:spring-boot-autoconfigure-processor")
 		annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
 
@@ -53,7 +51,7 @@ subprojects {
 
 	dependencyManagement {
 		imports {
-			mavenBom("org.springframework.boot:spring-boot-dependencies:3.1.2")
+			mavenBom("org.springframework.boot:spring-boot-dependencies:4.0.0")
 		}
 	}
 

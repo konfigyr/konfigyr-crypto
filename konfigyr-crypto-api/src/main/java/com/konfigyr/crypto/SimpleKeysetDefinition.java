@@ -1,7 +1,7 @@
 package com.konfigyr.crypto;
 
 import lombok.Value;
-import org.springframework.lang.NonNull;
+import org.jspecify.annotations.NonNull;
 
 import java.io.Serial;
 import java.io.Serializable;
