@@ -5,7 +5,6 @@ import com.konfigyr.crypto.*;
 import com.konfigyr.io.ByteArray;
 import org.jspecify.annotations.NullMarked;
 import org.springframework.util.Assert;
-import org.springframework.util.StreamUtils;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -21,8 +20,8 @@ import java.security.GeneralSecurityException;
  * when defining which type of keys should be generated and which Tink Primitives can be used to perform
  * specified {@link KeysetOperation key operations}.
  * <p>
- * When encrypting or decrypting the {@link KeysetHandle} a {@link BinaryKeysetReader} and
- * {@link BinaryKeysetWriter} would be used to manage sensitive key material.
+ * When encrypting or decrypting the {@link KeysetHandle} a {@link TinkProtoKeysetFormat} would be used to
+ * serialize the sensitive key material.
  *
  * @author : Vladimir Spasic
  * @since : 21.08.23, Mon
@@ -78,13 +77,13 @@ public class TinkKeysetFactory implements KeysetFactory {
 		final ByteArray cipher;
 
 		try {
-			final String serialized = TinkJsonProtoKeysetFormat.serializeEncryptedKeyset(
+			final byte[] serialized = TinkProtoKeysetFormat.serializeEncryptedKeyset(
 				((TinkKeyset) keyset).getHandle(),
 				new KeyEncryptionKeyAdapter(keyset.getName(), kek),
-					null
+				keyset.getName().getBytes(StandardCharsets.UTF_8)
 			);
 
-			cipher = ByteArray.fromString(serialized, StandardCharsets.UTF_8);
+			cipher = new ByteArray(serialized);
 		} catch (GeneralSecurityException e) {
 			throw new CryptoException.WrappingException(keyset.getName(), kek, e);
 		}
@@ -100,10 +99,10 @@ public class TinkKeysetFactory implements KeysetFactory {
 		final InputStream cipher = encryptedKeyset.getInputStream();
 
 		try {
-			handle = TinkJsonProtoKeysetFormat.parseEncryptedKeyset(
-				StreamUtils.copyToString(cipher, StandardCharsets.UTF_8),
+			handle = TinkProtoKeysetFormat.parseEncryptedKeyset(
+				cipher.readAllBytes(),
 				new KeyEncryptionKeyAdapter(name, kek),
-				null
+				name.getBytes(StandardCharsets.UTF_8)
 			);
 		} catch (GeneralSecurityException e) {
 			throw new CryptoException.UnwrappingException(name, kek, e);
