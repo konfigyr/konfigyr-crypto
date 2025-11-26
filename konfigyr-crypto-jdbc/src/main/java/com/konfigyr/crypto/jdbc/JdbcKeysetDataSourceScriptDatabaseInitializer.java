@@ -18,6 +18,13 @@ import java.util.List;
  **/
 public class JdbcKeysetDataSourceScriptDatabaseInitializer extends DataSourceScriptDatabaseInitializer {
 
+	/**
+	 * Creates a new {@link JdbcKeysetDataSourceScriptDatabaseInitializer} instance for the given data source
+	 * and properties.
+	 *
+	 * @param dataSource the data source to initialize the scheme, can't be {@literal null}
+	 * @param properties the Konfigyr Keyset JDBC properties, can't be {@literal null}
+	 */
 	public JdbcKeysetDataSourceScriptDatabaseInitializer(DataSource dataSource, JdbcKeysetProperties properties) {
 		super(dataSource, settings(dataSource, properties));
 	}

@@ -18,7 +18,7 @@ abstract class AbstractCryptoTest {
 	@NullMarked
 	static final class TestingKeyEncryptionKey extends AbstractKeyEncryptionKey {
 
-		public TestingKeyEncryptionKey() {
+		TestingKeyEncryptionKey() {
 			super("test-kek", "test-provider");
 		}
 
