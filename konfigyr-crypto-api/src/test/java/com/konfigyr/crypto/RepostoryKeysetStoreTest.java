@@ -11,7 +11,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.cache.concurrent.ConcurrentMapCache;
 
 import java.io.IOException;
-import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.*;
@@ -53,7 +52,12 @@ class RepostoryKeysetStoreTest {
 			.keyEncryptionKey("test-kek")
 			.build(ByteArray.fromString("encrypted material"));
 
-		store = new RepostoryKeysetStore(cache, repository, List.of(factory), List.of(provider));
+		store = KeysetStore.builder()
+			.cache(cache)
+			.repository(repository)
+			.factories(factory)
+			.providers(provider)
+			.build();
 	}
 
 	@Test

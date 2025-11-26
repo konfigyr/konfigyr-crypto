@@ -60,6 +60,7 @@ Factories should be able to:
 
 Konfigyr Crypto comes with the following implementations of the `KeysetFactory` which you can use:
  * [Google Tink](konfigyr-crypto-tink)
+ * [Nimbus JOSE JWT](konfigyr-crypto-jose)
 
 ### Key encryption keys and providers
 

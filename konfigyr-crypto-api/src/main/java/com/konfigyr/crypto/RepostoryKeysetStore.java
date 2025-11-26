@@ -1,11 +1,11 @@
 package com.konfigyr.crypto;
 
-import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NullMarked;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -28,7 +28,6 @@ import static com.konfigyr.crypto.CryptoException.*;
  * @since : 26.08.23, Sat
  **/
 @NullMarked
-@RequiredArgsConstructor
 public class RepostoryKeysetStore implements KeysetStore {
 
 	private final Logger logger = LoggerFactory.getLogger(getClass());
@@ -40,6 +39,26 @@ public class RepostoryKeysetStore implements KeysetStore {
 	private final List<KeysetFactory> factories;
 
 	private final List<KeyEncryptionKeyProvider> providers;
+
+	/**
+	 * Creates a new {@link RepostoryKeysetStore} instance using the provided arguments.
+	 *
+	 * @param cache the keyset cache implementation, can't be {@literal null}
+	 * @param repository the keyset repository implementation, can't be {@literal null}
+	 * @param factories the list of keyset factories, can't be {@literal null}
+	 * @param providers the list of key encryption key providers, can't be {@literal null}
+	 */
+	public RepostoryKeysetStore(
+		KeysetCache cache,
+		KeysetRepository repository,
+		List<KeysetFactory> factories,
+		List<KeyEncryptionKeyProvider> providers
+	) {
+		this.cache = cache;
+		this.repository = repository;
+		this.factories = Collections.unmodifiableList(factories);
+		this.providers = Collections.unmodifiableList(providers);
+	}
 
 	@Override
 	public Optional<KeyEncryptionKeyProvider> provider(String provider) {
