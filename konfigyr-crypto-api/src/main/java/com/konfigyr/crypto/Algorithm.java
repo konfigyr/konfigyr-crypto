@@ -44,4 +44,14 @@ public interface Algorithm extends Serializable {
 	 */
 	Set<KeysetOperation> operations();
 
+	/**
+	 * Checks if the algorithm supports the given operation.
+	 *
+	 * @param operation operation to be checked, never {@literal null}.
+	 * @return {@code true} if the algorithm supports the operation, {@code false} otherwise.
+	 */
+	default boolean supports(KeysetOperation operation) {
+		return operations().contains(operation);
+	}
+
 }

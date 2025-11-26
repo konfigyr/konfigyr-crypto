@@ -1,4 +1,5 @@
 rootProject.name = 'konfigyr-crypto'
 include 'konfigyr-crypto-api'
+include 'konfigyr-crypto-jose'
 include 'konfigyr-crypto-jdbc'
 include 'konfigyr-crypto-tink'
