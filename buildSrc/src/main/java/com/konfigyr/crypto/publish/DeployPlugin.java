@@ -13,17 +13,16 @@ import org.gradle.api.publish.maven.MavenPublication;
 import org.gradle.api.publish.maven.plugins.MavenPublishPlugin;
 import org.gradle.plugins.signing.SigningExtension;
 import org.gradle.plugins.signing.SigningPlugin;
-
-import javax.annotation.Nonnull;
+import org.jspecify.annotations.NonNull;
 
 /**
  * @author : Vladimir Spasic
  * @since : 04.09.23, Mon
  **/
-public class DeployPlugin implements Plugin<Project> {
+public class DeployPlugin implements Plugin<@NonNull Project> {
 
 	@Override
-	public void apply(@Nonnull Project project) {
+	public void apply(@NonNull Project project) {
 		project.getPlugins().apply(MavenPublishPlugin.class);
 		project.getPlugins().apply(SigningPlugin.class);
 

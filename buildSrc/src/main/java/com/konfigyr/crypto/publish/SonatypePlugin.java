@@ -4,22 +4,22 @@ import io.github.gradlenexus.publishplugin.NexusPublishExtension;
 import io.github.gradlenexus.publishplugin.NexusPublishPlugin;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
+import org.jspecify.annotations.NonNull;
 
-import javax.annotation.Nonnull;
 import java.net.URI;
 
 /**
  * @author : Vladimir Spasic
  * @since : 08.09.23, Fri
  **/
-public class SonatypePlugin implements Plugin<Project> {
+public class SonatypePlugin implements Plugin<@NonNull Project> {
 
 	private static final String GROUP_NAME = "com.konfigyr";
-	private static final URI REPOSITORY_URL = URI.create("https://s01.oss.sonatype.org/service/local/");
-	private static final URI SNAPSHOT_REPOSITORY_URL = URI.create("https://s01.oss.sonatype.org/content/repositories/snapshots/");
+	private static final URI REPOSITORY_URL = URI.create("https://ossrh-staging-api.central.sonatype.com/service/local/");
+	private static final URI SNAPSHOT_REPOSITORY_URL = URI.create("https://central.sonatype.com/repository/maven-snapshots/");
 
 	@Override
-	public void apply(@Nonnull Project project) {
+	public void apply(@NonNull Project project) {
 		project.getPlugins().apply(NexusPublishPlugin.class);
 		project.setGroup(GROUP_NAME);
 
@@ -38,7 +38,7 @@ public class SonatypePlugin implements Plugin<Project> {
 			}
 		}));
 
-		project.task("release", it -> {
+		project.getTasks().getByName("release", it -> {
 			it.setGroup("publishing");
 			it.setDescription("Closes and releases.the Sonatype Staging repository where the artifacts are uploaded");
 			it.dependsOn(project.getTasks().findByName("closeAndReleaseSonatypeStagingRepository"));

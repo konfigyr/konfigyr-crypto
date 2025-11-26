@@ -4,11 +4,13 @@ import org.gradle.api.Project;
 import org.gradle.api.model.ObjectFactory;
 import org.gradle.api.provider.Property;
 import org.gradle.api.provider.ProviderFactory;
+import org.jspecify.annotations.NullMarked;
 
 /**
  * @author : Vladimir Spasic
  * @since : 04.09.23, Mon
  **/
+@NullMarked
 public abstract class DeployExtension {
 
 	static final String NAME = "deploy";
