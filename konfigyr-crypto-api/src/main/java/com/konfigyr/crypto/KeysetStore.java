@@ -1,7 +1,12 @@
 package com.konfigyr.crypto;
 
 import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
+import org.springframework.cache.support.NoOpCache;
+import org.springframework.util.Assert;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -62,6 +67,18 @@ import java.util.Optional;
  **/
 @NullMarked
 public interface KeysetStore {
+
+	/**
+	 * Creates a new {@link Builder} instance that can be used to create {@link KeysetStore} instances.
+	 * <p>
+	 * This builder would return an instance of {@link RepostoryKeysetStore} by default.
+	 *
+	 * @return the keyset store builder, never {@literal null}.
+	 * @see RepostoryKeysetStore
+	 */
+	static Builder builder() {
+		return new Builder();
+	}
 
 	/**
 	 * Locate the {@link KeyEncryptionKeyProvider} by the matching key name from this
@@ -173,5 +190,110 @@ public interface KeysetStore {
 	 * @param keyset keyset to be removed, can't be {@literal null}
 	 */
 	void remove(Keyset keyset);
+
+	/**
+	 * Builder class used to create {@link KeysetStore} instances. This builder would return an instance of
+	 * {@link RepostoryKeysetStore} by default.
+	 */
+	final class Builder {
+		private @Nullable KeysetCache cache;
+		private @Nullable KeysetRepository repository;
+		private final List<KeysetFactory> factories;
+		private final List<KeyEncryptionKeyProvider> providers;
+
+		private Builder() {
+			providers = new ArrayList<>();
+			factories = new ArrayList<>();
+		}
+
+		/**
+		 * Specify the {@link KeysetCache} to be used by the {@link KeysetStore}.
+		 *
+		 * @param cache keyset cache implementation, can't be {@literal null}.
+		 * @return the builder instance, never {@literal null}.
+		 */
+		public Builder cache(KeysetCache cache) {
+			this.cache = cache;
+			return this;
+		}
+
+		/**
+		 * Specify the {@link KeysetRepository} to be used by the {@link KeysetStore}.
+		 *
+		 * @param repository keyset repository implementation, can't be {@literal null}.
+		 * @return the builder instance, never {@literal null}.
+		 */
+		public Builder repository(KeysetRepository repository) {
+			this.repository = repository;
+			return this;
+		}
+
+		/**
+		 * Specify the {@link KeysetFactory} implementations to be used by the {@link KeysetStore}.
+		 *
+		 * @param factories keyset factory implementations, can't be {@literal null}.
+		 * @return the builder instance, never {@literal null}.
+		 */
+		public Builder factories(KeysetFactory... factories) {
+			return factories(List.of(factories));
+		}
+
+		/**
+		 * Specify the {@link KeysetFactory} implementations to be used by the {@link KeysetStore}.
+		 *
+		 * @param factories keyset factory implementations, can't be {@literal null}.
+		 * @return the builder instance, never {@literal null}.
+		 */
+		public Builder factories(Iterable<KeysetFactory> factories) {
+			for (KeysetFactory factory : factories) {
+				this.factories.add(factory);
+			}
+			return this;
+		}
+
+		/**
+		 * Specify the {@link KeyEncryptionKeyProvider} implementations to be used by the {@link KeysetStore}.
+		 *
+		 * @param providers key encryption key provider implementations, can't be {@literal null}.
+		 * @return the builder instance, never {@literal null}.
+		 */
+		public Builder providers(KeyEncryptionKeyProvider... providers) {
+			return providers(List.of(providers));
+		}
+
+		/**
+		 * Specify the {@link KeyEncryptionKeyProvider} implementations to be used by the {@link KeysetStore}.
+		 *
+		 * @param providers key encryption key provider implementations, can't be {@literal null}.
+		 * @return the builder instance, never {@literal null}.
+		 */
+		public Builder providers(Iterable<KeyEncryptionKeyProvider> providers) {
+			for (KeyEncryptionKeyProvider provider : providers) {
+				this.providers.add(provider);
+			}
+			return this;
+		}
+
+		/**
+		 * Creates a new {@link KeysetStore} instance using the arguments provided to the builder.
+		 *
+		 * @return the keyset stores instance, never {@literal null}.
+		 * @throws IllegalArgumentException when required arguments are not set.
+		 */
+		public KeysetStore build() {
+			Assert.notEmpty(factories, "You need to specify at least one Keyset factory");
+			Assert.notEmpty(providers, "You need to specify at least one key encryption key provider");
+
+			if (repository == null) {
+				repository = new InMemoryKeysetRepository();
+			}
+
+			if (cache == null) {
+				cache = new SpringKeysetCache(new NoOpCache("noop-keyset-cache"));
+			}
+
+			return new RepostoryKeysetStore(cache, repository, factories, providers);
+		}
+	}
 
 }

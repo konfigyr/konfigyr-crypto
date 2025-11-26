@@ -2,6 +2,7 @@ package com.konfigyr.crypto;
 
 import com.konfigyr.io.ByteArray;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -32,6 +33,7 @@ class AbstractKeyEncryptionKeyTest {
 	}
 
 	@Test
+	@DisplayName("should define a basic information about a key encryption key")
 	void shouldDefineKek() {
 		assertThat(kek).returns("test-kek", KeyEncryptionKey::getId)
 			.returns("test-provider", KeyEncryptionKey::getProvider)
