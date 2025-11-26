@@ -14,6 +14,9 @@ import org.gradle.api.publish.maven.plugins.MavenPublishPlugin;
 import org.gradle.plugins.signing.SigningExtension;
 import org.gradle.plugins.signing.SigningPlugin;
 import org.jspecify.annotations.NonNull;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
 
 /**
  * @author : Vladimir Spasic
@@ -92,5 +95,21 @@ public class DeployPlugin implements Plugin<@NonNull Project> {
 			licence.getName().set("The Apache License, Version 2.0");
 			licence.getUrl().set("https://www.apache.org/licenses/LICENSE-2.0.txt");
 		}));
+
+		// Removes the dependency management node from the generated POM. This is not needed as the
+		// dependency versions are already resolved using configured version mapping strategies
+		pom.withXml(xml -> {
+			final Element root = xml.asElement();
+			final NodeList nodes = root.getChildNodes();
+			final int length = nodes.getLength();
+
+			for (int i = 0; i < length; i++) {
+				final Node node = nodes.item(i);
+
+				if (node != null && node.getNodeName().equals("dependencyManagement")) {
+					root.removeChild(node);
+				}
+			}
+		});
 	}
 }

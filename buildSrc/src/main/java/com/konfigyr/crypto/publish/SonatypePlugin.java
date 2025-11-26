@@ -38,7 +38,7 @@ public class SonatypePlugin implements Plugin<@NonNull Project> {
 			}
 		}));
 
-		project.getTasks().getByName("release", it -> {
+		project.getTasks().register("release", it -> {
 			it.setGroup("publishing");
 			it.setDescription("Closes and releases.the Sonatype Staging repository where the artifacts are uploaded");
 			it.dependsOn(project.getTasks().findByName("closeAndReleaseSonatypeStagingRepository"));

@@ -11,7 +11,7 @@ plugins {
 apply(plugin = "com.konfigyr.sonatype")
 
 allprojects {
-	group = "com.konfigyr"
+    group = "com.konfigyr"
 	version = "1.0.0-RC3"
 }
 
