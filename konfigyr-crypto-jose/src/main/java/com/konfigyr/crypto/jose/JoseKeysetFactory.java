@@ -106,7 +106,8 @@ public class JoseKeysetFactory implements KeysetFactory {
 
 	@Override
 	public Keyset create(KeyEncryptionKey kek, EncryptedKeyset encryptedKeyset) throws IOException {
-		final InputStreamReader reader = new InputStreamReader(encryptedKeyset.getInputStream());
+		final ByteArray unwrapped = kek.unwrap(encryptedKeyset.getData());
+		final InputStreamReader reader = new InputStreamReader(unwrapped.getInputStream());
 		final Map<String, Object>[] json;
 
 		try {
