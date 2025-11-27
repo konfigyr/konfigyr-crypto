@@ -163,6 +163,16 @@ class JsonWebKeysetTest extends AbstractCryptoTest {
 				tuple(KeyType.OCTET, KeyStatus.ENABLED, false, Set.of(KeyOperation.VERIFY))
 			);
 
+		assertThat(rotated.rotate())
+			.hasSize(3)
+			.asInstanceOf(InstanceOfAssertFactories.iterable(JsonWebKey.class))
+			.extracting(Key::getType, Key::getStatus, Key::isPrimary, it -> it.getValue().getKeyOperations())
+			.containsExactlyInAnyOrder(
+				tuple(KeyType.OCTET, KeyStatus.ENABLED, true, Set.of(KeyOperation.SIGN, KeyOperation.VERIFY)),
+				tuple(KeyType.OCTET, KeyStatus.ENABLED, false, Set.of(KeyOperation.VERIFY)),
+				tuple(KeyType.OCTET, KeyStatus.ENABLED, false, Set.of(KeyOperation.VERIFY))
+			);
+
 		assertThat(rotated.getKeys())
 			.filteredOn(Key::isPrimary, false)
 			.hasSize(1)
