@@ -6,7 +6,6 @@ import com.nimbusds.jose.*;
 import com.nimbusds.jose.jwk.JWKMatcher;
 import com.nimbusds.jose.jwk.JWKSelector;
 import com.nimbusds.jose.jwk.KeyOperation;
-import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -19,7 +18,7 @@ import java.text.ParseException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
-import java.util.Set;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.*;
@@ -156,21 +155,10 @@ class JsonWebKeysetTest extends AbstractCryptoTest {
 
 		assertThat(rotated.getKeys())
 			.hasSize(2)
-			.asInstanceOf(InstanceOfAssertFactories.iterable(JsonWebKey.class))
-			.extracting(Key::getType, Key::getStatus, Key::isPrimary, it -> it.getValue().getKeyOperations())
+			.extracting(Key::getType, Key::getStatus, Key::isPrimary)
 			.containsExactlyInAnyOrder(
-				tuple(KeyType.OCTET, KeyStatus.ENABLED, true, Set.of(KeyOperation.SIGN, KeyOperation.VERIFY)),
-				tuple(KeyType.OCTET, KeyStatus.ENABLED, false, Set.of(KeyOperation.VERIFY))
-			);
-
-		assertThat(rotated.rotate())
-			.hasSize(3)
-			.asInstanceOf(InstanceOfAssertFactories.iterable(JsonWebKey.class))
-			.extracting(Key::getType, Key::getStatus, Key::isPrimary, it -> it.getValue().getKeyOperations())
-			.containsExactlyInAnyOrder(
-				tuple(KeyType.OCTET, KeyStatus.ENABLED, true, Set.of(KeyOperation.SIGN, KeyOperation.VERIFY)),
-				tuple(KeyType.OCTET, KeyStatus.ENABLED, false, Set.of(KeyOperation.VERIFY)),
-				tuple(KeyType.OCTET, KeyStatus.ENABLED, false, Set.of(KeyOperation.VERIFY))
+				tuple(KeyType.OCTET, KeyStatus.ENABLED, true),
+				tuple(KeyType.OCTET, KeyStatus.ENABLED, false)
 			);
 
 		assertThat(rotated.getKeys())
@@ -179,7 +167,64 @@ class JsonWebKeysetTest extends AbstractCryptoTest {
 			.first()
 			.returns(keyset.getKeys().get(0).getId(), Key::getId)
 			.returns(false, Key::isPrimary);
+	}
 
+	@Test
+	@DisplayName("rotated keys should not be performing any signing operations")
+	void shouldNotRotateKeysetWithSigningOperations() throws IOException {
+		final var keyset = generate("rotating-keyset", JoseAlgorithm.HS256);
+
+		assertThat(keyset.getKeys())
+			.hasSize(1)
+			.satisfiesExactly(
+				assertKeyOperations(true, KeyOperation.SIGN, KeyOperation.VERIFY)
+			);
+
+		final var rotated = keyset.rotate();
+
+		assertThat(rotated.getKeys())
+			.hasSize(2)
+			.satisfiesExactly(
+				assertKeyOperations(true, KeyOperation.SIGN, KeyOperation.VERIFY),
+				assertKeyOperations(false, KeyOperation.VERIFY)
+			);
+
+		assertThat(rotated.rotate().getKeys())
+			.hasSize(3)
+			.satisfiesExactly(
+				assertKeyOperations(true, KeyOperation.SIGN, KeyOperation.VERIFY),
+				assertKeyOperations(false, KeyOperation.VERIFY),
+				assertKeyOperations(false, KeyOperation.VERIFY)
+			);
+	}
+
+	@Test
+	@DisplayName("rotated keys should not be performing any encrypt operations")
+	void shouldNotRotateKeysetWithEncryptOperations() throws IOException {
+		final var keyset = generate("rotating-keyset", JoseAlgorithm.A128KW);
+
+		assertThat(keyset.getKeys())
+			.hasSize(1)
+			.satisfiesExactly(
+				assertKeyOperations(true, KeyOperation.ENCRYPT, KeyOperation.DECRYPT)
+			);
+
+		final var rotated = keyset.rotate();
+
+		assertThat(rotated.getKeys())
+			.hasSize(2)
+			.satisfiesExactly(
+				assertKeyOperations(true, KeyOperation.ENCRYPT, KeyOperation.DECRYPT),
+				assertKeyOperations(false, KeyOperation.DECRYPT)
+			);
+
+		assertThat(rotated.rotate().getKeys())
+			.hasSize(3)
+			.satisfiesExactly(
+				assertKeyOperations(true, KeyOperation.ENCRYPT, KeyOperation.DECRYPT),
+				assertKeyOperations(false, KeyOperation.DECRYPT),
+				assertKeyOperations(false, KeyOperation.DECRYPT)
+			);
 	}
 
 	@Test
@@ -325,6 +370,20 @@ class JsonWebKeysetTest extends AbstractCryptoTest {
 		return Arrays.stream(JoseAlgorithm.values())
 			.filter(algorithm -> algorithm.supports(KeysetOperation.ENCRYPT))
 			.map(Arguments::of);
+	}
+
+	static Consumer<Key> assertKeyOperations(boolean primary, KeyOperation... expected) {
+		return key -> {
+			assertThat(key)
+				.as("Key should be enabled and marked as %s key", primary ? "primary" : "not primary")
+				.isInstanceOf(JsonWebKey.class)
+				.returns(KeyStatus.ENABLED, Key::getStatus)
+				.returns(primary, Key::isPrimary);
+
+			assertThat(((JsonWebKey) key).getValue().getKeyOperations())
+				.as("Allowed JWK key operations should be %s", Arrays.toString(expected))
+				.containsExactlyInAnyOrder(expected);
+		};
 	}
 
 }
