@@ -27,6 +27,7 @@ import java.text.ParseException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Implementation of a {@link Keyset} that is backed by the
@@ -152,9 +153,13 @@ class JsonWebKeyset implements Keyset, JWKSource<SecurityContext> {
 		final List<JsonWebKey> keys = new ArrayList<>(size());
 		keys.add(new JsonWebKey(key, KeyStatus.ENABLED, true));
 
-		stream().map(JsonWebKey.class::cast).forEach(existing -> keys.add(
-			new JsonWebKey(existing.getValue(), existing.getStatus(), false))
-		);
+		stream().map(JsonWebKey.class::cast).forEach(existing -> {
+			if (existing.isPrimary()) {
+				keys.add(rotateKey(existing));
+			} else {
+				keys.add(existing);
+			}
+		});
 
 		return JsonWebKeyset.builder(keys)
 				.name(name)
@@ -250,6 +255,41 @@ class JsonWebKeyset implements Keyset, JWKSource<SecurityContext> {
 		}
 
 		throw new IllegalArgumentException("Unsupported JWK key type: " + key.getKeyType());
+	}
+
+	/**
+	 * Rotates the previously generated key that was part of the keyset. The key should not be marked
+	 * as primary anymore and should not perform encryption or signing operations.
+	 *
+	 * @param key the existing key to be rotated
+	 * @return the rotated key
+	 */
+	private JsonWebKey rotateKey(JsonWebKey key) {
+		final Set<KeyOperation> operations = key.getValue()
+			.getKeyOperations()
+			.stream()
+			.filter(operation -> operation == KeyOperation.VERIFY || operation == KeyOperation.DECRYPT)
+			.collect(Collectors.toUnmodifiableSet());
+
+		final JWK jwk;
+
+		if (key.getValue() instanceof RSAKey rsa) {
+			jwk = new RSAKey.Builder(rsa)
+				.keyOperations(operations)
+				.build();
+		} else if (key.getValue() instanceof ECKey ec) {
+			jwk = new ECKey.Builder(ec)
+				.keyOperations(operations)
+				.build();
+		} else if (key.getValue() instanceof OctetSequenceKey secret) {
+			jwk = new OctetSequenceKey.Builder(secret)
+				.keyOperations(operations)
+				.build();
+		} else {
+			throw new IllegalStateException("Unsupported JWK type: " + key.getValue().getKeyType());
+		}
+
+		return new JsonWebKey(jwk, key.getStatus(), false);
 	}
 
 	private void assertKeysetOperation(KeysetOperation operation) {

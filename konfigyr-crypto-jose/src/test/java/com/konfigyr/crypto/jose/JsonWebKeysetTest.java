@@ -6,7 +6,7 @@ import com.nimbusds.jose.*;
 import com.nimbusds.jose.jwk.JWKMatcher;
 import com.nimbusds.jose.jwk.JWKSelector;
 import com.nimbusds.jose.jwk.KeyOperation;
-import org.assertj.core.data.TemporalUnitWithinOffset;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -19,6 +19,7 @@ import java.text.ParseException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
+import java.util.Set;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.*;
@@ -140,26 +141,35 @@ class JsonWebKeysetTest extends AbstractCryptoTest {
 		final var keyset = generate("rotating-keyset", JoseAlgorithm.HS256);
 		final var rotated = keyset.rotate();
 
-		assertThatObject(rotated).isNotNull()
+		assertThatObject(rotated)
+			.isNotNull()
 				.isNotEqualTo(keyset)
 				.isInstanceOf(JsonWebKeyset.class)
 				.returns(keyset.getName(), Keyset::getName)
 				.returns(keyset.getAlgorithm(), Keyset::getAlgorithm)
 				.returns(keyset.getKeyEncryptionKey(), Keyset::getKeyEncryptionKey)
 				.returns(keyset.getRotationInterval(), Keyset::getRotationInterval)
-				.satisfies(it -> assertThat(it.getNextRotationTime()).isAfter(keyset.getNextRotationTime())
-						.isCloseTo(Instant.now().plus(it.getRotationInterval()),
-								new TemporalUnitWithinOffset(1, ChronoUnit.SECONDS)))
-				.satisfies(it -> assertThat(it.getKeys()).isNotNull()
-						.hasSize(2)
-						.extracting(Key::getType, Key::getStatus, Key::isPrimary)
-						.containsExactlyInAnyOrder(
-								tuple(KeyType.OCTET, KeyStatus.ENABLED, true),
-								tuple(KeyType.OCTET, KeyStatus.ENABLED, false)
-						))
-				.satisfies(it -> assertThat(it.getKey(keyset.getKeys().get(0).getId())).isPresent()
-						.get()
-						.returns(false, Key::isPrimary));
+				.satisfies(it -> assertThat(it.getNextRotationTime())
+					.isAfter(keyset.getNextRotationTime())
+					.isCloseTo(Instant.now().plus(it.getRotationInterval()), within(1, ChronoUnit.SECONDS))
+				);
+
+		assertThat(rotated.getKeys())
+			.hasSize(2)
+			.asInstanceOf(InstanceOfAssertFactories.iterable(JsonWebKey.class))
+			.extracting(Key::getType, Key::getStatus, Key::isPrimary, it -> it.getValue().getKeyOperations())
+			.containsExactlyInAnyOrder(
+				tuple(KeyType.OCTET, KeyStatus.ENABLED, true, Set.of(KeyOperation.SIGN, KeyOperation.VERIFY)),
+				tuple(KeyType.OCTET, KeyStatus.ENABLED, false, Set.of(KeyOperation.VERIFY))
+			);
+
+		assertThat(rotated.getKeys())
+			.filteredOn(Key::isPrimary, false)
+			.hasSize(1)
+			.first()
+			.returns(keyset.getKeys().get(0).getId(), Key::getId)
+			.returns(false, Key::isPrimary);
+
 	}
 
 	@Test
