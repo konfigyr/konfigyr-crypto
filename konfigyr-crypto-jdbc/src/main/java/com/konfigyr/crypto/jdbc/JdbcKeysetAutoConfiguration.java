@@ -20,7 +20,6 @@ import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.SQLErrorCodeSQLExceptionTranslator;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionOperations;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -50,7 +49,7 @@ public class JdbcKeysetAutoConfiguration {
 	@Bean
 	KeysetRepository jdbcKeysetRepository(DataSource dataSource, PlatformTransactionManager txManager) {
 		final JdbcKeysetRepository repository = new JdbcKeysetRepository(createJdbcOperations(dataSource),
-				createTransactionOperations(txManager));
+				createTransactionOperations(txManager, properties));
 
 		repository.setTableName(properties.getTableName());
 
@@ -72,9 +71,16 @@ public class JdbcKeysetAutoConfiguration {
 		return template;
 	}
 
-	private static TransactionOperations createTransactionOperations(@NonNull PlatformTransactionManager txManager) {
+	private static TransactionOperations createTransactionOperations(
+		@NonNull PlatformTransactionManager txManager,
+		@NonNull JdbcKeysetProperties properties
+	) {
 		final TransactionTemplate template = new TransactionTemplate(txManager);
-		template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+		template.setPropagationBehavior(properties.getTransactionPropagationBehavior().value());
+		template.setIsolationLevel(properties.getTransactionIsolationLevel().value());
+		template.setTimeout((int) properties.getTransactionTimeout().toSeconds());
+		template.setName("jdbc-keyset-repository-transaction-operations");
+		template.setReadOnly(false);
 		template.afterPropertiesSet();
 		return template;
 	}
