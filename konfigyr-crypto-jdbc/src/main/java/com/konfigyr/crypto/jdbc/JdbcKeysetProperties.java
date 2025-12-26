@@ -3,6 +3,10 @@ package com.konfigyr.crypto.jdbc;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.sql.init.DatabaseInitializationMode;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
+
+import java.time.Duration;
 
 /**
  * Configuration properties for JDBC backed {@link com.konfigyr.crypto.KeysetRepository}
@@ -37,5 +41,23 @@ public class JdbcKeysetProperties {
 	 * keysets}.
 	 */
 	private String tableName = JdbcKeysetRepository.DEFAULT_TABLE_NAME;
+
+	/**
+	 * Specifies the transaction isolation level that is used by the {@link JdbcKeysetRepository} when writing
+	 * to the database. Defaults to {@link Isolation#DEFAULT}.
+	 */
+	private Isolation transactionIsolationLevel = Isolation.DEFAULT;
+
+	/**
+	 * Specifies the transaction propagation behavior that is used by the {@link JdbcKeysetRepository} when
+	 * writing to the database. Defaults to {@link Propagation#REQUIRED}.
+	 */
+	private Propagation transactionPropagationBehavior = Propagation.REQUIRED;
+
+	/**
+	 * Specifies the transaction timeout that is used by the {@link JdbcKeysetRepository} when writing
+	 * to the database. Defaults to 30 seconds.
+	 */
+	private Duration transactionTimeout = Duration.ofSeconds(30);
 
 }

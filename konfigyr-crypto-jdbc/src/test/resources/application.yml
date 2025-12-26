@@ -2,3 +2,6 @@ konfigyr:
   crypto:
     jdbc:
       initialize-schema: embedded
+      transaction-propagation-behavior: requires_new
+      transaction-isolation-level: serializable
+      transaction-timeout: 5s

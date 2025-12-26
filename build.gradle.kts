@@ -12,7 +12,7 @@ apply(plugin = "com.konfigyr.sonatype")
 
 allprojects {
     group = "com.konfigyr"
-	version = "1.0.0-RC4"
+	version = "1.0.0-RC5"
 }
 
 subprojects {
@@ -51,7 +51,7 @@ subprojects {
 
 	dependencyManagement {
 		imports {
-			mavenBom("org.springframework.boot:spring-boot-dependencies:4.0.0")
+			mavenBom("org.springframework.boot:spring-boot-dependencies:4.0.1")
 		}
 	}
 
