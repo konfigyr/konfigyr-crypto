@@ -3,7 +3,7 @@ plugins {
 	id("checkstyle")
 	id("java-library")
 	id("io.spring.dependency-management") version "1.1.7"
-	id("io.freefair.lombok") version "9.1.0" apply false
+	id("io.freefair.lombok") version "9.2.0" apply false
 	id("com.konfigyr.sonatype") apply false
 	id("com.konfigyr.deploy") apply false
 }
