@@ -3,9 +3,9 @@ description = "Konfigyr Crypto library that uses Google Tink as an implementatio
 dependencies {
     api(project(":konfigyr-crypto-api"))
 
-    compileOnly("com.google.crypto.tink:tink:1.20.0")
+    compileOnly("com.google.crypto.tink:tink:1.21.0")
 	compileOnly("org.springframework.boot:spring-boot-starter")
 
-    testImplementation("com.google.crypto.tink:tink:1.20.0")
+    testImplementation("com.google.crypto.tink:tink:1.21.0")
 	testImplementation("org.springframework.boot:spring-boot-starter")
 }
