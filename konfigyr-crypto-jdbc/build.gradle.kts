@@ -2,8 +2,8 @@ description = "Konfigyr Crypto library that uses Spring Data JDBC to store your 
 
 dependencies {
     api(project(":konfigyr-crypto-api"))
-    compileOnly("org.springframework.boot:spring-boot-starter-jdbc")
+    compileOnly(libs.spring.starter.jdbc)
 
+	testImplementation(libs.spring.starter.jdbc.test)
     testImplementation("org.hsqldb:hsqldb")
-	testImplementation("org.springframework.boot:spring-boot-starter-jdbc-test")
 }

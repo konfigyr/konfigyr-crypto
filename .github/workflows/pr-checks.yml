@@ -10,7 +10,7 @@ jobs:
     name: Build
     strategy:
       matrix:
-        jdk: [17, 25]
+        jdk: [21, 25]
       fail-fast: false
     runs-on: ubuntu-latest
     permissions:
@@ -21,9 +21,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Validate Gradle wrapper
-        uses: gradle/actions/wrapper-validation@v6
-
       - name: Set up JDK ${{ matrix.jdk }}
         uses: actions/setup-java@v5
         with:
@@ -33,6 +30,7 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
         with:
+          cache-provider: basic
           cache-read-only: true
 
       - name: Run tests

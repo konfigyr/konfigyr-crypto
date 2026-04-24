@@ -1,0 +1,18 @@
+[versions]
+spring-boot = "4.0.6"
+
+[libraries]
+spring-dependencies = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "spring-boot" }
+spring-processor-autoconfigure = { module = "org.springframework.boot:spring-boot-autoconfigure-processor", version.ref = "spring-boot" }
+spring-processor-configuration = { module = "org.springframework.boot:spring-boot-configuration-processor", version.ref = "spring-boot" }
+spring-starter = { module = "org.springframework.boot:spring-boot-starter", version.ref = "spring-boot" }
+spring-starter-jdbc = { module = "org.springframework.boot:spring-boot-starter-jdbc", version.ref = "spring-boot" }
+spring-starter-validation = { module = "org.springframework.boot:spring-boot-starter-validation", version.ref = "spring-boot" }
+spring-starter-test = { module = "org.springframework.boot:spring-boot-starter-test", version.ref = "spring-boot" }
+spring-starter-jdbc-test = { module = "org.springframework.boot:spring-boot-starter-jdbc-test", version.ref = "spring-boot" }
+
+jose-jwt = { module = "com.nimbusds:nimbus-jose-jwt", version = "10.9" }
+tink = { module = "com.google.crypto.tink:tink", version = "1.21.0" }
+
+[plugins]
+lombok = { id = "io.freefair.lombok", version = "9.4.0" }
