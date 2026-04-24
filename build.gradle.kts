@@ -2,10 +2,10 @@ plugins {
 	id("idea")
 	id("checkstyle")
 	id("java-library")
-	id("io.spring.dependency-management") version "1.1.7"
-	id("io.freefair.lombok") version "9.2.0" apply false
 	id("com.konfigyr.sonatype") apply false
 	id("com.konfigyr.deploy") apply false
+
+    alias(libs.plugins.lombok) apply false
 }
 
 apply(plugin = "com.konfigyr.sonatype")
@@ -19,7 +19,6 @@ subprojects {
     apply(plugin = "checkstyle")
     apply(plugin = "java-library")
     apply(plugin = "io.freefair.lombok")
-    apply(plugin = "io.spring.dependency-management")
     apply(plugin = "com.konfigyr.deploy")
 
 	repositories {
@@ -32,31 +31,27 @@ subprojects {
         withSourcesJar()
 
         toolchain {
-            languageVersion = JavaLanguageVersion.of(17)
+            languageVersion = JavaLanguageVersion.of(21)
         }
     }
 
     checkstyle {
-        toolVersion = "12.1.1"
+        toolVersion = "13.4.0"
     }
 
 	dependencies {
-		annotationProcessor("org.springframework.boot:spring-boot-autoconfigure-processor")
-		annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
+        implementation(platform(rootProject.libs.spring.dependencies))
 
-		testImplementation("org.springframework.boot:spring-boot-starter-test")
-		testImplementation("org.springframework.boot:spring-boot-starter-validation")
+        annotationProcessor(rootProject.libs.spring.processor.autoconfigure)
+        annotationProcessor(rootProject.libs.spring.processor.configuration)
+
+        testImplementation(rootProject.libs.spring.starter.test)
+        testImplementation(rootProject.libs.spring.starter.validation)
         testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 	}
 
-	dependencyManagement {
-		imports {
-			mavenBom("org.springframework.boot:spring-boot-dependencies:4.0.5")
-		}
-	}
-
     tasks.withType<JavaCompile>().configureEach {
-        options.release = 17
+        options.release = 21
     }
 
     tasks.test {

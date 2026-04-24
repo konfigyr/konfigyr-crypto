@@ -3,9 +3,8 @@ description = "Konfigyr Crypto library that uses JOSE JWT as an implementation o
 dependencies {
 	api(project(":konfigyr-crypto-api"))
 
-    compileOnly("com.nimbusds:nimbus-jose-jwt:10.8")
-	compileOnly("org.springframework.boot:spring-boot-starter")
+    compileOnly(libs.spring.starter)
+    compileOnly(libs.jose.jwt)
 
-    testImplementation("com.nimbusds:nimbus-jose-jwt:10.8")
-	testImplementation("org.springframework.boot:spring-boot-starter")
+    testImplementation(libs.jose.jwt)
 }
