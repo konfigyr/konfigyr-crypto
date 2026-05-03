@@ -15,4 +15,4 @@ jose-jwt = { module = "com.nimbusds:nimbus-jose-jwt", version = "10.9" }
 tink = { module = "com.google.crypto.tink:tink", version = "1.21.0" }
 
 [plugins]
-lombok = { id = "io.freefair.lombok", version = "9.4.0" }
+lombok = { id = "io.freefair.lombok", version = "9.5.0" }
