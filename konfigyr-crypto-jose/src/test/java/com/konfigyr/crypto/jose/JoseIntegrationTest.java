@@ -126,7 +126,7 @@ public class JoseIntegrationTest {
 
 	@Test
 	@Order(4)
-	@DisplayName("should read and unwrap JWE keyset from the repository")
+	@DisplayName("should read and unwrap encryption keyset from the repository")
 	void shouldReadEncryptingKeyset() {
 		final var kek = store.kek(KEK_PROVIDER, KEK_IDENTIFIER);
 

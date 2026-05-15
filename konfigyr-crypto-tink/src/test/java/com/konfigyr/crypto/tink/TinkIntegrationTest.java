@@ -87,7 +87,7 @@ public class TinkIntegrationTest {
 	@Order(3)
 	@DisplayName("should wrap and write keyset in the repository")
 	void shouldWriteKeyset() throws Exception {
-		final var handle = KeysetHandle.generateNew(TinkUtils.keyTemplateForAlgorithm(TinkAlgorithm.ED25519));
+		final var handle = KeysetHandle.generateNew(TinkAlgorithm.ED25519.template());
 
 		final var keyset = TinkKeyset.builder(handle)
 			.name("singing-key")

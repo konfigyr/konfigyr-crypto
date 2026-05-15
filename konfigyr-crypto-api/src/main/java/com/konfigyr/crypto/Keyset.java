@@ -16,9 +16,19 @@ import java.util.stream.Stream;
  * Keys in a {@link Keyset} get a unique identifier and, depending on the implementation,
  * a key status which allows disabling keys without removing them from a {@link Keyset}.
  * <p>
- * The designated primary key within the {@link Keyset} is used to perform sign and
- * encrypt operations. Non-primary keys are used only to perform signature verification
- * and decrypt operations if they are not in a disabled state.
+ * The designated primary key within the {@link Keyset} is used to perform the active
+ * cryptographic operation (sign or encrypt). Non-primary keys are used only for
+ * the corresponding passive operation (verify or decrypt) when they are not
+ * in a disabled state.
+ * <p>
+ * Which operations a keyset supports is determined by its {@link Algorithm#purpose()}:
+ * <ul>
+ *     <li>{@link KeysetPurpose#SIGNING} supports {@link #sign(ByteArray)} and
+ *         {@link #verify(ByteArray, ByteArray)}.</li>
+ *     <li>{@link KeysetPurpose#ENCRYPTION} supports {@link #encrypt(ByteArray)} and
+ *         {@link #decrypt(ByteArray)}.</li>
+ * </ul>
+ * All other operations throw {@link CryptoException.UnsupportedKeysetOperationException}.
  * <p>
  * Rotating cryptographic keys is a recommended security practice. Some industry
  * standards, such as Payment Card Industry Data Security Standard (PCI DSS), require a
@@ -59,60 +69,91 @@ public interface Keyset extends KeysetDefinition, Iterable<Key> {
 	}
 
 	/**
-	 * Encrypts the given byte buffer wrapped inside a {@link ByteArray}.
+	 * Encrypts the given byte buffer wrapped inside a {@link ByteArray}. Only supported when
+	 * {@link Algorithm#purpose()} is {@link KeysetPurpose#ENCRYPTION}.
 	 *
 	 * @param data Data wrapped as a byte buffer that should be encrypted, can't be {@literal null}.
 	 * @return Encrypted data wrapped inside a byte buffer.
+	 * @throws CryptoException.UnsupportedKeysetOperationException when the algorithm does not
+	 * support {@link KeysetOperation#ENCRYPT}.
 	 */
 	default ByteArray encrypt(ByteArray data) {
 		return encrypt(data, null);
 	}
 
 	/**
-	 * Encrypt the byte buffer with additional data to be used as authentication context when performing encryption.
+	 * Encrypt the byte buffer with additional data to be used as authentication context when
+	 * performing encryption. Only supported when {@link Algorithm#purpose()} is
+	 * {@link KeysetPurpose#ENCRYPTION}.
 	 *
 	 * @param data Data wrapped as a byte buffer that should be encrypted, can't be {@literal null}.
-	 * @param context Authentication context byte bugger, can be {@literal null}.
+	 * @param context Authentication context byte buffer, can be {@literal null}.
 	 * @return Encrypted data wrapped inside a byte buffer.
+	 * @throws CryptoException.UnsupportedKeysetOperationException when the algorithm does not
+	 * support {@link KeysetOperation#ENCRYPT}.
 	 */
-	ByteArray encrypt(ByteArray data, @Nullable ByteArray context);
+	default ByteArray encrypt(ByteArray data, @Nullable ByteArray context) {
+		throw new CryptoException.UnsupportedKeysetOperationException(
+				getName(), KeysetOperation.ENCRYPT, getAlgorithm().operations());
+	}
 
 	/**
-	 * Decrypt the given byte buffer wrapped inside a {@link ByteArray}.
+	 * Decrypt the given byte buffer wrapped inside a {@link ByteArray}. Only supported when
+	 * {@link Algorithm#purpose()} is {@link KeysetPurpose#ENCRYPTION}.
 	 *
 	 * @param cipher Data wrapped as a byte buffer that should be decrypted, can't be {@literal null}.
 	 * @return Decrypted data wrapped inside a byte buffer.
+	 * @throws CryptoException.UnsupportedKeysetOperationException when the algorithm does not
+	 * support {@link KeysetOperation#DECRYPT}.
 	 */
 	default ByteArray decrypt(ByteArray cipher) {
 		return decrypt(cipher, null);
 	}
 
 	/**
-	 * Decrypt the byte buffer with additional data was used during encryption as authentication context.
+	 * Decrypt the byte buffer with additional data that was used during encryption as
+	 * authentication context. Only supported when {@link Algorithm#purpose()} is
+	 * {@link KeysetPurpose#ENCRYPTION}.
 	 *
 	 * @param cipher Data wrapped as a byte buffer that should be decrypted, can't be {@literal null}.
-	 * @param context Authentication context byte bugger, can be {@literal null}.
+	 * @param context Authentication context byte buffer, can be {@literal null}.
 	 * @return Decrypted data wrapped inside a byte buffer.
+	 * @throws CryptoException.UnsupportedKeysetOperationException when the algorithm does not
+	 * support {@link KeysetOperation#DECRYPT}.
 	 */
-	ByteArray decrypt(ByteArray cipher, @Nullable ByteArray context);
+	default ByteArray decrypt(ByteArray cipher, @Nullable ByteArray context) {
+		throw new CryptoException.UnsupportedKeysetOperationException(
+				getName(), KeysetOperation.DECRYPT, getAlgorithm().operations());
+	}
 
 	/**
-	 * Signs the data wrapped inside a {@link ByteArray}. This method would return a {@link ByteArray} that
-	 * contains the digital signature.
+	 * Signs the data wrapped inside a {@link ByteArray}. Only supported when
+	 * {@link Algorithm#purpose()} is {@link KeysetPurpose#SIGNING}.
 	 *
 	 * @param data Data wrapped as a byte buffer that should be signed, can't be {@literal null}.
 	 * @return digital signature wrapped inside a byte buffer.
+	 * @throws CryptoException.UnsupportedKeysetOperationException when the algorithm does not
+	 * support {@link KeysetOperation#SIGN}.
 	 */
-	ByteArray sign(ByteArray data);
+	default ByteArray sign(ByteArray data) {
+		throw new CryptoException.UnsupportedKeysetOperationException(
+				getName(), KeysetOperation.SIGN, getAlgorithm().operations());
+	}
 
 	/**
-	 * Verifies if digital signature of the data wrapped inside a {@link ByteArray} is correct.
+	 * Verifies if the digital signature of the data wrapped inside a {@link ByteArray} is
+	 * correct. Only supported when {@link Algorithm#purpose()} is {@link KeysetPurpose#SIGNING}.
 	 *
 	 * @param signature Signature wrapped as a byte buffer that should be verified, can't be {@literal null}.
 	 * @param data Original data wrapped as a byte buffer from which the signature is created, can't be {@literal null}.
 	 * @return {@code true} if the signature is valid, {@code false} otherwise.
+	 * @throws CryptoException.UnsupportedKeysetOperationException when the algorithm does not
+	 * support {@link KeysetOperation#VERIFY}.
 	 */
-	boolean verify(ByteArray signature, ByteArray data);
+	default boolean verify(ByteArray signature, ByteArray data) {
+		throw new CryptoException.UnsupportedKeysetOperationException(
+				getName(), KeysetOperation.VERIFY, getAlgorithm().operations());
+	}
 
 	/**
 	 * Lifecycle method that is used to rotate cryptographic keys within the {@link Keyset}.

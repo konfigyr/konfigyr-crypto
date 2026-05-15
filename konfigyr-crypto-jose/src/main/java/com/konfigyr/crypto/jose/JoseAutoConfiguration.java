@@ -1,5 +1,7 @@
 package com.konfigyr.crypto.jose;
 
+import com.konfigyr.crypto.AlgorithmRegistrar;
+import com.konfigyr.crypto.AlgorithmRegistry;
 import com.konfigyr.crypto.CryptoAutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigureBefore;
@@ -20,8 +22,13 @@ import org.springframework.context.annotation.Bean;
 public class JoseAutoConfiguration {
 
 	@Bean
-	JoseKeysetFactory joseKeysetFactory() {
-		return new JoseKeysetFactory();
+	AlgorithmRegistrar joseAlgorithmRegistrar() {
+		return registry -> JoseAlgorithm.DEFAULT_ALGORITHMS.forEach(registry::register);
+	}
+
+	@Bean
+	JoseKeysetFactory joseKeysetFactory(AlgorithmRegistry registry) {
+		return new JoseKeysetFactory(registry);
 	}
 
 }

@@ -42,6 +42,39 @@ public abstract class CryptoException extends RuntimeException {
 	}
 
 	/**
+	 * Exception thrown when the {@link AlgorithmRegistry} cannot resolve an algorithm
+	 * for the given name. This typically means the algorithm was never registered or
+	 * the stored {@link EncryptedKeyset} references an algorithm that is no longer
+	 * available in the current application context.
+	 */
+	public static class UnknownAlgorithmException extends CryptoException {
+
+		@Serial
+		private static final long serialVersionUID = SERIAL;
+
+		private final String algorithmName;
+
+		/**
+		 * Creates a new {@link UnknownAlgorithmException} for the given algorithm name.
+		 *
+		 * @param algorithmName the unresolvable algorithm name, can't be {@literal null}
+		 */
+		public UnknownAlgorithmException(String algorithmName) {
+			super("No algorithm registered with name '" + algorithmName + "'. Make sure the "
+					+ "algorithm is registered via an AlgorithmRegistrar bean.");
+			this.algorithmName = algorithmName;
+		}
+
+		/**
+		 * @return the algorithm name that could not be resolved, never {@literal null}
+		 */
+		public @NonNull String getAlgorithmName() {
+			return algorithmName;
+		}
+
+	}
+
+	/**
 	 * Exception thrown when the algorithm is not supported by the {@link Keyset}
 	 * implementation, or it can't be used by a specific {@link KeysetOperation}.
 	 */

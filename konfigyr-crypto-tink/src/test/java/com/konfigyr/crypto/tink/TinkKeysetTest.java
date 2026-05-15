@@ -50,7 +50,7 @@ class TinkKeysetTest extends AbstractCryptoTest {
 	@Test
 	@DisplayName("should perform encryption using tink HybridEncrypt primitive")
 	void shouldPerformHybridEncryptionOperation() throws Exception {
-		final var keyset = generate("test", TinkAlgorithm.DHKEM_X25519_HKDF_SHA256_HKDF_SHA256_AES_128_GCM);
+		final var keyset = generate("test", TinkAlgorithm.ECIES_P256_HKDF_HMAC_SHA256_AES128_GCM);
 		final var cypher = keyset.encrypt(DATA);
 
 		assertThat(cypher).isNotNull();
@@ -60,7 +60,7 @@ class TinkKeysetTest extends AbstractCryptoTest {
 			.satisfies(assertOperationException("test", KeysetOperation.DECRYPT));
 
 		assertThatThrownBy(
-				() -> generate("test", TinkAlgorithm.DHKEM_X25519_HKDF_SHA256_HKDF_SHA256_AES_128_GCM).decrypt(cypher))
+				() -> generate("test", TinkAlgorithm.ECIES_P256_HKDF_HMAC_SHA256_AES128_GCM).decrypt(cypher))
 			.satisfies(assertOperationException("test", KeysetOperation.DECRYPT));
 	}
 
@@ -116,7 +116,7 @@ class TinkKeysetTest extends AbstractCryptoTest {
 				.extracting(Key::getType, Key::getStatus, Key::isPrimary)
 				.containsExactlyInAnyOrder(tuple(KeyType.OCTET, KeyStatus.ENABLED, true),
 						tuple(KeyType.OCTET, KeyStatus.ENABLED, false)))
-			.satisfies(it -> assertThat(it.getKey(keyset.getKeys().get(0).getId())).isPresent()
+			.satisfies(it -> assertThat(it.getKey(keyset.getKeys().getFirst().getId())).isPresent()
 				.get()
 				.returns(false, Key::isPrimary));
 	}

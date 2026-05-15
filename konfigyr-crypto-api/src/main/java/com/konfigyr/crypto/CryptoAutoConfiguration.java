@@ -8,9 +8,14 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.context.annotation.Bean;
 
 /**
- * Autoconfiguration class used to create the {@link KeysetStore}. This configuration
- * requires that the {@link KeysetFactory} Spring Bean is present in the application
- * context.
+ * Autoconfiguration class used to create the {@link AlgorithmRegistry} and
+ * {@link KeysetStore}. This configuration requires that at least one {@link KeysetFactory}
+ * Spring Bean is present in the application context.
+ * <p>
+ * The {@link AlgorithmRegistry} bean is created by collecting all {@link AlgorithmRegistrar}
+ * beans from the context and invoking them in order. Cryptographic library modules
+ * ({@code konfigyr-crypto-tink}, {@code konfigyr-crypto-jose}) register their built-in
+ * algorithms this way via {@code @AutoConfigureBefore} ordering.
  * <p>
  * This configuration also declares an in-memory implementation of the
  * {@link KeysetRepository} that should not be used in production. It is recommended to
@@ -24,6 +29,14 @@ import org.springframework.context.annotation.Bean;
 @ConditionalOnBean(KeysetFactory.class)
 @ConditionalOnMissingBean(KeysetStore.class)
 public class CryptoAutoConfiguration {
+
+	@Bean
+	@ConditionalOnMissingBean(AlgorithmRegistry.class)
+	AlgorithmRegistry algorithmRegistry(ObjectProvider<@NonNull AlgorithmRegistrar> registrars) {
+		final AlgorithmRegistry registry = new SimpleAlgorithmRegistry();
+		registrars.forEach(registrar -> registrar.register(registry));
+		return registry;
+	}
 
 	@Bean
 	@ConditionalOnMissingBean(KeysetRepository.class)

@@ -1,5 +1,7 @@
 package com.konfigyr.crypto.tink;
 
+import com.konfigyr.crypto.AlgorithmRegistrar;
+import com.konfigyr.crypto.AlgorithmRegistry;
 import com.konfigyr.crypto.CryptoAutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigureBefore;
@@ -20,8 +22,13 @@ import org.springframework.context.annotation.Bean;
 public class TinkAutoConfiguration {
 
 	@Bean
-	TinkKeysetFactory tinkKeysetFactory() {
-		return new TinkKeysetFactory();
+	AlgorithmRegistrar tinkAlgorithmRegistrar() {
+		return registry -> TinkAlgorithm.DEFAULT_ALGORITHMS.forEach(registry::register);
+	}
+
+	@Bean
+	TinkKeysetFactory tinkKeysetFactory(AlgorithmRegistry registry) {
+		return new TinkKeysetFactory(registry);
 	}
 
 }

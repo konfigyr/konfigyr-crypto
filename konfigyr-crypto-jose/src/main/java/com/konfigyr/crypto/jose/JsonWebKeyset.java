@@ -9,7 +9,6 @@ import com.nimbusds.jose.crypto.factories.DefaultJWSSignerFactory;
 import com.nimbusds.jose.crypto.factories.DefaultJWSVerifierFactory;
 import com.nimbusds.jose.jwk.*;
 import com.nimbusds.jose.jwk.KeyType;
-import com.nimbusds.jose.jwk.gen.JWKGenerator;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.*;
 import com.nimbusds.jose.produce.JWSSignerFactory;
@@ -77,7 +76,6 @@ class JsonWebKeyset implements Keyset, JWKSource<SecurityContext> {
 			).keyID(key.getKeyID()).build();
 
 			final JWEObject object = new JWEObject(header, new Payload(data.array()));
-
 			object.encrypt(createEncrypter(key));
 
 			return ByteArray.fromString(object.serialize(), StandardCharsets.UTF_8);
@@ -141,11 +139,10 @@ class JsonWebKeyset implements Keyset, JWKSource<SecurityContext> {
 
 	@Override
 	public Keyset rotate() {
-		final JWKGenerator<?> generator = JoseUtils.generatorForDefinition(this);
 		final JWK key;
 
 		try {
-			key = generator.generate();
+			key = algorithm.generator().generate();
 		} catch (JOSEException ex) {
 			throw new CryptoException.KeysetException(this, "Failed to create JWK", ex);
 		}
@@ -171,19 +168,12 @@ class JsonWebKeyset implements Keyset, JWKSource<SecurityContext> {
 	}
 
 	private JWEEncrypter createEncrypter(JWK key) throws JOSEException {
-		if (key instanceof RSAKey rsa) {
-			return new RSAEncrypter(rsa);
-		}
-
-		if (key instanceof ECKey ec) {
-			return new ECDHEncrypter(ec);
-		}
-
-		if (key instanceof OctetSequenceKey secret) {
-			return new AESEncrypter(secret);
-		}
-
-		throw new CryptoException.UnsupportedAlgorithmException(algorithm);
+		return switch (key) {
+			case RSAKey rsa -> new RSAEncrypter(rsa);
+			case ECKey ec -> new ECDHEncrypter(ec);
+			case OctetSequenceKey secret -> new AESEncrypter(secret);
+			default -> throw new CryptoException.UnsupportedAlgorithmException(algorithm);
+		};
 	}
 
 	private JWEDecrypter createDecrypter(JWEHeader header) throws JOSEException {
@@ -240,7 +230,7 @@ class JsonWebKeyset implements Keyset, JWKSource<SecurityContext> {
 			throw new KeySourceException("Found multiple keys for JWK matcher: " + matcher);
 		}
 
-		final JWK key = keys.get(0);
+		final JWK key = keys.getFirst();
 
 		if (KeyType.RSA.equals(key.getKeyType())) {
 			return resolver.apply(key.toRSAKey());
@@ -271,23 +261,18 @@ class JsonWebKeyset implements Keyset, JWKSource<SecurityContext> {
 			.filter(operation -> operation == KeyOperation.VERIFY || operation == KeyOperation.DECRYPT)
 			.collect(Collectors.toUnmodifiableSet());
 
-		final JWK jwk;
-
-		if (key.getValue() instanceof RSAKey rsa) {
-			jwk = new RSAKey.Builder(rsa)
+		final JWK jwk = switch (key.getValue()) {
+			case RSAKey rsa -> new RSAKey.Builder(rsa)
 				.keyOperations(operations)
 				.build();
-		} else if (key.getValue() instanceof ECKey ec) {
-			jwk = new ECKey.Builder(ec)
+			case ECKey ec -> new ECKey.Builder(ec)
 				.keyOperations(operations)
 				.build();
-		} else if (key.getValue() instanceof OctetSequenceKey secret) {
-			jwk = new OctetSequenceKey.Builder(secret)
+			case OctetSequenceKey secret -> new OctetSequenceKey.Builder(secret)
 				.keyOperations(operations)
 				.build();
-		} else {
-			throw new IllegalStateException("Unsupported JWK type: " + key.getValue().getKeyType());
-		}
+			default -> throw new IllegalStateException("Unsupported JWK type: " + key.getValue().getKeyType());
+		};
 
 		return new JsonWebKey(jwk, key.getStatus(), false);
 	}
