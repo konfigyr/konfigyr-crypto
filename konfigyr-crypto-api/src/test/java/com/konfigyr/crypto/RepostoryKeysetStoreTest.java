@@ -11,7 +11,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.cache.concurrent.ConcurrentMapCache;
 
 import java.io.IOException;
-import java.util.Set;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -392,14 +391,14 @@ class RepostoryKeysetStoreTest {
 
 		@NonNull
 		@Override
-		public KeyType type() {
-			return KeyType.OCTET;
+		public KeysetPurpose purpose() {
+			return KeysetPurpose.ENCRYPTION;
 		}
 
 		@NonNull
 		@Override
-		public Set<KeysetOperation> operations() {
-			return Set.of(KeysetOperation.ENCRYPT, KeysetOperation.DECRYPT);
+		public KeyType type() {
+			return KeyType.OCTET;
 		}
 
 	}

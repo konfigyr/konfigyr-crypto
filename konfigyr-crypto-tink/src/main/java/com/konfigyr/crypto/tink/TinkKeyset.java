@@ -214,7 +214,7 @@ class TinkKeyset implements Keyset {
 	}
 
 	private com.google.crypto.tink.proto.KeyTemplate parseKeyTemplateProto() throws GeneralSecurityException {
-		final Parameters parameters = TinkUtils.keyTemplateForAlgorithm(algorithm).toParameters();
+		final Parameters parameters = algorithm.template().toParameters();
 
 		try {
 			return com.google.crypto.tink.proto.KeyTemplate.parseFrom(TinkProtoParametersFormat.serialize(parameters));

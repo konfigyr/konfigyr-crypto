@@ -1,37 +1,53 @@
 package com.konfigyr.crypto.jose;
 
-import com.konfigyr.crypto.EncryptedKeyset;
-import com.konfigyr.crypto.Keyset;
-import com.konfigyr.crypto.KeysetDefinition;
+import com.konfigyr.crypto.*;
 import com.konfigyr.io.ByteArray;
 import com.nimbusds.jose.shaded.gson.JsonSyntaxException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.text.ParseException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.mockito.Mockito.mock;
 
 class JoseKeysetFactoryTest extends AbstractCryptoTest {
 
-	@EnumSource(JoseAlgorithm.class)
+	@MethodSource("joseAlgorithms")
 	@ParameterizedTest(name = "algorithm: {0}")
 	@DisplayName("should support every defined JOSE Algorithm")
 	void shouldSupportJoseAlgorithm(JoseAlgorithm algorithm) {
 		assertThat(factory.supports(KeysetDefinition.of("test", algorithm))).isTrue();
 	}
 
-	@EnumSource(JoseAlgorithm.class)
+	@MethodSource("joseAlgorithms")
 	@ParameterizedTest(name = "algorithm: {0}")
 	@DisplayName("should support every defined JOSE Algorithm from encrypted keyset")
 	void shouldSupportJoseAlgorithmEncryptedKeysets(JoseAlgorithm algorithm) {
 		final var keyset = EncryptedKeyset.builder(KeysetDefinition.of("test", algorithm))
 			.provider("test-provider")
 			.keyEncryptionKey("test-kek")
+			.build(ByteArray.fromString("Encrypted keyset"));
+
+		assertThat(factory.supports(keyset)).isTrue();
+	}
+
+	@MethodSource("joseAlgorithms")
+	@ParameterizedTest(name = "algorithm: {0}")
+	@DisplayName("should support encrypted keysets identified by JOSE algorithm name")
+	void shouldSupportEncryptedKeysetsWithJoseAlgorithmNames(JoseAlgorithm algorithm) {
+		final var keyset = EncryptedKeyset.builder()
+			.name("test")
+			.algorithm(algorithm.name())
+			.provider("test-provider")
+			.keyEncryptionKey("test-kek")
+			.rotationInterval(Duration.ofDays(90))
+			.nextRotationTime(Instant.now().plus(Duration.ofDays(1)))
 			.build(ByteArray.fromString("Encrypted keyset"));
 
 		assertThat(factory.supports(keyset)).isTrue();
@@ -90,6 +106,18 @@ class JoseKeysetFactoryTest extends AbstractCryptoTest {
 	}
 
 	@Test
+	@DisplayName("should fail to create keyset from unsupported definition")
+	void shouldAssertUnsupportedDefinition() {
+		final var algorithm = mock(Algorithm.class);
+		final var definition = KeysetDefinition.of("test-keyset", algorithm);
+
+		assertThatExceptionOfType(CryptoException.UnsupportedAlgorithmException.class)
+			.isThrownBy(() -> factory.create(kek, definition))
+			.withMessageContaining("Unsupported algorithm")
+			.withNoCause();
+	}
+
+	@Test
 	@DisplayName("should fail to create JOSE JSON web keyset instance due to invalid JSON data")
 	void shouldFailToCreateKeysetFromInvalidJsonData() {
 		final var encrypted = EncryptedKeyset.builder()
@@ -121,6 +149,10 @@ class JoseKeysetFactoryTest extends AbstractCryptoTest {
 			.isThrownBy(() -> factory.create(kek, encrypted))
 			.withMessageContaining("Fail to read encrypted JOSE keyset: jose-key")
 			.withCauseInstanceOf(ParseException.class);
+	}
+
+	static Stream<JoseAlgorithm> joseAlgorithms() {
+		return JoseAlgorithm.DEFAULT_ALGORITHMS.stream();
 	}
 
 }

@@ -3,6 +3,7 @@ package com.konfigyr.crypto.tink;
 import com.google.crypto.tink.*;
 import com.konfigyr.crypto.*;
 import com.konfigyr.io.ByteArray;
+import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NullMarked;
 import org.springframework.util.Assert;
 
@@ -29,31 +30,33 @@ import java.security.GeneralSecurityException;
  * @see TinkKeyset
  **/
 @NullMarked
+@RequiredArgsConstructor
 public class TinkKeysetFactory implements KeysetFactory {
+
+	private final AlgorithmRegistry registry;
 
 	@Override
 	public boolean supports(EncryptedKeyset encryptedKeyset) {
-		for (TinkAlgorithm algorithm : TinkAlgorithm.values()) {
-			if (algorithm.name().equals(encryptedKeyset.getAlgorithm())) {
-				return true;
-			}
-		}
-		return false;
+		return registry.find(encryptedKeyset.getAlgorithm())
+			.filter(a -> a instanceof TinkAlgorithm)
+			.isPresent();
 	}
 
 	@Override
 	public boolean supports(KeysetDefinition definition) {
-		return TinkUtils.isSupportedAlgorithm(definition.getAlgorithm());
+		return definition.getAlgorithm() instanceof TinkAlgorithm;
 	}
 
 	@Override
 	public Keyset create(KeyEncryptionKey kek, KeysetDefinition definition) {
-		final KeyTemplate template = TinkUtils.keyTemplateForAlgorithm(definition.getAlgorithm());
+		if (!(definition.getAlgorithm() instanceof TinkAlgorithm tinkAlgorithm)) {
+			throw new CryptoException.UnsupportedAlgorithmException(definition.getAlgorithm());
+		}
 
 		final KeysetHandle handle;
 
 		try {
-			handle = KeysetHandle.generateNew(template);
+			handle = KeysetHandle.generateNew(tinkAlgorithm.template());
 		}
 		catch (GeneralSecurityException e) {
 			throw new CryptoException.UnsupportedAlgorithmException(definition.getAlgorithm(), e);
@@ -61,7 +64,7 @@ public class TinkKeysetFactory implements KeysetFactory {
 
 		return TinkKeyset.builder(handle)
 			.name(definition.getName())
-			.algorithm((TinkAlgorithm) definition.getAlgorithm())
+			.algorithm(tinkAlgorithm)
 			.keyEncryptionKey(kek)
 			.rotationInterval(definition.getRotationInterval())
 			.nextRotationTime(definition.getNextRotationTime())
@@ -108,9 +111,11 @@ public class TinkKeysetFactory implements KeysetFactory {
 			throw new CryptoException.UnwrappingException(name, kek, e);
 		}
 
+		final TinkAlgorithm algorithm = (TinkAlgorithm) registry.resolve(encryptedKeyset.getAlgorithm());
+
 		return TinkKeyset.builder(handle)
 			.name(name)
-			.algorithm(TinkAlgorithm.valueOf(encryptedKeyset.getAlgorithm()))
+			.algorithm(algorithm)
 			.keyEncryptionKey(kek)
 			.rotationInterval(encryptedKeyset.getRotationInterval())
 			.nextRotationTime(encryptedKeyset.getNextRotationTime())

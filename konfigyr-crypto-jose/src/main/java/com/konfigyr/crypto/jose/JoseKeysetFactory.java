@@ -4,11 +4,11 @@ import com.konfigyr.crypto.*;
 import com.konfigyr.io.ByteArray;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.jwk.JWK;
-import com.nimbusds.jose.jwk.gen.JWKGenerator;
 import com.nimbusds.jose.shaded.gson.Gson;
 import com.nimbusds.jose.shaded.gson.GsonBuilder;
 import com.nimbusds.jose.shaded.gson.JsonParseException;
 import com.nimbusds.jose.shaded.gson.reflect.TypeToken;
+import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NullMarked;
 
 import java.io.IOException;
@@ -32,8 +32,9 @@ import java.util.Map;
  * API, like {@link com.nimbusds.jose.proc.JWEKeySelector JWEKeySelector} and
  * {@link com.nimbusds.jose.proc.JWSKeySelector JWSKeySelector}.
  * <p>
- * Keep in mind that the {@link JsonWebKeyset} would generate {@link com.nimbusds.jose.JWEObject JWE}
- * when encrypting the data, and {@link com.nimbusds.jose.JWSObject JWS} when signing it.
+ * Keep in mind that the {@link JsonWebKeyset} generates a {@link com.nimbusds.jose.JWEObject JWE}
+ * token when encrypting data using a {@link KeysetPurpose#ENCRYPTION} algorithm, and a
+ * {@link com.nimbusds.jose.JWSObject JWS} token when signing data.
  *
  * @author : Vladimir Spasic
  * @since : 24.11.25, Mon
@@ -41,22 +42,21 @@ import java.util.Map;
  * @see JsonWebKeyset
  **/
 @NullMarked
+@RequiredArgsConstructor
 public class JoseKeysetFactory implements KeysetFactory {
 
 	private static final TypeToken<?> JSON_KEY_TYPE = TypeToken.getParameterized(Map.class, String.class, Object.class);
 	private static final TypeToken<?> JSON_KEYS_TYPE = TypeToken.getArray(JSON_KEY_TYPE.getType());
 
+	private final AlgorithmRegistry registry;
 	private final Gson gson = new GsonBuilder()
 		.create();
 
 	@Override
 	public boolean supports(EncryptedKeyset encryptedKeyset) {
-		for (JoseAlgorithm algorithm : JoseAlgorithm.values()) {
-			if (algorithm.name().equals(encryptedKeyset.getAlgorithm())) {
-				return true;
-			}
-		}
-		return false;
+		return registry.find(encryptedKeyset.getAlgorithm())
+			.filter(a -> a instanceof JoseAlgorithm)
+			.isPresent();
 	}
 
 	@Override
@@ -66,11 +66,14 @@ public class JoseKeysetFactory implements KeysetFactory {
 
 	@Override
 	public Keyset create(KeyEncryptionKey kek, KeysetDefinition definition) {
-		final JWKGenerator<?> generator = JoseUtils.generatorForDefinition(definition);
+		if (!(definition.getAlgorithm() instanceof JoseAlgorithm joseAlgorithm)) {
+			throw new CryptoException.UnsupportedAlgorithmException(definition.getAlgorithm());
+		}
+
 		final JWK key;
 
 		try {
-			key = generator.generate();
+			key = joseAlgorithm.generator().generate();
 		} catch (JOSEException ex) {
 			throw new CryptoException.KeysetException(definition, "Failed to create JWK", ex);
 		}
@@ -78,7 +81,7 @@ public class JoseKeysetFactory implements KeysetFactory {
 		return JsonWebKeyset.builder(new JsonWebKey(key, KeyStatus.ENABLED, true))
 			.keyEncryptionKey(kek)
 			.name(definition.getName())
-			.algorithm((JoseAlgorithm) definition.getAlgorithm())
+			.algorithm(joseAlgorithm)
 			.rotationInterval(definition.getRotationInterval())
 			.nextRotationTime(definition.getNextRotationTime())
 			.build();
@@ -126,10 +129,12 @@ public class JoseKeysetFactory implements KeysetFactory {
 			}
 		}
 
+		final JoseAlgorithm algorithm = (JoseAlgorithm) registry.resolve(encryptedKeyset.getAlgorithm());
+
 		return JsonWebKeyset.builder(keys)
 			.keyEncryptionKey(kek)
 			.name(encryptedKeyset.getName())
-			.algorithm(JoseAlgorithm.valueOf(encryptedKeyset.getAlgorithm()))
+			.algorithm(algorithm)
 			.rotationInterval(encryptedKeyset.getRotationInterval())
 			.nextRotationTime(encryptedKeyset.getNextRotationTime())
 			.build();

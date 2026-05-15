@@ -2,23 +2,41 @@ package com.konfigyr.crypto.jose;
 
 import com.konfigyr.crypto.Algorithm;
 import com.konfigyr.crypto.KeyType;
-import com.konfigyr.crypto.KeysetOperation;
+import com.konfigyr.crypto.KeysetPurpose;
 import com.nimbusds.jose.JWEAlgorithm;
 import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.jwk.Curve;
+import com.nimbusds.jose.jwk.JWK;
+import com.nimbusds.jose.jwk.gen.ECKeyGenerator;
+import com.nimbusds.jose.jwk.gen.JWKGenerator;
+import com.nimbusds.jose.jwk.gen.OctetSequenceKeyGenerator;
+import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
+import lombok.EqualsAndHashCode;
 import org.jspecify.annotations.NullMarked;
+import org.springframework.util.Assert;
 
-import java.util.Set;
+import java.time.Instant;
+import java.util.Date;
+import java.util.List;
+import java.util.UUID;
+import java.util.function.Supplier;
 
 /**
- * An enumeration of the cryptographic algorithms defined by the following RFCs:
+ * Collection of {@link Algorithm algorithms} supported by the
+ * <a href="https://connect2id.com/products/nimbus-jose-jwt">Nimbus JOSE JWT</a> library.
+ * <p>
+ * Algorithms are grouped by their intended cryptographic purpose:
  * <ul>
- *     <li>
- *         <a target="_blank" href="https://tools.ietf.org/html/rfc7518">JSON Web Algorithms (JWA)</a>
- *     </li>
- *     <li>
- *         <a target="_blank" href="https://tools.ietf.org/html/rfc7516">JSON Web Encryption (JWE)</a>
- *     </li>
+ *     <li>{@link KeysetPurpose#SIGNING} — JWS algorithms (HMAC, ECDSA, RSA-PSS, RSA-PKCS1)</li>
+ *     <li>{@link KeysetPurpose#ENCRYPTION} — JWE key management algorithms (RSA-OAEP,
+ *         AES Key Wrap, ECDH-ES, AES-GCM Key Wrap)</li>
  * </ul>
+ * <p>
+ * Algorithm names follow the IANA-registered names from RFC 7518 (JWA), prefixed with
+ * {@code "jose:"} to identify this factory family.
+ * <p>
+ * Custom JOSE algorithms can be created by constructing an instance directly and registering
+ * it via an {@link com.konfigyr.crypto.AlgorithmRegistrar} bean.
  *
  * @author : Vladimir Spasic
  * @since : 24.11.25, Mon
@@ -26,173 +44,299 @@ import java.util.Set;
  * @see com.nimbusds.jose.JWEAlgorithm
  */
 @NullMarked
-public enum JoseAlgorithm implements Algorithm {
+@EqualsAndHashCode(of = "name")
+public final class JoseAlgorithm implements Algorithm {
+
+	/* -------------------------------------------------------------------------
+	 * HMAC symmetric signing algorithms (KeysetPurpose.SIGNING)
+	 * ---------------------------------------------------------------------- */
 
 	/**
-	 * HMAC using SHA-256.
+	 * HMAC using SHA-256. NIST FIPS 198-1.
 	 */
-	HS256(KeyType.OCTET, JWSAlgorithm.HS256, KeysetOperation.SIGN, KeysetOperation.VERIFY),
+	public static final JoseAlgorithm HS256 = new JoseAlgorithm(
+		"jose:HS256", KeyType.OCTET, KeysetPurpose.SIGNING, JWSAlgorithm.HS256,
+		() -> new OctetSequenceKeyGenerator(256)
+	);
 
 	/**
-	 * HMAC using SHA-384.
+	 * HMAC using SHA-384. NIST FIPS 198-1.
 	 */
-	HS384(KeyType.OCTET, JWSAlgorithm.HS384, KeysetOperation.SIGN, KeysetOperation.VERIFY),
+	public static final JoseAlgorithm HS384 = new JoseAlgorithm(
+		"jose:HS384", KeyType.OCTET, KeysetPurpose.SIGNING, JWSAlgorithm.HS384,
+		() -> new OctetSequenceKeyGenerator(384)
+	);
 
 	/**
-	 * HMAC using SHA-512.
+	 * HMAC using SHA-512. NIST FIPS 198-1.
 	 */
-	HS512(KeyType.OCTET, JWSAlgorithm.HS512, KeysetOperation.SIGN, KeysetOperation.VERIFY),
+	public static final JoseAlgorithm HS512 = new JoseAlgorithm(
+		"jose:HS512", KeyType.OCTET, KeysetPurpose.SIGNING, JWSAlgorithm.HS512,
+		() -> new OctetSequenceKeyGenerator(512)
+	);
+
+	/* -------------------------------------------------------------------------
+	 * ECDSA asymmetric signing algorithms (KeysetPurpose.SIGNING)
+	 * ---------------------------------------------------------------------- */
 
 	/**
-	 * RSASSA-PKCS1-v1_5 using SHA-256. This algorithm is still widely supported but explicitly
-	 * disallowed for new systems in NIST SP 800-131A.
+	 * ECDSA using NIST P-256 and SHA-256. NIST FIPS 186-5.
 	 */
-	RS256(KeyType.RSA, JWSAlgorithm.RS256, KeysetOperation.SIGN, KeysetOperation.VERIFY),
+	public static final JoseAlgorithm ES256 = new JoseAlgorithm(
+		"jose:ES256", KeyType.EC, KeysetPurpose.SIGNING, JWSAlgorithm.ES256, () -> new ECKeyGenerator(Curve.P_256)
+	);
 
 	/**
-	 * RSASSA-PKCS1-v1_5 using SHA-384. This algorithm is still widely supported but explicitly
-	 * disallowed for new systems in NIST SP 800-131A.
+	 * ECDSA using NIST P-384 and SHA-384. NIST FIPS 186-5.
 	 */
-	RS384(KeyType.RSA, JWSAlgorithm.RS384, KeysetOperation.SIGN, KeysetOperation.VERIFY),
+	public static final JoseAlgorithm ES384 = new JoseAlgorithm(
+		"jose:ES384", KeyType.EC, KeysetPurpose.SIGNING, JWSAlgorithm.ES384, () -> new ECKeyGenerator(Curve.P_384)
+	);
 
 	/**
-	 * RSASSA-PKCS1-v1_5 using SHA-512. This algorithm is still widely supported but explicitly
-	 * disallowed for new systems in NIST SP 800-131A.
+	 * ECDSA using NIST P-521 and SHA-512. NIST FIPS 186-5.
 	 */
-	RS512(KeyType.RSA, JWSAlgorithm.RS512, KeysetOperation.SIGN, KeysetOperation.VERIFY),
+	public static final JoseAlgorithm ES512 = new JoseAlgorithm(
+		"jose:ES512", KeyType.EC, KeysetPurpose.SIGNING, JWSAlgorithm.ES512, () -> new ECKeyGenerator(Curve.P_521)
+	);
+
+	/* -------------------------------------------------------------------------
+	 * RSA-PSS asymmetric signing algorithms (KeysetPurpose.SIGNING)
+	 * ---------------------------------------------------------------------- */
 
 	/**
-	 * ECDSA using P-256 and SHA-256 (Recommended+).
+	 * RSASSA-PSS using SHA-256 and MGF1 with SHA-256. NIST FIPS 186-5, SP 800-131A Rev 2.
 	 */
-	ES256(KeyType.EC, JWSAlgorithm.ES256, KeysetOperation.SIGN, KeysetOperation.VERIFY),
+	public static final JoseAlgorithm PS256 = new JoseAlgorithm(
+		"jose:PS256", KeyType.RSA, KeysetPurpose.SIGNING, JWSAlgorithm.PS256,
+		() -> new RSAKeyGenerator(RSAKeyGenerator.MIN_KEY_SIZE_BITS * 2)
+	);
 
 	/**
-	 * ECDSA using P-384 and SHA-384.
+	 * RSASSA-PSS using SHA-384 and MGF1 with SHA-384. NIST FIPS 186-5, SP 800-131A Rev 2.
 	 */
-	ES384(KeyType.EC, JWSAlgorithm.ES384, KeysetOperation.SIGN, KeysetOperation.VERIFY),
+	public static final JoseAlgorithm PS384 = new JoseAlgorithm(
+		"jose:PS384", KeyType.RSA, KeysetPurpose.SIGNING, JWSAlgorithm.PS384,
+		() -> new RSAKeyGenerator(RSAKeyGenerator.MIN_KEY_SIZE_BITS * 2)
+	);
 
 	/**
-	 * ECDSA using P-521 and SHA-512.
+	 * RSASSA-PSS using SHA-512 and MGF1 with SHA-512. NIST FIPS 186-5, SP 800-131A Rev 2.
 	 */
-	ES512(KeyType.EC, JWSAlgorithm.ES512, KeysetOperation.SIGN, KeysetOperation.VERIFY),
+	public static final JoseAlgorithm PS512 = new JoseAlgorithm(
+		"jose:PS512", KeyType.RSA, KeysetPurpose.SIGNING, JWSAlgorithm.PS512,
+		() -> new RSAKeyGenerator(RSAKeyGenerator.MIN_KEY_SIZE_BITS * 2)
+	);
+
+	/* -------------------------------------------------------------------------
+	 * RSA-PKCS1 signing algorithms (KeysetPurpose.SIGNING)
+	 * Included for JOSE interoperability only; disallowed for new applications
+	 * by NIST SP 800-131A Rev 2. Prefer PS256/PS384/PS512 for new designs.
+	 * ---------------------------------------------------------------------- */
 
 	/**
-	 * RSASSA-PSS using SHA-256 and MGF1 with SHA-256.
+	 * RSASSA-PKCS1-v1_5 using SHA-256. Retained for JOSE interoperability only;
+	 * new applications should use {@link #PS256} instead.
 	 */
-	PS256(KeyType.RSA, JWSAlgorithm.PS256, KeysetOperation.SIGN, KeysetOperation.VERIFY),
+	public static final JoseAlgorithm RS256 = new JoseAlgorithm(
+		"jose:RS256", KeyType.RSA, KeysetPurpose.SIGNING, JWSAlgorithm.RS256,
+		() -> new RSAKeyGenerator(RSAKeyGenerator.MIN_KEY_SIZE_BITS)
+	);
 
 	/**
-	 * RSASSA-PSS using SHA-384 and MGF1 with SHA-384.
+	 * RSASSA-PKCS1-v1_5 using SHA-384. Retained for JOSE interoperability only;
+	 * new applications should use {@link #PS384} instead.
 	 */
-	PS384(KeyType.RSA, JWSAlgorithm.PS384, KeysetOperation.SIGN, KeysetOperation.VERIFY),
+	public static final JoseAlgorithm RS384 = new JoseAlgorithm(
+		"jose:RS384", KeyType.RSA, KeysetPurpose.SIGNING, JWSAlgorithm.RS384,
+		() -> new RSAKeyGenerator(RSAKeyGenerator.MIN_KEY_SIZE_BITS)
+	);
 
 	/**
-	 * RSASSA-PSS using SHA-512 and MGF1 with SHA-512.
+	 * RSASSA-PKCS1-v1_5 using SHA-512. Retained for JOSE interoperability only;
+	 * new applications should use {@link #PS512} instead.
 	 */
-	PS512(KeyType.RSA, JWSAlgorithm.PS512, KeysetOperation.SIGN, KeysetOperation.VERIFY),
+	public static final JoseAlgorithm RS512 = new JoseAlgorithm(
+		"jose:RS512", KeyType.RSA, KeysetPurpose.SIGNING, JWSAlgorithm.RS512,
+		() -> new RSAKeyGenerator(RSAKeyGenerator.MIN_KEY_SIZE_BITS * 2)
+	);
+
+	/* -------------------------------------------------------------------------
+	 * RSA-OAEP encryption algorithms (KeysetPurpose.ENCRYPTION)
+	 * ---------------------------------------------------------------------- */
 
 	/**
-	 * RSAES using Optimal Asymmetric Encryption Padding (OAEP) (RFC 3447),
-	 * with the SHA-256 hash function and the MGF1 with SHA-256 mask
-	 * generation function.
+	 * RSA-OAEP with SHA-256. NIST SP 800-56B Rev 2.
 	 */
-	RSA_OAEP_256(KeyType.RSA, JWEAlgorithm.RSA_OAEP_256, KeysetOperation.ENCRYPT, KeysetOperation.DECRYPT),
+	public static final JoseAlgorithm RSA_OAEP_256 = new JoseAlgorithm(
+		"jose:RSA-OAEP-256", KeyType.RSA, KeysetPurpose.ENCRYPTION, JWEAlgorithm.RSA_OAEP_256,
+		() -> new RSAKeyGenerator(RSAKeyGenerator.MIN_KEY_SIZE_BITS)
+	);
 
 	/**
-	 * RSAES using Optimal Asymmetric Encryption Padding (OAEP) (RFC 3447),
-	 * with the SHA-512 hash function and the MGF1 with SHA-384 mask
-	 * generation function.
+	 * RSA-OAEP with SHA-384. NIST SP 800-56B Rev 2.
 	 */
-	RSA_OAEP_384(KeyType.RSA, JWEAlgorithm.RSA_OAEP_384, KeysetOperation.ENCRYPT, KeysetOperation.DECRYPT),
+	public static final JoseAlgorithm RSA_OAEP_384 = new JoseAlgorithm(
+		"jose:RSA-OAEP-384", KeyType.RSA, KeysetPurpose.ENCRYPTION, JWEAlgorithm.RSA_OAEP_384,
+		() -> new RSAKeyGenerator(RSAKeyGenerator.MIN_KEY_SIZE_BITS)
+	);
 
 	/**
-	 * RSAES using Optimal Asymmetric Encryption Padding (OAEP) (RFC 3447),
-	 * with the SHA-512 hash function and the MGF1 with SHA-512 mask
-	 * generation function.
+	 * RSA-OAEP with SHA-512. NIST SP 800-56B Rev 2.
 	 */
-	RSA_OAEP_512(KeyType.RSA, JWEAlgorithm.RSA_OAEP_512, KeysetOperation.ENCRYPT, KeysetOperation.DECRYPT),
+	public static final JoseAlgorithm RSA_OAEP_512 = new JoseAlgorithm(
+		"jose:RSA-OAEP-512", KeyType.RSA, KeysetPurpose.ENCRYPTION, JWEAlgorithm.RSA_OAEP_512,
+		() -> new RSAKeyGenerator(RSAKeyGenerator.MIN_KEY_SIZE_BITS * 2)
+	);
+
+	/* -------------------------------------------------------------------------
+	 * AES Key Wrap encryption algorithms (KeysetPurpose.ENCRYPTION)
+	 * ---------------------------------------------------------------------- */
 
 	/**
-	 * Advanced Encryption Standard (AES) Key Wrap Algorithm (RFC 3394) using 128-bit keys.
+	 * AES Key Wrap (RFC 3394) using 128-bit keys. NIST SP 800-38F.
 	 */
-	A128KW(KeyType.OCTET, JWEAlgorithm.A128KW, KeysetOperation.ENCRYPT, KeysetOperation.DECRYPT),
+	public static final JoseAlgorithm A128KW = new JoseAlgorithm(
+		"jose:A128KW", KeyType.OCTET, KeysetPurpose.ENCRYPTION, JWEAlgorithm.A128KW,
+		() -> new OctetSequenceKeyGenerator(128)
+	);
 
 	/**
-	 * Advanced Encryption Standard (AES) Key Wrap Algorithm (RFC 3394) using 192-bit keys.
+	 * AES Key Wrap (RFC 3394) using 192-bit keys. NIST SP 800-38F.
 	 */
-	A192KW(KeyType.OCTET, JWEAlgorithm.A192KW, KeysetOperation.ENCRYPT, KeysetOperation.DECRYPT),
+	public static final JoseAlgorithm A192KW = new JoseAlgorithm(
+		"jose:A192KW", KeyType.OCTET, KeysetPurpose.ENCRYPTION, JWEAlgorithm.A192KW,
+		() -> new OctetSequenceKeyGenerator(192)
+	);
 
 	/**
-	 * Advanced Encryption Standard (AES) Key Wrap Algorithm (RFC 3394) using 256-bit keys.
+	 * AES Key Wrap (RFC 3394) using 256-bit keys. NIST SP 800-38F.
 	 */
-	A256KW(KeyType.OCTET, JWEAlgorithm.A256KW, KeysetOperation.ENCRYPT, KeysetOperation.DECRYPT),
+	public static final JoseAlgorithm A256KW = new JoseAlgorithm(
+		"jose:A256KW", KeyType.OCTET, KeysetPurpose.ENCRYPTION, JWEAlgorithm.A256KW,
+		() -> new OctetSequenceKeyGenerator(256)
+	);
+
+	/* -------------------------------------------------------------------------
+	 * AES-GCM Key Wrap encryption algorithms (KeysetPurpose.ENCRYPTION)
+	 * ---------------------------------------------------------------------- */
 
 	/**
-	 * Elliptic Curve Diffie-Hellman Ephemeral Static (RFC 6090) key
-	 * agreement using the Concat KDF, as defined in section 5.8.1 of
-	 * NIST.800-56A, with the agreed-upon key being used directly as the
-	 * Content Encryption Key (CEK) (rather than being used to wrap the
-	 * CEK).
+	 * AES-GCM Key Wrap using 128-bit keys. NIST SP 800-38D.
 	 */
-	ECDH_ES(KeyType.EC, JWEAlgorithm.ECDH_ES, KeysetOperation.ENCRYPT, KeysetOperation.DECRYPT),
+	public static final JoseAlgorithm A128GCMKW = new JoseAlgorithm(
+		"jose:A128GCMKW", KeyType.OCTET, KeysetPurpose.ENCRYPTION, JWEAlgorithm.A128GCMKW,
+		() -> new OctetSequenceKeyGenerator(128)
+	);
 
 	/**
-	 * Elliptic Curve Diffie-Hellman Ephemeral Static key agreement per
-	 * "ECDH-ES", but where the agreed-upon key is used to wrap the Content
-	 * Encryption Key (CEK) with the "A128KW" function (rather than being
-	 * used directly as the CEK).
+	 * AES-GCM Key Wrap using 192-bit keys. NIST SP 800-38D.
 	 */
-	ECDH_ES_A128KW(KeyType.EC, JWEAlgorithm.ECDH_ES_A128KW, KeysetOperation.ENCRYPT, KeysetOperation.DECRYPT),
+	public static final JoseAlgorithm A192GCMKW = new JoseAlgorithm(
+		"jose:A192GCMKW", KeyType.OCTET, KeysetPurpose.ENCRYPTION, JWEAlgorithm.A192GCMKW,
+		() -> new OctetSequenceKeyGenerator(192)
+	);
 
 	/**
-	 * Elliptic Curve Diffie-Hellman Ephemeral Static key agreement per
-	 * "ECDH-ES", but where the agreed-upon key is used to wrap the Content
-	 * Encryption Key (CEK) with the "A192KW" function (rather than being
-	 * used directly as the CEK).
+	 * AES-GCM Key Wrap using 256-bit keys. NIST SP 800-38D.
 	 */
-	ECDH_ES_A192KW(KeyType.EC, JWEAlgorithm.ECDH_ES_A192KW, KeysetOperation.ENCRYPT, KeysetOperation.DECRYPT),
+	public static final JoseAlgorithm A256GCMKW = new JoseAlgorithm(
+		"jose:A256GCMKW", KeyType.OCTET, KeysetPurpose.ENCRYPTION, JWEAlgorithm.A256GCMKW,
+		() -> new OctetSequenceKeyGenerator(256)
+	);
+
+	/* -------------------------------------------------------------------------
+	 * ECDH-ES encryption algorithms (KeysetPurpose.ENCRYPTION)
+	 * ---------------------------------------------------------------------- */
 
 	/**
-	 * Elliptic Curve Diffie-Hellman Ephemeral Static key agreement per
-	 * "ECDH-ES", but where the agreed-upon key is used to wrap the Content
-	 * Encryption Key (CEK) with the "A256KW" function (rather than being
-	 * used directly as the CEK).
+	 * ECDH-ES using Concat KDF with the agreed-upon key as the CEK. NIST SP 800-56A Rev 3.
 	 */
-	ECDH_ES_A256KW(KeyType.EC, JWEAlgorithm.ECDH_ES_A256KW, KeysetOperation.ENCRYPT, KeysetOperation.DECRYPT),
+	public static final JoseAlgorithm ECDH_ES = new JoseAlgorithm(
+		"jose:ECDH-ES", KeyType.EC, KeysetPurpose.ENCRYPTION, JWEAlgorithm.ECDH_ES,
+		() -> new ECKeyGenerator(Curve.P_256)
+	);
 
 	/**
-	 * AES in Galois/Counter Mode (GCM) (NIST.800-38D) 128-bit keys.
+	 * ECDH-ES with AES-128 Key Wrap of the CEK. NIST SP 800-56A Rev 3.
 	 */
-	A128GCMKW(KeyType.OCTET, JWEAlgorithm.A128GCMKW, KeysetOperation.ENCRYPT, KeysetOperation.DECRYPT),
+	public static final JoseAlgorithm ECDH_ES_A128KW = new JoseAlgorithm(
+		"jose:ECDH-ES+A128KW", KeyType.EC, KeysetPurpose.ENCRYPTION, JWEAlgorithm.ECDH_ES_A128KW,
+		() -> new ECKeyGenerator(Curve.P_256)
+	);
 
 	/**
-	 * AES in Galois/Counter Mode (GCM) (NIST.800-38D) 192-bit keys.
+	 * ECDH-ES with AES-192 Key Wrap of the CEK. NIST SP 800-56A Rev 3.
 	 */
-	A192GCMKW(KeyType.OCTET, JWEAlgorithm.A192GCMKW, KeysetOperation.ENCRYPT, KeysetOperation.DECRYPT),
+	public static final JoseAlgorithm ECDH_ES_A192KW = new JoseAlgorithm(
+		"jose:ECDH-ES+A192KW", KeyType.EC, KeysetPurpose.ENCRYPTION, JWEAlgorithm.ECDH_ES_A192KW,
+		() -> new ECKeyGenerator(Curve.P_384)
+	);
 
 	/**
-	 * AES in Galois/Counter Mode (GCM) (NIST.800-38D) 256-bit keys.
+	 * ECDH-ES with AES-256 Key Wrap of the CEK. NIST SP 800-56A Rev 3.
 	 */
-	A256GCMKW(KeyType.OCTET, JWEAlgorithm.A256GCMKW, KeysetOperation.ENCRYPT, KeysetOperation.DECRYPT);
+	public static final JoseAlgorithm ECDH_ES_A256KW = new JoseAlgorithm(
+		"jose:ECDH-ES+A256KW", KeyType.EC, KeysetPurpose.ENCRYPTION, JWEAlgorithm.ECDH_ES_A256KW,
+		() -> new ECKeyGenerator(Curve.P_521)
+	);
 
+	/**
+	 * List of all built-in JOSE algorithm constants.
+	 */
+	public static final List<JoseAlgorithm> DEFAULT_ALGORITHMS = List.of(
+		HS256, HS384, HS512,
+		ES256, ES384, ES512,
+		PS256, PS384, PS512,
+		RS256, RS384, RS512,
+		RSA_OAEP_256, RSA_OAEP_384, RSA_OAEP_512,
+		A128KW, A192KW, A256KW,
+		A128GCMKW, A192GCMKW, A256GCMKW,
+		ECDH_ES, ECDH_ES_A128KW, ECDH_ES_A192KW, ECDH_ES_A256KW
+	);
+
+	private final String name;
 	private final KeyType type;
-	private final Set<KeysetOperation> operations;
+	private final KeysetPurpose purpose;
 	private final com.nimbusds.jose.Algorithm algorithm;
+	private final Supplier<JWKGenerator<? extends JWK>> generator;
 
-	JoseAlgorithm(KeyType type, com.nimbusds.jose.Algorithm algorithm, KeysetOperation... operations) {
+	/**
+	 * Creates a custom JOSE algorithm with an explicit name, key type, purpose, backing
+	 * JOSE algorithm identifier, and JWK generator.
+	 * <p>
+	 * The {@code name} must be unique across all registered algorithms and must not change
+	 * once key material has been created with this algorithm.
+	 *
+	 * @param name      stable unique algorithm name with {@code "jose:"} prefix, must not be blank
+	 * @param type      key material type, must not be {@literal null}
+	 * @param purpose   intended cryptographic purpose, must not be {@literal null}
+	 * @param algorithm the backing Nimbus JOSE algorithm identifier, must not be {@literal null}
+	 * @param generator JWK generator factory used to create key material, can be {@literal null}
+	 */
+	public JoseAlgorithm(
+		String name,
+		KeyType type,
+		KeysetPurpose purpose,
+		com.nimbusds.jose.Algorithm algorithm,
+		Supplier<JWKGenerator<? extends JWK>> generator
+	) {
+		Assert.isTrue(name.startsWith("jose:"), "JOSE algorithm names must start with 'jose:' prefix");
+		this.name = name;
 		this.type = type;
+		this.purpose = purpose;
 		this.algorithm = algorithm;
-		this.operations = Set.of(operations);
+		this.generator = generator;
 	}
 
-	/**
-	 * Method that returns the {@link com.nimbusds.jose.Algorithm JOSE Algorithm} that backs this
-	 * {@link JoseAlgorithm}.
-	 *
-	 * @return the backing JOSE algorithm, never {@literal null}.
-	 */
-	public com.nimbusds.jose.Algorithm algorithm() {
-		return algorithm;
+	@Override
+	public String name() {
+		return name;
+	}
+
+	@Override
+	public KeysetPurpose purpose() {
+		return purpose;
 	}
 
 	@Override
@@ -200,9 +344,34 @@ public enum JoseAlgorithm implements Algorithm {
 		return type;
 	}
 
+	/**
+	 * Returns the Nimbus JOSE algorithm identifier that backs this algorithm.
+	 *
+	 * @return backing JOSE algorithm, never {@literal null}.
+	 */
+	public com.nimbusds.jose.Algorithm algorithm() {
+		return algorithm;
+	}
+
+	/**
+	 * Returns the JWK generator used to generate key material for this algorithm.
+	 *
+	 * @param <T> the JWK type produced by the generator
+	 * @return JWK generator, never {@literal null}.
+	 */
+	@SuppressWarnings("unchecked")
+	public <T extends JWK> JWKGenerator<T> generator() {
+		return (JWKGenerator<T>) generator.get()
+			.keyID(UUID.randomUUID().toString())
+			.algorithm(algorithm)
+			.keyUse(JoseUtils.resolveKeyUse(purpose))
+			.keyOperations(JoseUtils.resolveKeyOperations(purpose))
+			.notBeforeTime(Date.from(Instant.ofEpochSecond(System.currentTimeMillis() / 1000)));
+	}
+
 	@Override
-	public Set<KeysetOperation> operations() {
-		return operations;
+	public String toString() {
+		return name;
 	}
 
 }

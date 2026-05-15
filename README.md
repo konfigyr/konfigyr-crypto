@@ -3,7 +3,7 @@
 ![CI Build](https://github.com/konfigyr/konfigyr-crypto/actions/workflows/continuous-integration.yml/badge.svg)
 [![Join the chat at https://gitter.im/konfigyr/konfigyr-crypto](https://badges.gitter.im/konfigyr/konfigyr-crypto.svg)](https://gitter.im/konfigyr/konfigyr-crypt?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 [![Latest Release](https://img.shields.io/maven-central/v/com.konfigyr/konfigyr-crypto-api.svg?style=flat)](https://central.sonatype.com/search?q=g%3Acom.konfigyr)
-![Java 17+](https://img.shields.io/badge/java-17+-lightgray.svg)
+![Java 21+](https://img.shields.io/badge/java-21+-lightgray.svg)
 
 The Konfigyr Crypto library defines instructs how should a Spring Application perform crypto operations, generate cryptographic material and manage its lifecycle. It attempts to define an API that best describes cryptography best practices how should protect your data and protect the encryption keys that protect your data.
 
@@ -61,6 +61,38 @@ Factories should be able to:
 Konfigyr Crypto comes with the following implementations of the `KeysetFactory` which you can use:
  * [Google Tink](konfigyr-crypto-tink)
  * [Nimbus JOSE JWT](konfigyr-crypto-jose)
+
+### Algorithms
+
+An `Algorithm` is an immutable value object that declares the identity and capabilities of a cryptographic algorithm:
+
+* `name()` — a stable, unique identifier that is **persisted** alongside the `EncryptedKeyset`. It must never change once key material has been created with it.
+* `purpose()` — the `KeysetPurpose` (`SIGNING` or `ENCRYPTION`), which determines which operations the keyset supports.
+* `type()` — the `KeyType` of the underlying key material (`EC`, `RSA`, or `OCTET`).
+
+The built-in `TinkAlgorithm` and `JoseAlgorithm` constants follow a naming convention of prefixing names with the library family (`tink:` and `jose:` respectively). Use a similar stable prefix for any custom algorithms to avoid name collisions.
+
+#### AlgorithmRegistry
+
+The `AlgorithmRegistry` is a sealed catalog of all algorithms known to the application. It serves two purposes:
+
+1. **Resolution** — converts the algorithm name stored in an `EncryptedKeyset` back to the concrete `Algorithm` instance needed to decrypt it.
+2. **Algorithm confusion prevention** — only algorithms registered at startup can be resolved. An `EncryptedKeyset` referencing an unknown name will fail fast rather than attempting to use an unexpected algorithm.
+
+The registry is sealed after the Spring context finishes initialising all singletons. Any attempt to register an algorithm after that point throws `IllegalStateException`.
+
+#### AlgorithmRegistrar
+
+Algorithms are contributed to the registry via `AlgorithmRegistrar` beans. Each built-in module registers its algorithms during auto-configuration:
+
+```java
+@Bean
+AlgorithmRegistrar joseAlgorithmRegistrar() {
+    return registry -> JoseAlgorithm.DEFAULT_ALGORITHMS.forEach(registry::register);
+}
+```
+
+Declare your own `AlgorithmRegistrar` bean to add custom algorithms alongside the built-in ones.
 
 ### Key encryption keys and providers
 
@@ -142,7 +174,7 @@ class TinkExample {
         return store.create("my-kek-provider", "my-kek", KeysetDefinition.of(
                 "my-dek", // give a name to your DEK
                 TinkAlgorithm.AES256_GCM, // define the Tink algorithm to the DEK
-                Duration.of(90) // define the rotation frequency for your DEK
+                Duration.ofDays(90) // define the rotation frequency for your DEK
         ));
     }
 
@@ -152,16 +184,16 @@ class TinkExample {
         return store.create(kek, KeysetDefinition.of(
                 "my-dek", // give a name to your DEK
                 TinkAlgorithm.AES256_GCM, // define the Tink algorithm to the DEK
-                Duration.of(90) // define the rotation frequency for your DEK
+                Duration.ofDays(90) // define the rotation frequency for your DEK
         ));
     }
 
-    public Keyset rotate() {
-        return store.rotate("my-dek");
+    public void rotate() {
+        store.rotate("my-dek");
     }
 
-    public Keyset remove() {
-        return store.remove("my-dek");
+    public void remove() {
+        store.remove("my-dek");
     }
 }
 ```
@@ -172,6 +204,112 @@ Keyset repository is a simple interface which goal is to implement how should an
 
 Konfigyr Crypto comes with the following implementations of the `KeysetRepository` which you can use:
 * [JDBC](konfigyr-crypto-jdbc)
+
+## Implementing a custom crypto provider
+
+To integrate a new cryptography library or add a custom algorithm, you need three things:
+
+1. An `Algorithm` implementation that declares the algorithm's identity.
+2. A `Keyset` implementation that performs the actual cryptographic operations.
+3. A `KeysetFactory` implementation that creates `Keyset` instances from definitions and encrypted data.
+
+Wire them as Spring beans and register your algorithms via `AlgorithmRegistrar`.
+
+### Step 1: Define your algorithm
+
+```java
+public final class MyAlgorithm implements Algorithm {
+
+    public static final MyAlgorithm MY_SIGNING = new MyAlgorithm(
+        "my-lib:EC_SIGNING", KeysetPurpose.SIGNING, KeyType.EC
+    );
+
+    private final String name;
+    private final KeysetPurpose purpose;
+    private final KeyType type;
+
+    public MyAlgorithm(String name, KeysetPurpose purpose, KeyType type) {
+        this.name = name;
+        this.purpose = purpose;
+        this.type = type;
+    }
+
+    @Override public String name()           { return name; }
+    @Override public KeysetPurpose purpose() { return purpose; }
+    @Override public KeyType type()          { return type; }
+}
+```
+
+The `name` is persisted in the `EncryptedKeyset` row and used to look up the algorithm at load time. Choose a stable prefix unique to your library (e.g. `my-lib:`) and never rename an algorithm once key material has been created with it.
+
+### Step 2: Implement KeysetFactory
+
+```java
+public class MyKeysetFactory implements KeysetFactory {
+
+    private final AlgorithmRegistry registry;
+
+    public MyKeysetFactory(AlgorithmRegistry registry) {
+        this.registry = registry;
+    }
+
+    @Override
+    public boolean supports(KeysetDefinition definition) {
+        // the definition carries the Algorithm object directly
+        return definition.getAlgorithm() instanceof MyAlgorithm;
+    }
+
+    @Override
+    public boolean supports(EncryptedKeyset encryptedKeyset) {
+        // the encrypted form only carries the algorithm name string — resolve via registry
+        return registry.find(encryptedKeyset.getAlgorithm())
+            .filter(a -> a instanceof MyAlgorithm)
+            .isPresent();
+    }
+
+    @Override
+    public Keyset create(KeyEncryptionKey kek, KeysetDefinition definition) {
+        MyAlgorithm algorithm = (MyAlgorithm) definition.getAlgorithm();
+        // generate key material using your library, return a Keyset implementation
+    }
+
+    @Override
+    public EncryptedKeyset create(Keyset keyset) throws IOException {
+        ByteArray serialized = // serialize your Keyset to bytes
+        ByteArray encrypted  = keyset.getKeyEncryptionKey().wrap(serialized);
+        return EncryptedKeyset.from(keyset, encrypted);
+    }
+
+    @Override
+    public Keyset create(KeyEncryptionKey kek, EncryptedKeyset encryptedKeyset) throws IOException {
+        ByteArray decrypted  = kek.unwrap(encryptedKeyset.getData());
+        MyAlgorithm algorithm = (MyAlgorithm) registry.resolve(encryptedKeyset.getAlgorithm());
+        // deserialize decrypted bytes and return a Keyset implementation
+    }
+}
+```
+
+`supports(EncryptedKeyset)` uses `registry.find()` to resolve the stored algorithm name back to a concrete instance. `supports(KeysetDefinition)` can use `instanceof` because the definition already holds the `Algorithm` object directly.
+
+### Step 3: Register and wire as Spring beans
+
+```java
+@Configuration
+class MyLibAutoConfiguration {
+
+    @Bean
+    AlgorithmRegistrar myAlgorithmRegistrar() {
+        return registry -> registry.register(MyAlgorithm.MY_SIGNING);
+    }
+
+    @Bean
+    MyKeysetFactory myKeysetFactory(AlgorithmRegistry registry) {
+        return new MyKeysetFactory(registry);
+    }
+}
+```
+
+The `KeysetStore` auto-configuration picks up all `KeysetFactory` beans automatically. Once these beans are declared, `store.create(kek, KeysetDefinition.of("my-key", MyAlgorithm.MY_SIGNING))` will delegate to your factory without any further wiring.
 
 ## Building from Source
 Konfigyr Crypto uses a Gradle-based build system. In the instructions below, `./gradlew` is invoked from the root of the source tree and serves as a cross-platform, self-contained bootstrap mechanism for the build.

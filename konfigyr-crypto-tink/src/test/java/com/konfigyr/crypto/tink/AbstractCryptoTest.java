@@ -19,13 +19,19 @@ public abstract class AbstractCryptoTest {
 
 	public static final ByteArray CONTEXT = ByteArray.fromString("Deterministic AEAD context - Associated Data");
 
-	protected KeysetFactory factory = new TinkKeysetFactory();
+	protected KeysetFactory factory = createFactory();
 
 	protected KeyEncryptionKey kek = TinkKeyEncryptionKey.builder("test-provider").generate("test-kek");
 
 	@BeforeAll
 	protected static void register() {
 		TinkUtils.register();
+	}
+
+	private static TinkKeysetFactory createFactory() {
+		final AlgorithmRegistry registry = new SimpleAlgorithmRegistry();
+		TinkAlgorithm.DEFAULT_ALGORITHMS.forEach(registry::register);
+		return new TinkKeysetFactory(registry);
 	}
 
 	protected Keyset generate(String name, Algorithm algorithm) throws IOException {

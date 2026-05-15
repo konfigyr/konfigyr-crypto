@@ -13,7 +13,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNoException;
@@ -64,18 +63,25 @@ class JdbcKeysetRepositoryTest {
 
 	enum TestAlgorithm implements Algorithm {
 
-		ENCRYPTION, SIGNING;
+		ENCRYPTION(KeysetPurpose.ENCRYPTION),
+		SIGNING(KeysetPurpose.SIGNING);
+
+		private final KeysetPurpose purpose;
+
+		TestAlgorithm(KeysetPurpose purpose) {
+			this.purpose = purpose;
+		}
+
+		@NonNull
+		@Override
+		public KeysetPurpose purpose() {
+			return purpose;
+		}
 
 		@NonNull
 		@Override
 		public KeyType type() {
 			return KeyType.OCTET;
-		}
-
-		@NonNull
-		@Override
-		public Set<KeysetOperation> operations() {
-			return Set.of(KeysetOperation.ENCRYPT, KeysetOperation.DECRYPT);
 		}
 
 	}

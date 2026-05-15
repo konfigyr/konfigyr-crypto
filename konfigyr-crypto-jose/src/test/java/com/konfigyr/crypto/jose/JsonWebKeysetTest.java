@@ -63,29 +63,29 @@ class JsonWebKeysetTest extends AbstractCryptoTest {
 
 	@MethodSource("encryptionAlgorithms")
 	@ParameterizedTest(name = "using algorithm: {0}")
-	@DisplayName("should encrypt byte array and decrypt it")
+	@DisplayName("should encrypt and decrypt data using JWE encryption algorithm")
 	void shouldPerformEncryptionOperations(JoseAlgorithm algorithm) throws Exception {
 		final var data = ByteArray.fromString("data to be encrypted");
-		final var key = generate("test-rs384", algorithm);
+		final var key = generate("test-jwe", algorithm);
 
 		assertThat(key.getAlgorithm().operations())
-			.as("Keyset operations for algorithm %s myst be ENCRYPT and DECRYPT", algorithm.name())
+			.as("Keyset operations for algorithm %s must be ENCRYPT and DECRYPT", algorithm.name())
 			.containsExactlyInAnyOrder(KeysetOperation.ENCRYPT, KeysetOperation.DECRYPT);
 
-		final var cipher = key.encrypt(data);
+		final var token = key.encrypt(data);
 
-		assertThat(cipher)
-			.as("Generated JWE must not be null")
+		assertThat(token)
+			.as("Generated JWE token must not be null")
 			.isNotNull();
 
-		final var jwe = JWEObject.parse(new String(cipher.array(), StandardCharsets.UTF_8));
+		final var jwe = JWEObject.parse(new String(token.array(), StandardCharsets.UTF_8));
 
 		assertThat(jwe.getHeader().getAlgorithm())
-			.as("JWE algorithm must match keyset algorithm")
+			.as("JWE key management algorithm must match keyset algorithm")
 			.isEqualTo(algorithm.algorithm());
 
 		assertThat(jwe.getHeader().getEncryptionMethod())
-			.as("JWE encryption algorithm must be %s", EncryptionMethod.A256GCM)
+			.as("JWE content encryption algorithm must be %s", EncryptionMethod.A256GCM)
 			.isEqualTo(EncryptionMethod.A256GCM);
 
 		assertThat(jwe.getHeader().getKeyID())
@@ -96,8 +96,8 @@ class JsonWebKeysetTest extends AbstractCryptoTest {
 			.as("JWE must contain the encrypted content")
 			.isNotNull();
 
-		assertThat(key.decrypt(cipher))
-			.as("Should decrypt encrypted data back to original")
+		assertThat(key.decrypt(token))
+			.as("Should decrypt JWE token back to original data")
 			.isEqualTo(data);
 	}
 
@@ -109,7 +109,7 @@ class JsonWebKeysetTest extends AbstractCryptoTest {
 		final var selector = new JWKSelector(
 			new JWKMatcher.Builder()
 				.algorithm(JWSAlgorithm.RS256)
-				.keyID(keyset.getKeys().get(0).getId())
+				.keyID(keyset.getKeys().getFirst().getId())
 				.build()
 		);
 
@@ -165,7 +165,7 @@ class JsonWebKeysetTest extends AbstractCryptoTest {
 			.filteredOn(Key::isPrimary, false)
 			.hasSize(1)
 			.first()
-			.returns(keyset.getKeys().get(0).getId(), Key::getId)
+			.returns(keyset.getKeys().getFirst().getId(), Key::getId)
 			.returns(false, Key::isPrimary);
 	}
 
@@ -199,8 +199,8 @@ class JsonWebKeysetTest extends AbstractCryptoTest {
 	}
 
 	@Test
-	@DisplayName("rotated keys should not be performing any encrypt operations")
-	void shouldNotRotateKeysetWithEncryptOperations() throws IOException {
+	@DisplayName("rotated keys should not be performing encrypt operations")
+	void shouldNotRotateKeysetWithEncryptionOperations() throws IOException {
 		final var keyset = generate("rotating-keyset", JoseAlgorithm.A128KW);
 
 		assertThat(keyset.getKeys())
@@ -272,26 +272,26 @@ class JsonWebKeysetTest extends AbstractCryptoTest {
 	}
 
 	@Test
-	@DisplayName("should fail to decrypt invalid JWE data")
+	@DisplayName("should fail to decrypt invalid JWE token")
 	void decryptInvalidJWE() throws IOException {
 		final var key = generate("encrypting-keyset", JoseAlgorithm.A128KW);
 
 		assertThatExceptionOfType(CryptoException.KeysetOperationException.class)
-			.isThrownBy(() -> key.decrypt(ByteArray.fromString("data to be encrypted")))
+			.isThrownBy(() -> key.decrypt(ByteArray.fromString("not a jwe token")))
 			.returns(KeysetOperation.DECRYPT, CryptoException.KeysetOperationException::attemptedOperation)
 			.withRootCauseInstanceOf(ParseException.class);
 	}
 
 	@Test
-	@DisplayName("should fail to decrypt JWE encrypted by a different keyset with same algorithm")
+	@DisplayName("should fail to decrypt JWE token encrypted by a different keyset with same algorithm")
 	void decryptJWEFromDifferentKeyset() throws IOException {
 		final var encrypting = generate("encrypting-keyset", JoseAlgorithm.A128KW);
 		final var decrypting = generate("decrypting-keyset", JoseAlgorithm.A128KW);
 
-		final var jwe = encrypting.encrypt(ByteArray.fromString("data to be encrypted"));
+		final var token = encrypting.encrypt(ByteArray.fromString("data to be encrypted"));
 
 		assertThatExceptionOfType(CryptoException.KeysetOperationException.class)
-			.isThrownBy(() -> decrypting.decrypt(jwe))
+			.isThrownBy(() -> decrypting.decrypt(token))
 			.returns(KeysetOperation.DECRYPT, CryptoException.KeysetOperationException::attemptedOperation)
 			.withRootCauseInstanceOf(KeySourceException.class)
 			.havingRootCause()
@@ -361,13 +361,13 @@ class JsonWebKeysetTest extends AbstractCryptoTest {
 	}
 
 	static Stream<Arguments> signingAlgorithms() {
-		return Arrays.stream(JoseAlgorithm.values())
+		return JoseAlgorithm.DEFAULT_ALGORITHMS.stream()
 			.filter(algorithm -> algorithm.supports(KeysetOperation.SIGN))
 			.map(Arguments::of);
 	}
 
 	static Stream<Arguments> encryptionAlgorithms() {
-		return Arrays.stream(JoseAlgorithm.values())
+		return JoseAlgorithm.DEFAULT_ALGORITHMS.stream()
 			.filter(algorithm -> algorithm.supports(KeysetOperation.ENCRYPT))
 			.map(Arguments::of);
 	}

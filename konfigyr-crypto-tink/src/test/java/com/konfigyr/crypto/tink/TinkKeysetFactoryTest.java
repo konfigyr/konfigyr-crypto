@@ -5,13 +5,14 @@ import com.konfigyr.io.ByteArray;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
+
+import java.util.stream.Stream;
 import org.jspecify.annotations.NonNull;
 
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.time.Duration;
-import java.util.Set;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -21,14 +22,14 @@ import static org.mockito.Mockito.mock;
 class TinkKeysetFactoryTest extends AbstractCryptoTest {
 
 	@ParameterizedTest
-	@EnumSource(TinkAlgorithm.class)
+	@MethodSource("tinkAlgorithms")
 	@DisplayName("factory should support Tink algorithms when checking keyset definitions")
 	void shouldSupportTinkAlgorithmDefinitions(TinkAlgorithm algorithm) {
 		assertThat(factory.supports(KeysetDefinition.of("test", algorithm))).isTrue();
 	}
 
 	@ParameterizedTest
-	@EnumSource(TinkAlgorithm.class)
+	@MethodSource("tinkAlgorithms")
 	@DisplayName("factory should support Tink algorithms when checking encrypted keysets")
 	void shouldSupportTinkAlgorithmEncryptedKeysets(TinkAlgorithm algorithm) {
 		final var keyset = EncryptedKeyset.builder(KeysetDefinition.of("test", algorithm))
@@ -40,7 +41,7 @@ class TinkKeysetFactoryTest extends AbstractCryptoTest {
 	}
 
 	@ParameterizedTest
-	@EnumSource(TinkAlgorithm.class)
+	@MethodSource("tinkAlgorithms")
 	@DisplayName("factory should support Tink algorithms names")
 	void shouldSupportEncryptedKeysetsWithTinkAlgorithmNames(TinkAlgorithm algorithm) {
 		final var keyset = EncryptedKeyset.builder()
@@ -87,10 +88,10 @@ class TinkKeysetFactoryTest extends AbstractCryptoTest {
 	@Test
 	@DisplayName("should create Tink keyset")
 	void shouldCreateTinkKeyset() throws Exception {
-		assertThatObject(generate("tink-key", TinkAlgorithm.AES128_EAX)).isNotNull()
+		assertThatObject(generate("tink-key", TinkAlgorithm.AES128_GCM)).isNotNull()
 			.isInstanceOf(TinkKeyset.class)
 			.returns("tink-key", Keyset::getName)
-			.returns(TinkAlgorithm.AES128_EAX, Keyset::getAlgorithm);
+			.returns(TinkAlgorithm.AES128_GCM, Keyset::getAlgorithm);
 	}
 
 	@Test
@@ -177,7 +178,20 @@ class TinkKeysetFactoryTest extends AbstractCryptoTest {
 
 	enum TestAlgorithm implements Algorithm {
 
-		ENCRYPTION, SIGNING;
+		ENCRYPTION(KeysetPurpose.ENCRYPTION),
+		SIGNING(KeysetPurpose.SIGNING);
+
+		private final KeysetPurpose purpose;
+
+		TestAlgorithm(KeysetPurpose purpose) {
+			this.purpose = purpose;
+		}
+
+		@NonNull
+		@Override
+		public KeysetPurpose purpose() {
+			return purpose;
+		}
 
 		@NonNull
 		@Override
@@ -185,12 +199,9 @@ class TinkKeysetFactoryTest extends AbstractCryptoTest {
 			return KeyType.OCTET;
 		}
 
-		@NonNull
-		@Override
-		public Set<KeysetOperation> operations() {
-			return Set.of(KeysetOperation.ENCRYPT, KeysetOperation.DECRYPT);
-		}
-
 	}
 
+	static Stream<TinkAlgorithm> tinkAlgorithms() {
+		return TinkAlgorithm.DEFAULT_ALGORITHMS.stream();
+	}
 }
