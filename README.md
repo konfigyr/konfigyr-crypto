@@ -1,6 +1,7 @@
 # Konfigyr Crypto
 
 ![CI Build](https://github.com/konfigyr/konfigyr-crypto/actions/workflows/continuous-integration.yml/badge.svg)
+[![codecov](https://codecov.io/gh/konfigyr/konfigyr-crypto/graph/badge.svg?token=K76STH7L4L)](https://codecov.io/gh/konfigyr/konfigyr-crypto)
 [![Join the chat at https://gitter.im/konfigyr/konfigyr-crypto](https://badges.gitter.im/konfigyr/konfigyr-crypto.svg)](https://gitter.im/konfigyr/konfigyr-crypt?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 [![Latest Release](https://img.shields.io/maven-central/v/com.konfigyr/konfigyr-crypto-api.svg?style=flat)](https://central.sonatype.com/search?q=g%3Acom.konfigyr)
 ![Java 21+](https://img.shields.io/badge/java-21+-lightgray.svg)
