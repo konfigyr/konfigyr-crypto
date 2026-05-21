@@ -11,7 +11,6 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.*;
@@ -22,10 +21,14 @@ class AbstractKeysetTest {
 	static final Instant now = Instant.parse("2026-01-01T00:00:00Z");
 
 	static AbstractKeyTest.ConcreteKey createKey(String id, boolean primary) {
+		return createKey(id, primary, KeyStatus.ENABLED);
+	}
+
+	static AbstractKeyTest.ConcreteKey createKey(String id, boolean primary, KeyStatus status) {
 		return AbstractKeyTest.ConcreteKey.builder()
 			.id(id)
 			.algorithm(TestAlgorithm.INSTANCE)
-			.status(KeyStatus.ENABLED)
+			.status(status)
 			.primary(primary)
 			.createdAt(now)
 			.build();
@@ -164,15 +167,58 @@ class AbstractKeysetTest {
 	@Test
 	@DisplayName("should throw when no primary key is present in the keyset")
 	void shouldThrowWhenNoPrimaryKeyPresent() {
-		final var keyset = ConcreteKeyset.builder()
-			.name("test-keyset")
-			.factory("test-factory")
-			.purpose(KeysetPurpose.ENCRYPTION)
-			.keyEncryptionKey(kek)
-			.key(createKey("non-primary-key", false))
-			.build();
+		assertThatExceptionOfType(CryptoException.KeysetException.class)
+			.isThrownBy(() -> ConcreteKeyset.builder()
+				.name("test-keyset")
+				.factory("test-factory")
+				.purpose(KeysetPurpose.ENCRYPTION)
+				.keyEncryptionKey(kek)
+				.key(createKey("non-primary-key", false))
+				.build())
+			.withMessageContaining("must have a primary key")
+			.returns("test-keyset", CryptoException.KeysetException::getName);
+	}
 
-		assertThatExceptionOfType(NoSuchElementException.class).isThrownBy(keyset::getPrimary);
+	@Test
+	@DisplayName("should throw KeysetDisabledException when the primary key is disabled")
+	void shouldThrowWhenPrimaryKeyIsDisabled() {
+		assertThatExceptionOfType(CryptoException.KeysetDisabledException.class)
+			.isThrownBy(() -> ConcreteKeyset.builder()
+				.name("test-keyset")
+				.factory("test-factory")
+				.purpose(KeysetPurpose.ENCRYPTION)
+				.keyEncryptionKey(kek)
+				.key(createKey("primary-key", true, KeyStatus.DISABLED))
+				.build())
+			.returns("test-keyset", CryptoException.KeysetException::getName);
+	}
+
+	@Test
+	@DisplayName("should throw KeysetPendingDestructionException when the primary key is pending destruction")
+	void shouldThrowWhenPrimaryKeyIsPendingDestruction() {
+		assertThatExceptionOfType(CryptoException.KeysetPendingDestructionException.class)
+			.isThrownBy(() -> ConcreteKeyset.builder()
+				.name("test-keyset")
+				.factory("test-factory")
+				.purpose(KeysetPurpose.ENCRYPTION)
+				.keyEncryptionKey(kek)
+				.key(createKey("primary-key", true, KeyStatus.PENDING_DESTRUCTION))
+				.build())
+			.returns("test-keyset", CryptoException.KeysetException::getName);
+	}
+
+	@Test
+	@DisplayName("should throw KeysetDestroyedException when the primary key has been destroyed")
+	void shouldThrowWhenPrimaryKeyIsDestroyed() {
+		assertThatExceptionOfType(CryptoException.KeysetDestroyedException.class)
+			.isThrownBy(() -> ConcreteKeyset.builder()
+				.name("test-keyset")
+				.factory("test-factory")
+				.purpose(KeysetPurpose.ENCRYPTION)
+				.keyEncryptionKey(kek)
+				.key(createKey("primary-key", true, KeyStatus.DESTROYED))
+				.build())
+			.returns("test-keyset", CryptoException.KeysetException::getName);
 	}
 
 	@Test

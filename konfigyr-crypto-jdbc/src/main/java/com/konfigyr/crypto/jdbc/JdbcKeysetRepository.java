@@ -22,6 +22,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -141,6 +142,31 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 			WHERE KEYSET_NAME = ?
 			""";
 
+	private static final String UPDATE_KEY_STATUS_QUERY = """
+			UPDATE %KEYS_TABLE_NAME%
+			SET KEY_STATUS = ?, DESTRUCTION_SCHEDULED_AT = ?, DESTROYED_AT = ?
+			WHERE KEYSET_NAME = ? AND KEY_ID = ?
+			""";
+
+	private static final String DESTROY_KEY_QUERY = """
+			UPDATE %KEYS_TABLE_NAME%
+			SET KEY_STATUS = 'DESTROYED', KEY_DATA = NULL, DESTRUCTION_SCHEDULED_AT = NULL, DESTROYED_AT = ?
+			WHERE KEYSET_NAME = ? AND KEY_ID = ?
+			""";
+
+	private static final String FIND_PENDING_DESTRUCTION_QUERY = """
+			SELECT K.KEYSET_NAME, K.KEYSET_PURPOSE, K.KEYSET_FACTORY, K.KEYSET_PROVIDER, K.KEYSET_KEK,
+				K.ROTATION_INTERVAL, K.DESTRUCTION_GRACE_PERIOD,
+				E.KEY_ID, E.KEY_ALGORITHM, E.KEY_TYPE, E.KEY_STATUS, E.KEY_PRIMARY, E.KEY_DATA,
+				E.CREATED_AT, E.INITIALIZED_AT, E.EXPIRES_AT, E.DESTRUCTION_SCHEDULED_AT, E.DESTROYED_AT
+			FROM %TABLE_NAME% K
+			INNER JOIN %KEYS_TABLE_NAME% E ON E.KEYSET_NAME = K.KEYSET_NAME
+			WHERE E.KEY_STATUS = 'PENDING_DESTRUCTION'
+				AND E.DESTRUCTION_SCHEDULED_AT IS NOT NULL
+				AND E.DESTRUCTION_SCHEDULED_AT <= ?
+			ORDER BY K.KEYSET_NAME, E.KEY_ID
+			""";
+
 	/* Configurable table names and query overrides */
 
 	private String tableName = DEFAULT_TABLE_NAME;
@@ -167,6 +193,12 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 
 	private String deleteKeysetQuery;
 
+	private String updateKeyStatusQuery;
+
+	private String destroyKeyQuery;
+
+	private String findPendingDestructionQuery;
+
 	private final JdbcOperations jdbcOperations;
 
 	private final TransactionOperations transactionOperations;
@@ -186,6 +218,9 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 		deleteKeyQuery = sql(deleteKeyQuery, DELETE_KEY_QUERY);
 		deleteKeysQuery = sql(deleteKeysQuery, DELETE_KEYS_QUERY);
 		deleteKeysetQuery = sql(deleteKeysetQuery, DELETE_KEYSET_QUERY);
+		updateKeyStatusQuery = sql(updateKeyStatusQuery, UPDATE_KEY_STATUS_QUERY);
+		destroyKeyQuery = sql(destroyKeyQuery, DESTROY_KEY_QUERY);
+		findPendingDestructionQuery = sql(findPendingDestructionQuery, FIND_PENDING_DESTRUCTION_QUERY);
 	}
 
 	@NonNull
@@ -336,6 +371,83 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 			setInstant(ps, 11, key.getDestructionScheduledAt());
 			setInstant(ps, 12, key.getDestroyedAt());
 		});
+	}
+
+	@Override
+	public void updateKeyStatus(@NonNull KeyTransition transition) {
+		log.debug("Updating key '{}' in keyset '{}' to status {}",
+				transition.getKeyId(), transition.getKeysetName(), transition.getStatus());
+
+		if (transition.getStatus() == KeyStatus.DESTROYED) {
+			jdbcOperations.update(destroyKeyQuery, ps -> {
+				setInstant(ps, 1, transition.getDestroyedAt());
+				ps.setString(2, transition.getKeysetName());
+				ps.setString(3, transition.getKeyId());
+			});
+		}
+		else {
+			jdbcOperations.update(updateKeyStatusQuery, ps -> {
+				ps.setString(1, transition.getStatus().name());
+				setInstant(ps, 2, transition.getDestructionScheduledAt());
+				setInstant(ps, 3, transition.getDestroyedAt());
+				ps.setString(4, transition.getKeysetName());
+				ps.setString(5, transition.getKeyId());
+			});
+		}
+	}
+
+	@NonNull
+	@Override
+	public List<EncryptedKeyset> findPendingDestruction() {
+		log.debug("Querying for keys pending destruction");
+
+		return transactionOperations.execute(status ->
+			jdbcOperations.query(
+				findPendingDestructionQuery,
+				pss -> pss.setLong(1, Instant.now().toEpochMilli()),
+				this::extractPendingDestruction));
+	}
+
+	private List<EncryptedKeyset> extractPendingDestruction(
+			@NonNull ResultSet rs) throws SQLException, DataAccessException {
+		final Map<String, EncryptedKeyset.Builder> builders = new LinkedHashMap<>();
+		final Map<String, List<EncryptedKey>> keysByName = new LinkedHashMap<>();
+
+		while (rs.next()) {
+			final String name = rs.getString("KEYSET_NAME");
+			if (!builders.containsKey(name)) {
+				builders.put(name, extractKeysetRow(rs));
+			}
+			keysByName.computeIfAbsent(name, k -> new ArrayList<>()).add(convertKey(rs));
+		}
+
+		final List<EncryptedKeyset> result = new ArrayList<>(builders.size());
+		for (Map.Entry<String, EncryptedKeyset.Builder> entry : builders.entrySet()) {
+			final List<EncryptedKey> keys = keysByName.getOrDefault(entry.getKey(), List.of());
+			result.add(entry.getValue().build(keys));
+		}
+		return result;
+	}
+
+	private EncryptedKeyset.Builder extractKeysetRow(@NonNull ResultSet rs) throws SQLException {
+		final EncryptedKeyset.Builder builder = EncryptedKeyset.builder()
+			.name(rs.getString("KEYSET_NAME"))
+			.purpose(KeysetPurpose.valueOf(rs.getString("KEYSET_PURPOSE")))
+			.factory(rs.getString("KEYSET_FACTORY"))
+			.provider(rs.getString("KEYSET_PROVIDER"))
+			.keyEncryptionKey(rs.getString("KEYSET_KEK"));
+
+		final long rotationInterval = rs.getLong("ROTATION_INTERVAL");
+		if (!rs.wasNull()) {
+			builder.rotationInterval(rotationInterval);
+		}
+
+		final long destructionGracePeriod = rs.getLong("DESTRUCTION_GRACE_PERIOD");
+		if (!rs.wasNull()) {
+			builder.destructionGracePeriod(destructionGracePeriod);
+		}
+
+		return builder;
 	}
 
 	private boolean exists(@NonNull String name) {

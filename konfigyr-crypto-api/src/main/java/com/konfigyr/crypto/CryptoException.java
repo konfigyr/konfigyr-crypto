@@ -490,6 +490,162 @@ public abstract class CryptoException extends RuntimeException {
 	}
 
 	/**
+	 * Exception thrown when a {@link Keyset} is accessed but its primary {@link Key} is
+	 * in {@link KeyStatus#DISABLED} state and cannot perform any cryptographic operations.
+	 * <p>
+	 * This exception is thrown by the keyset construction path (e.g. {@link AbstractKeyset})
+	 * before any key material is unwrapped, ensuring no sensitive data is touched for
+	 * disabled keysets.
+	 */
+	public static class KeysetDisabledException extends KeysetException {
+
+		@Serial
+		private static final long serialVersionUID = SERIAL;
+
+		/**
+		 * Creates a new {@link KeysetDisabledException} for the given keyset name.
+		 *
+		 * @param name the name of the disabled {@link Keyset}, can't be {@literal null}
+		 */
+		public KeysetDisabledException(String name) {
+			super(name, "Keyset '" + name + "' is disabled and cannot perform cryptographic operations. "
+					+ "Enable the primary key before attempting to use this keyset.");
+		}
+
+	}
+
+	/**
+	 * Exception thrown when a {@link Keyset} is accessed but its primary {@link Key} is
+	 * in {@link KeyStatus#PENDING_DESTRUCTION} state.
+	 * <p>
+	 * A keyset in this state has been scheduled for destruction and is waiting for the
+	 * configured grace period to elapse. No cryptographic operations are permitted.
+	 * Call {@code KeysetStore.cancelDestruction} to restore the key to
+	 * {@link KeyStatus#DISABLED} if the destruction was unintended.
+	 */
+	public static class KeysetPendingDestructionException extends KeysetDisabledException {
+
+		@Serial
+		private static final long serialVersionUID = SERIAL;
+
+		/**
+		 * Creates a new {@link KeysetPendingDestructionException} for the given keyset name.
+		 *
+		 * @param name the name of the {@link Keyset} pending destruction, can't be {@literal null}
+		 */
+		public KeysetPendingDestructionException(String name) {
+			super(name);
+		}
+
+		@Override
+		public String getMessage() {
+			return "Keyset '" + getName() + "' is pending destruction and cannot perform cryptographic "
+					+ "operations. Call cancelDestruction to restore it to a disabled state.";
+		}
+
+	}
+
+	/**
+	 * Exception thrown when a {@link Keyset} is accessed but its primary {@link Key} has
+	 * been permanently destroyed ({@link KeyStatus#DESTROYED}).
+	 * <p>
+	 * A destroyed key's material has been erased and cannot be recovered. If the keyset
+	 * has no remaining {@link KeyStatus#ENABLED} key, it is permanently inoperable.
+	 */
+	public static class KeysetDestroyedException extends KeysetException {
+
+		@Serial
+		private static final long serialVersionUID = SERIAL;
+
+		/**
+		 * Creates a new {@link KeysetDestroyedException} for the given keyset name.
+		 *
+		 * @param name the name of the {@link Keyset} whose primary key has been destroyed,
+		 *             can't be {@literal null}
+		 */
+		public KeysetDestroyedException(String name) {
+			super(name, "Keyset '" + name + "' primary key has been permanently destroyed. "
+					+ "The key material cannot be recovered.");
+		}
+
+	}
+
+	/**
+	 * Exception thrown when an attempt is made to transition a {@link Key} to an invalid
+	 * {@link KeyStatus} from its current state.
+	 * <p>
+	 * For example, calling {@code scheduleDestruction} on a key that is still
+	 * {@link KeyStatus#ENABLED} (rather than {@link KeyStatus#DISABLED}) will throw this
+	 * exception because the required deactivation step was skipped.
+	 * <p>
+	 * This exception carries the keyset name, the key identifier, the current status,
+	 * and the attempted (target) status for diagnostic purposes.
+	 */
+	public static class InvalidKeyStatusTransitionException extends KeysetException {
+
+		@Serial
+		private static final long serialVersionUID = SERIAL;
+
+		/**
+		 * The identifier of the {@link Key} for which the transition was attempted.
+		 */
+		private final String keyId;
+
+		/**
+		 * The current {@link KeyStatus} of the {@link Key} when the transition was attempted.
+		 */
+		private final KeyStatus currentStatus;
+
+		/**
+		 * The {@link KeyStatus} that the caller attempted to transition the key into.
+		 */
+		private final KeyStatus attemptedStatus;
+
+		/**
+		 * Creates a new {@link InvalidKeyStatusTransitionException}.
+		 *
+		 * @param keysetName    the name of the keyset containing the key, can't be {@literal null}
+		 * @param keyId         the identifier of the key, can't be {@literal null}
+		 * @param currentStatus the current status of the key, can't be {@literal null}
+		 * @param attemptedStatus the status the caller tried to set, can't be {@literal null}
+		 */
+		public InvalidKeyStatusTransitionException(
+				String keysetName, String keyId,
+				KeyStatus currentStatus, KeyStatus attemptedStatus) {
+			super(keysetName, "Invalid key status transition for key '" + keyId + "' in keyset '"
+					+ keysetName + "': cannot transition from " + currentStatus + " to " + attemptedStatus + ".");
+			this.keyId = keyId;
+			this.currentStatus = currentStatus;
+			this.attemptedStatus = attemptedStatus;
+		}
+
+		/**
+		 * @return the identifier of the {@link Key} for which the transition was attempted,
+		 *         never {@literal null}
+		 */
+		public @NonNull String getKeyId() {
+			return keyId;
+		}
+
+		/**
+		 * @return the current {@link KeyStatus} of the key when the invalid transition was
+		 *         attempted, never {@literal null}
+		 */
+		public @NonNull KeyStatus getCurrentStatus() {
+			return currentStatus;
+		}
+
+		/**
+		 * @return the {@link KeyStatus} that was attempted but is not a valid transition from
+		 *         {@link #getCurrentStatus()}, never {@literal null}
+		 */
+		public @NonNull KeyStatus getAttemptedStatus() {
+			return attemptedStatus;
+		}
+
+	}
+
+	/**
 	 * Exception thrown when the {@link Keyset} is being encrypted, or wrapped, by the
 	 * responsible {@link KeyEncryptionKey}.
 	 * <p>

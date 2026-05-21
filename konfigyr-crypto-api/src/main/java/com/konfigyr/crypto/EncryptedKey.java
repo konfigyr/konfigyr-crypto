@@ -120,6 +120,29 @@ public class EncryptedKey implements Comparable<EncryptedKey>, InputStreamSource
 	}
 
 	/**
+	 * Creates a new instance of the {@link Builder} pre-populated from an existing {@link EncryptedKey}.
+	 * <p>
+	 * All fields are copied as-is. Callers can then override individual fields (e.g. {@code status},
+	 * {@code destructionScheduledAt}) before calling {@link Builder#build(ByteArray)}.
+	 *
+	 * @param existing the source {@link EncryptedKey} to copy, can't be {@literal null}
+	 * @return a pre-populated builder, never {@literal null}
+	 */
+	public static Builder builder(EncryptedKey existing) {
+		return builder()
+			.id(existing.getId())
+			.algorithm(existing.getAlgorithm())
+			.type(existing.getType())
+			.status(existing.getStatus())
+			.primary(existing.isPrimary())
+			.createdAt(existing.getCreatedAt())
+			.initializedAt(existing.getInitializedAt())
+			.expiresAt(existing.getExpiresAt())
+			.destructionScheduledAt(existing.getDestructionScheduledAt())
+			.destroyedAt(existing.getDestroyedAt());
+	}
+
+	/**
 	 * Creates a new instance of the {@link EncryptedKey} from the given {@link Key} and encrypted
 	 * key material represented by the {@link ByteArray}.
 	 *

@@ -103,6 +103,19 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 		Assert.notNull(builder.keys, "Keyset keys can't be null");
 		Assert.isTrue(!builder.keys.isEmpty(), "Keyset must have at least one key");
 
+		final T primary = builder.keys.stream()
+			.filter(Key::isPrimary)
+			.findFirst()
+			.orElseThrow(() -> new CryptoException.KeysetException(
+				builder.name, "Keyset '" + builder.name + "' must have a primary key"));
+
+		switch (primary.getStatus()) {
+			case DISABLED -> throw new CryptoException.KeysetDisabledException(builder.name);
+			case PENDING_DESTRUCTION -> throw new CryptoException.KeysetPendingDestructionException(builder.name);
+			case DESTROYED -> throw new CryptoException.KeysetDestroyedException(builder.name);
+			default -> { }
+		}
+
 		this.name = builder.name;
 		this.factory = builder.factory;
 		this.purpose = builder.purpose;
