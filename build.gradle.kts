@@ -1,5 +1,6 @@
 plugins {
 	id("idea")
+    id("jacoco")
 	id("checkstyle")
 	id("java-library")
 	id("com.konfigyr.sonatype") apply false
@@ -16,6 +17,7 @@ allprojects {
 }
 
 subprojects {
+    apply(plugin = "jacoco")
     apply(plugin = "checkstyle")
     apply(plugin = "java-library")
     apply(plugin = "io.freefair.lombok")
@@ -54,7 +56,18 @@ subprojects {
         options.release = 21
     }
 
+    tasks.jacocoTestReport {
+        dependsOn(tasks.test)
+
+        reports {
+            xml.required = true
+            html.required = true
+        }
+    }
+
     tasks.test {
         useJUnitPlatform()
+
+        finalizedBy(tasks.jacocoTestReport)
     }
 }
