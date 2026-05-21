@@ -1,8 +1,9 @@
 package com.konfigyr.crypto;
 
-import com.konfigyr.io.ByteArray;
-import org.jspecify.annotations.NonNull;
+import com.konfigyr.crypto.test.TestAlgorithm;
+import com.konfigyr.crypto.test.TestKeyEncryptionKey;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -11,22 +12,18 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.cache.concurrent.ConcurrentMapCache;
 
 import java.io.IOException;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
-import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 class RepostoryKeysetStoreTest {
 
-	private final KeysetDefinition definition = KeysetDefinition.of("test-keyset", TestAlgorithm.TEST);
+	private static final String FACTORY_NAME = "test-factory";
 
-	@Mock
-	KeyEncryptionKey kek;
-
-	@Mock
-	KeyEncryptionKeyProvider provider;
+	private final KeysetDefinition definition = KeysetDefinition.of("test-keyset", TestAlgorithm.INSTANCE);
 
 	@Mock
 	KeysetFactory factory;
@@ -35,10 +32,14 @@ class RepostoryKeysetStoreTest {
 	Keyset keyset;
 
 	@Spy
-	KeysetCache cache = new SpringKeysetCache(new ConcurrentMapCache("tesst-cache"));
+	KeysetCache cache = new SpringKeysetCache(new ConcurrentMapCache("test-cache"));
 
 	@Spy
 	KeysetRepository repository = new InMemoryKeysetRepository();
+
+	KeyEncryptionKey kek;
+
+	KeyEncryptionKeyProvider provider;
 
 	EncryptedKeyset encryptedKeyset;
 
@@ -46,10 +47,13 @@ class RepostoryKeysetStoreTest {
 
 	@BeforeEach
 	void setup() {
+		kek = TestKeyEncryptionKey.INSTANCE;
+		provider = new SimpleKeyEncryptionKeyProvider(kek.getProvider(), List.of(kek));
+
 		encryptedKeyset = EncryptedKeyset.builder(definition)
-			.provider("test-provider")
-			.keyEncryptionKey("test-kek")
-			.build(ByteArray.fromString("encrypted material"));
+			.provider(kek.getProvider())
+			.keyEncryptionKey(kek.getId())
+			.build(List.of());
 
 		store = KeysetStore.builder()
 			.cache(cache)
@@ -60,19 +64,36 @@ class RepostoryKeysetStoreTest {
 	}
 
 	@Test
-	void shouldCreateKeyset() throws IOException {
+	@DisplayName("should resolve the configured key encryption key provider by name")
+	void shouldResolveProvider() {
+		assertThat(store.provider(provider.getName()))
+			.isPresent()
+			.get()
+			.isSameAs(provider);
+	}
+
+	@Test
+	@DisplayName("should return empty when no provider matches the given name")
+	void shouldNotResolveUnknownProvider() {
+		assertThat(store.provider("unknown-provider"))
+			.isEmpty();
+	}
+
+	@Test
+	@DisplayName("should create a keyset and persist it to the repository by loading KEK from the provider")
+	void shouldCreateKeysetByKeyReference() throws IOException {
 		doReturn(keyset).when(factory).create(kek, definition);
 		doReturn(true).when(factory).supports(definition);
 		doReturn(encryptedKeyset).when(factory).create(keyset);
-		doReturn(encryptedKeyset.getProvider()).when(provider).getName();
-		doReturn(kek).when(provider).provide(encryptedKeyset.getKeyEncryptionKey());
 
-		assertThat(store.create(encryptedKeyset.getProvider(), encryptedKeyset.getKeyEncryptionKey(), definition))
+		assertThat(store.create(kek.getProvider(), kek.getId(), definition))
 			.isEqualTo(keyset);
 
-		assertThat(repository.read(definition.getName())).hasValue(encryptedKeyset);
+		assertThat(repository.read(definition.getName()))
+			.hasValue(encryptedKeyset);
 
-		assertThat(cache.get(definition.getName(), () -> null)).isEqualTo(encryptedKeyset);
+		assertThat(cache.get(definition.getName(), () -> null))
+			.isEqualTo(encryptedKeyset);
 
 		verify(factory).create(keyset);
 		verify(factory).create(kek, definition);
@@ -80,26 +101,47 @@ class RepostoryKeysetStoreTest {
 	}
 
 	@Test
+	@DisplayName("should create a keyset and persist it to the repository using the supplied kek")
+	void shouldCreateKeyset() throws IOException {
+		doReturn(keyset).when(factory).create(kek, definition);
+		doReturn(true).when(factory).supports(definition);
+		doReturn(encryptedKeyset).when(factory).create(keyset);
+
+		assertThat(store.create(kek, definition))
+			.isEqualTo(keyset);
+
+		assertThat(repository.read(definition.getName()))
+			.hasValue(encryptedKeyset);
+
+		assertThat(cache.get(definition.getName(), () -> null))
+			.isEqualTo(encryptedKeyset);
+
+		verify(factory).create(keyset);
+		verify(factory).create(kek, definition);
+		verify(repository).write(encryptedKeyset);
+	}
+
+	@Test
+	@DisplayName("should read a keyset from the repository and warm the cache")
 	void shouldReadKeyset() throws IOException {
-		doReturn(encryptedKeyset.getProvider()).when(provider).getName();
-		doReturn(kek).when(provider).provide(encryptedKeyset);
 		doReturn(true).when(factory).supports(encryptedKeyset);
 		doReturn(keyset).when(factory).create(kek, encryptedKeyset);
 
 		repository.write(encryptedKeyset);
 
-		assertThat(store.read(definition.getName())).isEqualTo(keyset);
+		assertThat(store.read(definition.getName()))
+			.isEqualTo(keyset);
 
-		assertThat(cache.get(definition.getName(), () -> null)).isEqualTo(encryptedKeyset);
+		assertThat(cache.get(definition.getName(), () -> null))
+			.isEqualTo(encryptedKeyset);
 
 		verify(factory).create(kek, encryptedKeyset);
 		verify(repository).read(definition.getName());
 	}
 
 	@Test
+	@DisplayName("should read a keyset from cache without hitting the repository")
 	void shouldReadKeysetFromCache() throws IOException {
-		doReturn(encryptedKeyset.getProvider()).when(provider).getName();
-		doReturn(kek).when(provider).provide(encryptedKeyset);
 		doReturn(true).when(factory).supports(encryptedKeyset);
 		doReturn(keyset).when(factory).create(kek, encryptedKeyset);
 
@@ -112,8 +154,10 @@ class RepostoryKeysetStoreTest {
 	}
 
 	@Test
+	@DisplayName("should write a keyset to the repository and update the cache")
 	void shouldWriteKeyset() throws IOException {
-		doReturn(true).when(factory).supports(keyset);
+		doReturn(FACTORY_NAME).when(factory).getName();
+		doReturn(FACTORY_NAME).when(keyset).getFactory();
 		doReturn(encryptedKeyset).when(factory).create(keyset);
 
 		assertThatNoException().isThrownBy(() -> store.write(keyset));
@@ -128,13 +172,12 @@ class RepostoryKeysetStoreTest {
 	}
 
 	@Test
+	@DisplayName("should rotate the keyset by name and persist the updated state")
 	void shouldRotateKeysetByName() throws IOException {
 		final var rotated = mock(Keyset.class);
 		final var rotatedEncryptedKeyset = mock(EncryptedKeyset.class);
 
 		doReturn(rotated).when(keyset).rotate();
-		doReturn(encryptedKeyset.getProvider()).when(provider).getName();
-		doReturn(kek).when(provider).provide(encryptedKeyset);
 		doReturn(true).when(factory).supports(any(EncryptedKeyset.class));
 		doReturn(keyset).when(factory).create(kek, encryptedKeyset);
 		doReturn(rotatedEncryptedKeyset).when(factory).create(rotated);
@@ -155,11 +198,13 @@ class RepostoryKeysetStoreTest {
 	}
 
 	@Test
+	@DisplayName("should rotate the keyset by reference and persist the updated state")
 	void shouldRotateKeyset() throws IOException {
 		final var rotated = mock(Keyset.class);
 
 		doReturn(rotated).when(keyset).rotate();
-		doReturn(true).when(factory).supports(any(Keyset.class));
+		doReturn(FACTORY_NAME).when(factory).getName();
+		doReturn(FACTORY_NAME).when(keyset).getFactory();
 		doReturn(encryptedKeyset).when(factory).create(rotated);
 
 		assertThatNoException().isThrownBy(() -> store.rotate(keyset));
@@ -173,6 +218,7 @@ class RepostoryKeysetStoreTest {
 	}
 
 	@Test
+	@DisplayName("should remove the keyset by reference from the repository and evict from cache")
 	void shouldRemoveKeyset() throws IOException {
 		doReturn(definition.getName()).when(keyset).getName();
 
@@ -183,6 +229,7 @@ class RepostoryKeysetStoreTest {
 	}
 
 	@Test
+	@DisplayName("should remove the keyset by name from the repository and evict from cache")
 	void shouldRemoveKeysetByName() throws IOException {
 		assertThatNoException().isThrownBy(() -> store.remove(definition.getName()));
 
@@ -191,216 +238,187 @@ class RepostoryKeysetStoreTest {
 	}
 
 	@Test
-	void shouldFailToCreateKeysetForUnkownProvider() {
+	@DisplayName("should throw when no provider matches the given name during create")
+	void shouldFailToCreateKeysetForUnknownProvider() {
 		doReturn(true).when(factory).supports(definition);
 
-		assertThatThrownBy(
-				() -> store.create(encryptedKeyset.getProvider(), encryptedKeyset.getKeyEncryptionKey(), definition))
-			.isInstanceOf(CryptoException.ProviderNotFoundException.class)
-			.extracting("provider")
-			.isEqualTo(encryptedKeyset.getProvider());
+		assertThatExceptionOfType(CryptoException.ProviderNotFoundException.class)
+			.isThrownBy(() -> store.create("unknown-provider", kek.getId(), definition))
+			.returns("unknown-provider", CryptoException.ProviderException::getProvider);
 
 		verifyNoInteractions(repository);
 		verify(factory).supports(definition);
 	}
 
 	@Test
+	@DisplayName("should throw when no factory supports the given definition")
 	void shouldFailToCreateKeysetForUnsupportedDefinition() {
-		assertThatThrownBy(
-				() -> store.create(encryptedKeyset.getProvider(), encryptedKeyset.getKeyEncryptionKey(), definition))
-			.isInstanceOf(CryptoException.UnsupportedKeysetException.class)
-			.extracting("name")
-			.isEqualTo(definition.getName());
+		assertThatExceptionOfType(CryptoException.UnsupportedKeysetException.class)
+			.isThrownBy(() -> store.create(kek, definition))
+			.returns(definition.getName(), CryptoException.KeysetException::getName);
 
-		verifyNoInteractions(provider);
 		verifyNoInteractions(repository);
 		verify(factory).supports(definition);
 	}
 
 	@Test
-	void shouldFailToCreateKeysetForUnkownEncryptionKey() {
-		doReturn(encryptedKeyset.getProvider()).when(provider).getName();
+	@DisplayName("should throw when the key encryption key is not found in the provider")
+	void shouldFailToCreateKeysetForUnknownEncryptionKey() {
 		doReturn(true).when(factory).supports(definition);
-		doThrow(new CryptoException.KeyEncryptionKeyNotFoundException("test-provider", "test-kek")).when(provider)
-			.provide(encryptedKeyset.getKeyEncryptionKey());
 
-		assertThatThrownBy(
-				() -> store.create(encryptedKeyset.getProvider(), encryptedKeyset.getKeyEncryptionKey(), definition))
-			.isInstanceOf(CryptoException.KeyEncryptionKeyNotFoundException.class)
-			.extracting("id")
-			.isEqualTo("test-kek");
+		assertThatExceptionOfType(CryptoException.KeyEncryptionKeyNotFoundException.class)
+			.isThrownBy(() -> store.create(kek.getProvider(), "unknown-kek", definition))
+			.returns(kek.getProvider(), CryptoException.KeyEncryptionKeyNotFoundException::getProvider)
+			.returns("unknown-kek", CryptoException.KeyEncryptionKeyNotFoundException::getId);
 
-		verify(provider).provide(encryptedKeyset.getKeyEncryptionKey());
 		verify(factory).supports(definition);
 		verifyNoInteractions(repository);
 	}
 
 	@Test
+	@DisplayName("should throw when the factory fails to generate key material")
 	void shouldFailToCreateKeysetMaterial() throws IOException {
-		doReturn(encryptedKeyset.getProvider()).when(provider).getName();
 		doReturn(true).when(factory).supports(definition);
-		doReturn(kek).when(provider).provide(encryptedKeyset.getKeyEncryptionKey());
 		doThrow(IOException.class).when(factory).create(kek, definition);
 
-		assertThatThrownBy(
-				() -> store.create(encryptedKeyset.getProvider(), encryptedKeyset.getKeyEncryptionKey(), definition))
-			.isInstanceOf(CryptoException.KeysetException.class)
-			.hasCauseInstanceOf(IOException.class)
-			.extracting("name")
-			.isEqualTo(definition.getName());
+		assertThatExceptionOfType(CryptoException.KeysetException.class)
+			.isThrownBy(() -> store.create(encryptedKeyset.getProvider(), encryptedKeyset.getKeyEncryptionKey(), definition))
+			.returns(definition.getName(), CryptoException.KeysetException::getName)
+			.withCauseInstanceOf(IOException.class);
 
-		verify(provider).provide(encryptedKeyset.getKeyEncryptionKey());
 		verify(factory).create(kek, definition);
 		verifyNoInteractions(repository);
 	}
 
 	@Test
+	@DisplayName("should throw when the keyset does not exist in the repository")
 	void shouldThrowKeysetNotFound() throws IOException {
-		assertThatThrownBy(() -> store.read(definition.getName()))
-			.isInstanceOf(CryptoException.KeysetNotFoundException.class)
-			.hasNoCause()
-			.extracting("name")
-			.isEqualTo(definition.getName());
+		assertThatExceptionOfType(CryptoException.KeysetNotFoundException.class)
+			.isThrownBy(() -> store.read(definition.getName()))
+			.returns(definition.getName(), CryptoException.KeysetException::getName)
+			.withNoCause();
 
 		verifyNoInteractions(factory);
 		verify(repository).read(definition.getName());
 	}
 
 	@Test
-	void shouldFailToEncryptKeyset() throws IOException {
-		final var cause = new IOException("fail to encrypt");
-		doThrow(cause).when(factory).create(keyset);
-		doReturn(true).when(factory).supports(keyset);
-		doReturn(definition.getName()).when(keyset).getName();
-
-		assertThatThrownBy(() -> store.write(keyset)).isInstanceOf(CryptoException.KeysetException.class)
-			.hasRootCause(cause)
-			.extracting("name")
-			.isEqualTo(definition.getName());
-
-		verify(factory).create(keyset);
-		verifyNoInteractions(repository);
-	}
-
-	@Test
+	@DisplayName("should throw when no factory supports the encrypted keyset")
 	void shouldFailToDecryptUnsupportedKeyset() throws IOException {
 		repository.write(encryptedKeyset);
 
-		assertThatThrownBy(() -> store.read(definition.getName()))
-			.isInstanceOf(CryptoException.UnsupportedKeysetException.class)
-			.extracting("name")
-			.isEqualTo(definition.getName());
+		assertThatExceptionOfType(CryptoException.UnsupportedKeysetException.class)
+			.isThrownBy(() -> store.read(definition.getName()))
+			.returns(definition.getName(), CryptoException.KeysetException::getName);
 
 		verify(factory).supports(encryptedKeyset);
 		verify(repository).read(definition.getName());
-		verifyNoInteractions(provider);
-		verifyNoInteractions(kek);
 	}
 
 	@Test
+	@DisplayName("should throw provider not found when reading encrypted keyset with an unknown provider name")
+	void shouldFailToFindProviderForKeyset() throws IOException {
+		encryptedKeyset = EncryptedKeyset.builder(definition)
+			.provider("unknown-provider")
+			.keyEncryptionKey(kek.getId())
+			.build(List.of());
+
+		repository.write(encryptedKeyset);
+
+		doReturn(true).when(factory)
+			.supports(encryptedKeyset);
+
+		assertThatExceptionOfType(CryptoException.ProviderNotFoundException.class)
+			.isThrownBy(() -> store.read(definition.getName()))
+			.withNoCause();
+	}
+
+	@Test
+	@DisplayName("should throw when the factory fails to unwrap the encrypted keyset")
 	void shouldFailToDecryptKeyset() throws IOException {
 		doReturn(true).when(factory).supports(encryptedKeyset);
-		doReturn(encryptedKeyset.getProvider()).when(provider).getName();
-		doReturn(kek).when(provider).provide(encryptedKeyset);
 
 		final var cause = new IOException("fail to decrypt");
 		doThrow(cause).when(factory).create(kek, encryptedKeyset);
 
 		repository.write(encryptedKeyset);
 
-		assertThatThrownBy(() -> store.read(definition.getName())).isInstanceOf(CryptoException.KeysetException.class)
-			.hasRootCause(cause)
-			.extracting("name")
-			.isEqualTo(definition.getName());
+		assertThatExceptionOfType(CryptoException.KeysetException.class)
+			.isThrownBy(() -> store.read(definition.getName()))
+			.withCause(cause)
+			.returns(definition.getName(), CryptoException.KeysetException::getName);
 
 		verify(factory).create(kek, encryptedKeyset);
 		verify(repository).read(definition.getName());
 	}
 
 	@Test
+	@DisplayName("should throw when no factory supports the keyset during write")
+	void shouldFailToWriteUnsupportedKeyset() {
+		doReturn(FACTORY_NAME).when(factory).getName();
+
+		assertThatExceptionOfType(CryptoException.UnsupportedKeysetException.class)
+			.isThrownBy(() -> store.write(keyset));
+
+		verifyNoInteractions(repository);
+	}
+
+	@Test
+	@DisplayName("should throw when the factory fails to wrap the keyset")
+	void shouldFailToEncryptKeyset() throws IOException {
+		final var cause = new IOException("fail to encrypt");
+		doReturn(FACTORY_NAME).when(factory).getName();
+		doReturn(FACTORY_NAME).when(keyset).getFactory();
+		doReturn(definition.getName()).when(keyset).getName();
+		doThrow(cause).when(factory).create(keyset);
+
+		assertThatExceptionOfType(CryptoException.KeysetException.class)
+			.isThrownBy(() -> store.write(keyset))
+			.withCause(cause)
+			.returns(definition.getName(), CryptoException.KeysetException::getName);
+
+		verify(factory).create(keyset);
+		verifyNoInteractions(repository);
+	}
+
+	@Test
+	@DisplayName("should throw when the repository raises an IOException")
 	void shouldFailToLoadEncryptedKeysetsFromRepository() throws IOException {
 		final var cause = new IOException("Ooops");
-
-		doReturn(true).when(factory).supports(any(KeysetDefinition.class));
 
 		doThrow(cause).when(repository).read(any());
 		doThrow(cause).when(repository).write(any());
 		doThrow(cause).when(repository).remove(any());
 
-		assertThatThrownBy(() -> store.read("test-keyset")).isInstanceOf(CryptoException.class).hasRootCause(cause);
+		assertThatExceptionOfType(CryptoException.class).isThrownBy(() -> store.read("test-keyset")).withCause(cause);
 
-		assertThatThrownBy(() -> store.write(keyset)).isInstanceOf(CryptoException.class).hasRootCause(cause);
+		assertThatExceptionOfType(CryptoException.class).isThrownBy(() -> store.write(keyset)).withCause(cause);
 
-		assertThatThrownBy(() -> store.remove("test-keyset")).isInstanceOf(CryptoException.class).hasRootCause(cause);
+		assertThatExceptionOfType(CryptoException.class).isThrownBy(() -> store.remove("test-keyset")).withCause(cause);
 	}
 
 	@Test
+	@DisplayName("should throw when rotating a keyset that does not exist in the repository")
 	void shouldFailToRotateKeysetThatDoesNotExist() throws IOException {
-		assertThatThrownBy(() -> store.rotate(definition.getName()))
-			.isInstanceOf(CryptoException.KeysetNotFoundException.class)
-			.extracting("name")
-			.isEqualTo(definition.getName());
+		assertThatExceptionOfType(CryptoException.KeysetNotFoundException.class)
+			.isThrownBy(() -> store.rotate(definition.getName()))
+			.returns(definition.getName(), CryptoException.KeysetException::getName);
 
 		verify(repository).read(definition.getName());
 	}
 
 	@Test
+	@DisplayName("should throw when the repository raises an IOException during removal")
 	void shouldFailToRemoveKeyset() throws IOException {
 		final var cause = new IOException("fail to remove");
 		doThrow(cause).when(repository).remove(definition.getName());
 
-		assertThatThrownBy(() -> store.remove(definition.getName())).isInstanceOf(CryptoException.KeysetException.class)
-			.hasRootCause(cause)
-			.extracting("name")
-			.isEqualTo(definition.getName());
+		assertThatExceptionOfType(CryptoException.KeysetException.class)
+			.isThrownBy(() -> store.remove(definition.getName()))
+			.withCause(cause)
+			.returns(definition.getName(), CryptoException.KeysetException::getName);
 
 		verify(repository).remove(definition.getName());
-	}
-
-	@Test
-	void shouldFailToFindFactoryForEncryptedKeyset() throws IOException {
-		repository.write(encryptedKeyset);
-
-		assertThatThrownBy(() -> store.read("test-keyset"))
-			.isInstanceOf(CryptoException.UnsupportedKeysetException.class)
-			.hasNoCause();
-
-		verifyNoInteractions(provider);
-		verifyNoInteractions(kek);
-		verify(factory).supports(encryptedKeyset);
-	}
-
-	@Test
-	void shouldFailToFindProviderForKeyset() throws IOException {
-		repository.write(encryptedKeyset);
-
-		doReturn(true).when(factory).supports(encryptedKeyset);
-		doReturn("other-provider").when(provider).getName();
-
-		assertThatThrownBy(() -> store.read("test-keyset"))
-			.isInstanceOf(CryptoException.ProviderNotFoundException.class)
-			.hasNoCause();
-
-		verify(provider).getName();
-		verifyNoInteractions(kek);
-	}
-
-	enum TestAlgorithm implements Algorithm {
-
-		TEST;
-
-		@NonNull
-		@Override
-		public KeysetPurpose purpose() {
-			return KeysetPurpose.ENCRYPTION;
-		}
-
-		@NonNull
-		@Override
-		public KeyType type() {
-			return KeyType.OCTET;
-		}
-
 	}
 
 }

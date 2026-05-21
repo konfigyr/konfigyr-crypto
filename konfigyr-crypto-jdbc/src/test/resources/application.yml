@@ -5,3 +5,8 @@ konfigyr:
       transaction-propagation-behavior: requires_new
       transaction-isolation-level: serializable
       transaction-timeout: 5s
+
+logging:
+  level:
+    com.konfigyr.crypto: DEBUG
+    org.springframework.jdbc.core.JdbcTemplate: DEBUG

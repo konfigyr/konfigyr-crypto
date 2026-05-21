@@ -3,7 +3,6 @@ package com.konfigyr.crypto;
 import org.jspecify.annotations.NullMarked;
 
 import java.io.Serializable;
-import java.util.Set;
 
 /**
  * Algorithm interface that defines which {@link KeysetOperation operations} are supported
@@ -42,9 +41,18 @@ public interface Algorithm extends Serializable {
 	String name();
 
 	/**
+	 * Returns the name of the {@link KeysetFactory} that is responsible for creating
+	 * {@link Keyset} instances for this algorithm.
+	 *
+	 * @return keyset factory name, never {@literal null}.
+	 * @see KeysetFactory
+	 */
+	String factory();
+
+	/**
 	 * Returns the intended cryptographic purpose of this algorithm. Purpose determines
 	 * which {@link Keyset keysets} this algorithm may be used with and constrains the
-	 * set of valid {@link #operations()}.
+	 * set of valid keyset operations.
 	 *
 	 * @return keyset purpose, never {@literal null}.
 	 */
@@ -56,27 +64,5 @@ public interface Algorithm extends Serializable {
 	 * @return key type used by the algorithm, never {@literal null}.
 	 */
 	KeyType type();
-
-	/**
-	 * Collection of {@link KeysetOperation operations} this {@link Algorithm} can perform.
-	 * <p>
-	 * The returned set of operations must match the operations from the specified keyset
-	 * purpose.
-	 *
-	 * @return supported operations, never {@literal null} or empty.
-	 */
-	default Set<KeysetOperation> operations() {
-		return purpose().operations();
-	}
-
-	/**
-	 * Checks if the algorithm supports the given operation.
-	 *
-	 * @param operation operation to be checked, never {@literal null}.
-	 * @return {@code true} if the algorithm supports the operation, {@code false} otherwise.
-	 */
-	default boolean supports(KeysetOperation operation) {
-		return purpose().isOperationSupported(operation);
-	}
 
 }

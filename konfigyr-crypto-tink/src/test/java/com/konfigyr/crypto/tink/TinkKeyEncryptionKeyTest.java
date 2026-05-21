@@ -21,8 +21,7 @@ import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.notNull;
 import static org.mockito.Mockito.*;
@@ -111,10 +110,10 @@ class TinkKeyEncryptionKeyTest extends AbstractCryptoTest {
 	@Test
 	@DisplayName("should fail to create key encryption key from invalid secret key")
 	void shouldFailToCreateKekFromInvalidSecretKey() {
-		assertThatThrownBy(() -> builder.from("test-kek", ByteArray.empty()))
-			.isInstanceOf(IllegalArgumentException.class)
-			.hasRootCauseInstanceOf(GeneralSecurityException.class)
-			.hasMessage("Failed to create AES Key Encryption Key with id: test-kek");
+		assertThatIllegalArgumentException()
+			.isThrownBy(() -> builder.from("test-kek", ByteArray.empty()))
+			.withRootCauseInstanceOf(GeneralSecurityException.class)
+			.withMessage("Failed to create AES Key Encryption Key with id: test-kek");
 	}
 
 	@Test
@@ -125,9 +124,11 @@ class TinkKeyEncryptionKeyTest extends AbstractCryptoTest {
 		assertThat(kek).returns("test-kek-uri", KeyEncryptionKey::getId)
 			.returns("test-provider", KeyEncryptionKey::getProvider)
 			.returns("test-provider@test-kek-uri", KeyEncryptionKey::toString)
-			.satisfies(it -> assertThatThrownBy(() -> it.wrap(DATA)).isInstanceOf(IOException.class)
-				.hasRootCauseInstanceOf(GeneralSecurityException.class)
-				.hasRootCauseMessage("No KMS client does support: test-kek-uri"));
+			.satisfies(it -> assertThatExceptionOfType(IOException.class)
+				.isThrownBy(() -> it.wrap(DATA))
+				.withRootCauseInstanceOf(GeneralSecurityException.class)
+				.havingRootCause()
+				.withMessageContaining("No KMS client does support: test-kek-uri"));
 	}
 
 	@Test
@@ -138,18 +139,20 @@ class TinkKeyEncryptionKeyTest extends AbstractCryptoTest {
 		assertThat(kek).returns("test-kek-uri", KeyEncryptionKey::getId)
 			.returns("test-provider", KeyEncryptionKey::getProvider)
 			.returns("test-provider@test-kek-uri", KeyEncryptionKey::toString)
-			.satisfies(it -> assertThatThrownBy(() -> it.wrap(DATA)).isInstanceOf(IOException.class)
-				.hasRootCauseInstanceOf(GeneralSecurityException.class)
-				.hasRootCauseMessage("No KMS client does support: test-kek-uri"));
+			.satisfies(it -> assertThatExceptionOfType(IOException.class)
+				.isThrownBy(() -> it.wrap(DATA))
+				.withRootCauseInstanceOf(GeneralSecurityException.class)
+				.havingRootCause()
+				.withMessageContaining("No KMS client does support: test-kek-uri"));
 	}
 
 	@Test
 	@DisplayName("should fail to create key encryption key from invalid DEK template")
 	void shouldFailToCreateEnvelopKmsKekDueToUnsupportedDEKTemplate() {
-		assertThatThrownBy(() -> builder.kms("test-kek-uri", "DEK_TEMPLATE"))
-			.isInstanceOf(IllegalArgumentException.class)
-			.hasRootCauseInstanceOf(GeneralSecurityException.class)
-			.hasMessage("Could not resolve Tink Key Template for: DEK_TEMPLATE");
+		assertThatIllegalArgumentException()
+			.isThrownBy(() -> builder.kms("test-kek-uri", "DEK_TEMPLATE"))
+			.withRootCauseInstanceOf(GeneralSecurityException.class)
+			.withMessage("Could not resolve Tink Key Template for: DEK_TEMPLATE");
 	}
 
 	private static ThrowingConsumer<KeyEncryptionKey> assertEncryptsKeyset() {

@@ -3,11 +3,12 @@ package com.konfigyr.crypto;
 import org.jspecify.annotations.NullMarked;
 
 import java.io.IOException;
+import java.util.Objects;
 
 /**
  * Interface that behaves as the Service Provider Interface (SPI) to 3rd party cryptographic libraries.
  * <p>
- * This SPI is used by the {@link KeysetStore} to generate, retrieve, store, rotate and remove the actual
+ * This SPI is used by the {@link KeysetStore} to generate, retrieve, store, rotate, and remove the actual
  * cryptographic keys. Store can support multiple implementations of the {@link KeysetFactory} and it is
  * therefore important to the {@link KeysetStore} to know which {@link KeysetDefinition}, or its
  * {@link EncryptedKeyset} counterpart, is supported by which {@link KeysetFactory}.
@@ -28,8 +29,19 @@ import java.io.IOException;
 public interface KeysetFactory {
 
 	/**
-	 * Checks if the factory supports the indicated {@link EncryptedKeyset} when
-	 * generating and decrypting existing {@link Keyset keysets}.
+	 * Returns the name of the {@link KeysetFactory}. The name is used within the {@link KeysetStore}
+	 * to identify the {@link KeysetFactory} that should be used to manage the cryptographic key material.
+	 * <p>
+	 * For this reason it is important that the keyset factory names should be unique for each {@link KeysetFactory}
+	 * implementation within the same {@link KeysetStore}.
+	 *
+	 * @return the unique name of the {@link KeysetFactory}, never {@literal null}.
+	 */
+	String getName();
+
+	/**
+	 * Checks if the factory supports the indicated {@link EncryptedKeyset} when generating and
+	 * decrypting existing {@link Keyset keysets}.
 	 * <p>
 	 * Returning {@literal true} does not guarantee that {@link KeysetFactory} will be able to create
 	 * the {@link Keyset} presented by the instance of the {@link EncryptedKeyset}. It simply indicates
@@ -38,20 +50,42 @@ public interface KeysetFactory {
 	 * @param encryptedKeyset encrypted keyset to be checked, never {@literal null}
 	 * @return <code>true</code> if the factory can attempt keyset decryption
 	 */
-	boolean supports(EncryptedKeyset encryptedKeyset);
+	default boolean supports(EncryptedKeyset encryptedKeyset) {
+		return Objects.equals(getName(), encryptedKeyset.getFactory());
+	}
 
 	/**
-	 * Checks if the factory supports the indicated {@link KeysetDefinition} when
-	 * generating new {@link Keyset keysets}.
+	 * Checks if the factory supports the indicated {@link KeysetDefinition} when generating new
+	 * {@link Keyset keysets}.
 	 * <p>
 	 * Returning {@literal true} does not guarantee that {@link KeysetFactory} will be able to create
 	 * the {@link Keyset} presented by the instance of the {@link KeysetDefinition}. It simply indicates
 	 * it would attempt to generate new key material using the given instructions.
+	 * <p>
+	 * The default implementation of this method returns {@literal true} if the {@link Algorithm} given
+	 * to the definition belongs to this keyset factory.
 	 *
 	 * @param definition keyset definition to be checked, never {@literal null}
-	 * @return <code>true</code> if the factory can attempt keyset generation
+	 * @return <code>true</code> if the factory can attempt keyset generation.
 	 */
-	boolean supports(KeysetDefinition definition);
+	default boolean supports(KeysetDefinition definition) {
+		final Algorithm algorithm = definition.getAlgorithm();
+		return Objects.equals(getName(), algorithm.factory());
+	}
+
+	/**
+	 * Checks if the factory supports the indicated {@link Algorithm} for creating and
+	 * managing {@link Keyset keysets}.
+	 * <p>
+	 * The default implementation of this method returns {@literal true} if the given
+	 * {@link Algorithm} belongs to this keyset factory.
+	 *
+	 * @param algorithm algorithm to be checked, never {@literal null}
+	 * @return <code>true</code> if the factory supports the algorithm
+	 */
+	default boolean supports(Algorithm algorithm) {
+		return Objects.equals(getName(), algorithm.factory());
+	}
 
 	/**
 	 * Creates a new {@link Keyset} with a single primary key using the given {@link Algorithm}.

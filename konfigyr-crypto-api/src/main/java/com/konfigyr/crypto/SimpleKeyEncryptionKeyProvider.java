@@ -59,7 +59,7 @@ class SimpleKeyEncryptionKeyProvider implements KeyEncryptionKeyProvider {
 	}
 
 	private static String formatException(String name, String cause) {
-		return "You attempted to create a Key EncryptionKey Provider with name '" + name + "'" + cause;
+		return "You attempted to create a Key EncryptionKey Provider with name '" + name + "' " + cause;
 	}
 
 	private static String formatNullKekException(String name) {

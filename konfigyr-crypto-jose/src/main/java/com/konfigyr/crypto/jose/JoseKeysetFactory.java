@@ -2,21 +2,12 @@ package com.konfigyr.crypto.jose;
 
 import com.konfigyr.crypto.*;
 import com.konfigyr.io.ByteArray;
-import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.jwk.JWK;
-import com.nimbusds.jose.shaded.gson.Gson;
-import com.nimbusds.jose.shaded.gson.GsonBuilder;
-import com.nimbusds.jose.shaded.gson.JsonParseException;
-import com.nimbusds.jose.shaded.gson.reflect.TypeToken;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NullMarked;
 
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Implementation of the {@link KeysetFactory} that integrates
@@ -45,18 +36,13 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class JoseKeysetFactory implements KeysetFactory {
 
-	private static final TypeToken<?> JSON_KEY_TYPE = TypeToken.getParameterized(Map.class, String.class, Object.class);
-	private static final TypeToken<?> JSON_KEYS_TYPE = TypeToken.getArray(JSON_KEY_TYPE.getType());
+	static final String NAME = "jose";
 
 	private final AlgorithmRegistry registry;
-	private final Gson gson = new GsonBuilder()
-		.create();
 
 	@Override
-	public boolean supports(EncryptedKeyset encryptedKeyset) {
-		return registry.find(encryptedKeyset.getAlgorithm())
-			.filter(a -> a instanceof JoseAlgorithm)
-			.isPresent();
+	public String getName() {
+		return NAME;
 	}
 
 	@Override
@@ -66,77 +52,64 @@ public class JoseKeysetFactory implements KeysetFactory {
 
 	@Override
 	public Keyset create(KeyEncryptionKey kek, KeysetDefinition definition) {
-		if (!(definition.getAlgorithm() instanceof JoseAlgorithm joseAlgorithm)) {
-			throw new CryptoException.UnsupportedAlgorithmException(definition.getAlgorithm());
-		}
-
-		final JWK key;
-
-		try {
-			key = joseAlgorithm.generator().generate();
-		} catch (JOSEException ex) {
-			throw new CryptoException.KeysetException(definition, "Failed to create JWK", ex);
-		}
-
-		return JsonWebKeyset.builder(new JsonWebKey(key, KeyStatus.ENABLED, true))
+		return new JsonWebKeyset.Builder(definition)
+			.key(JsonWebKey.generate(KeyDefinition.of(definition), JoseUtils.generateKeyId()))
 			.keyEncryptionKey(kek)
-			.name(definition.getName())
-			.algorithm(joseAlgorithm)
-			.rotationInterval(definition.getRotationInterval())
-			.nextRotationTime(definition.getNextRotationTime())
 			.build();
 	}
 
 	@Override
 	public EncryptedKeyset create(Keyset keyset) {
 		final KeyEncryptionKey kek = keyset.getKeyEncryptionKey();
-		final ByteArray encrypted;
+		final List<EncryptedKey> keys = new ArrayList<>(keyset.getKeys().size());
 
-		try {
-			final List<Map<String, Object>> keys = keyset.getKeys()
-				.stream()
-				.map(JsonWebKey.class::cast)
-				.map(JsonWebKey::toJSON)
-				.toList();
+		for (Key key : keyset.getKeys()) {
+			final ByteArray encrypted;
 
-			encrypted = kek.wrap(ByteArray.fromString(gson.toJson(keys)));
-		} catch (Exception e) {
-			throw new CryptoException.WrappingException(keyset.getName(), kek, e);
+			try {
+				final JWK value = ((JsonWebKey) key).getValue();
+				encrypted = kek.wrap(ByteArray.fromString(value.toJSONString()));
+			} catch (Exception e) {
+				throw new CryptoException.WrappingException(keyset.getName(), kek, e);
+			}
+
+			keys.add(EncryptedKey.from(key, encrypted));
 		}
 
-		return EncryptedKeyset.from(keyset, encrypted);
+		return EncryptedKeyset.from(keyset, keys);
 	}
 
 	@Override
-	public Keyset create(KeyEncryptionKey kek, EncryptedKeyset encryptedKeyset) throws IOException {
-		final ByteArray unwrapped = kek.unwrap(encryptedKeyset.getData());
-		final InputStreamReader reader = new InputStreamReader(unwrapped.getInputStream());
-		final Map<String, Object>[] json;
+	public Keyset create(KeyEncryptionKey kek, EncryptedKeyset encryptedKeyset) {
+		final JsonWebKeyset.Builder builder = new JsonWebKeyset.Builder(encryptedKeyset)
+			.keyEncryptionKey(kek);
 
-		try {
-			json = gson.fromJson(reader, JSON_KEYS_TYPE.getType());
-		} catch (JsonParseException ex) {
-			throw new IOException("Fail to read encrypted JOSE keyset: " + encryptedKeyset.getName(), ex);
-		}
+		for (EncryptedKey encrypted : encryptedKeyset) {
+			final JWK key;
 
-		final List<JsonWebKey> keys = new ArrayList<>(json.length);
-
-		for (Map<String, Object> key : json) {
 			try {
-				keys.add(new JsonWebKey(key));
-			} catch (ParseException ex) {
-				throw new IOException("Fail to read encrypted JOSE keyset: " + encryptedKeyset.getName(), ex);
+				final ByteArray unwrapped = kek.unwrap(encrypted.getData());
+				key = JWK.parse(unwrapped.encode(String::new));
+			} catch (Exception e) {
+				throw new CryptoException.UnwrappingException(encryptedKeyset.getName(), kek, e);
 			}
+
+			final JoseAlgorithm algorithm = (JoseAlgorithm) registry.resolve(encrypted.getAlgorithm());
+
+			builder.key(new JsonWebKey.Builder(key)
+				.id(encrypted.getId())
+				.status(encrypted.getStatus())
+				.algorithm(algorithm)
+				.primary(encrypted.isPrimary())
+				.createdAt(encrypted.getCreatedAt())
+				.initializedAt(encrypted.getInitializedAt())
+				.expiresAt(encrypted.getExpiresAt())
+				.destructionScheduledAt(encrypted.getDestructionScheduledAt())
+				.destroyedAt(encrypted.getDestroyedAt())
+				.build()
+			);
 		}
 
-		final JoseAlgorithm algorithm = (JoseAlgorithm) registry.resolve(encryptedKeyset.getAlgorithm());
-
-		return JsonWebKeyset.builder(keys)
-			.keyEncryptionKey(kek)
-			.name(encryptedKeyset.getName())
-			.algorithm(algorithm)
-			.rotationInterval(encryptedKeyset.getRotationInterval())
-			.nextRotationTime(encryptedKeyset.getNextRotationTime())
-			.build();
+		return builder.build();
 	}
 }

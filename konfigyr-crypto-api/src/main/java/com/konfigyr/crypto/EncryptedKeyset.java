@@ -1,22 +1,22 @@
 package com.konfigyr.crypto;
 
-import com.konfigyr.io.ByteArray;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.Value;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.NullUnmarked;
-import org.springframework.core.io.InputStreamSource;
+import org.jspecify.annotations.Nullable;
 import org.springframework.util.Assert;
 
-import java.io.InputStream;
 import java.io.Serial;
 import java.io.Serializable;
 import java.time.Duration;
-import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 
 /**
- * Record that represents the {@link Keyset} at rest which private key material is
+ * Record that represents the {@link Keyset} at rest whose private key material is
  * encrypted by the {@link KeyEncryptionKey Key Encryption Key (KEK)}. The
  * {@link EncryptedKeyset} are retrieved, stored or removed by the
  * {@link KeysetRepository}.
@@ -26,6 +26,9 @@ import java.time.Instant;
  * data is stored in a database, the keys should be stored in the filesystem. This means
  * that if an attacker only has access to one of these (for example through directory
  * traversal or SQL injection), they cannot access both the keys and the data.
+ * <p>
+ * Each individual {@link Key} has its own encrypted material stored as an {@link EncryptedKey},
+ * which also carries the per-key lifecycle metadata (status, timestamps).
  *
  * @author : Vladimir Spasic
  * @since : 25.08.23, Fri
@@ -35,7 +38,7 @@ import java.time.Instant;
 @Value
 @NullMarked
 @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
-public class EncryptedKeyset implements InputStreamSource, Serializable {
+public class EncryptedKeyset implements Iterable<EncryptedKey>, Serializable {
 
 	@Serial
 	private static final long serialVersionUID = -5051833454368671211L;
@@ -46,9 +49,14 @@ public class EncryptedKeyset implements InputStreamSource, Serializable {
 	String name;
 
 	/**
-	 * Algorithm name that is used by this keyset.
+	 * The purpose of the key material in this keyset, stored as the enum name.
 	 */
-	String algorithm;
+	String purpose;
+
+	/**
+	 * The name of the {@link KeysetFactory} that manages this keyset.
+	 */
+	String factory;
 
 	/**
 	 * {@link KeyEncryptionKeyProvider} name that supplied the {@link KeyEncryptionKey} to encrypt this keyset.
@@ -61,23 +69,35 @@ public class EncryptedKeyset implements InputStreamSource, Serializable {
 	String keyEncryptionKey;
 
 	/**
-	 * Encrypted key material that was wrapped by the {@link KeyEncryptionKey}.
+	 * Per-key encrypted material with lifecycle metadata.
 	 */
-	ByteArray data;
+	List<EncryptedKey> keys;
 
 	/**
-	 * Rotation frequency for the keyset.
+	 * Rotation frequency for the keyset. {@literal null} when automatic rotation is disabled.
 	 */
+	@Nullable
 	Duration rotationInterval;
 
 	/**
-	 * Timestamp when the next key rotation should occur.
+	 * Grace period between scheduling key destruction and the actual removal of key material.
+	 * {@literal null} when the destruction grace period is disabled.
 	 */
-	Instant nextRotationTime;
+	@Nullable
+	Duration destructionGracePeriod;
+
+	/**
+	 * Returns the number of {@link EncryptedKey keys} in this keyset.
+	 *
+	 * @return keyset size.
+	 */
+	public int size() {
+		return keys.size();
+	}
 
 	@Override
-	public InputStream getInputStream() {
-		return data.getInputStream();
+	public Iterator<EncryptedKey> iterator() {
+		return keys.iterator();
 	}
 
 	/**
@@ -89,29 +109,40 @@ public class EncryptedKeyset implements InputStreamSource, Serializable {
 	}
 
 	/**
-	 * Creates a new instance of the {@link EncryptedKeyset.Builder} and populates the builder with the
-	 * data from the given {@link KeysetDefinition}.
+	 * Creates a new instance of the {@link EncryptedKeyset.Builder} populated from the given
+	 * {@link KeysetDefinition}.
 	 *
-	 * @param definition definition from which the builder would be created, can't be {@literal null}
+	 * @param definition definition from which the builder would be populated, can't be {@literal null}
 	 * @return encrypted keyset builder based on this definition, never {@literal  null}
 	 */
 	public static Builder builder(KeysetDefinition definition) {
-		return builder().name(definition.getName())
-			.algorithm(definition.getAlgorithm().name())
-			.rotationInterval(definition.getRotationInterval())
-			.nextRotationTime(definition.getNextRotationTime());
+		return builder()
+			.name(definition.getName())
+			.purpose(definition.getPurpose())
+			.factory(definition.getAlgorithm().factory())
+			.rotationInterval(definition.getRotationInterval().orElse(null))
+			.destructionGracePeriod(definition.getDestructionGracePeriod().orElse(null));
 	}
 
 	/**
-	 * Creates a new instance of the {@link EncryptedKeyset} from the given {@link Keyset} and encrypted
-	 * key material represented by the {@link ByteArray}.
+	 * Creates a new instance of the {@link EncryptedKeyset} from the given {@link Keyset} and list of
+	 * {@link EncryptedKey encrypted keys}.
 	 *
 	 * @param keyset keyset that is encrypted by the {@link KeyEncryptionKey}, can't be {@literal null}
-	 * @param data encrypted private key material, can't be {@literal null}
+	 * @param keys per-key encrypted material, can't be {@literal null}
 	 * @return encrypted keyset, never {@literal  null}
 	 */
-	public static EncryptedKeyset from(Keyset keyset, ByteArray data) {
-		return builder(keyset).keyEncryptionKey(keyset.getKeyEncryptionKey()).build(data);
+	public static EncryptedKeyset from(Keyset keyset, List<EncryptedKey> keys) {
+		final Builder builder = builder()
+			.name(keyset.getName())
+			.purpose(keyset.getPurpose())
+			.factory(keyset.getFactory())
+			.keyEncryptionKey(keyset.getKeyEncryptionKey());
+
+		keyset.getRotationInterval().ifPresent(builder::rotationInterval);
+		keyset.getDestructionGracePeriod().ifPresent(builder::destructionGracePeriod);
+
+		return builder.build(keys);
 	}
 
 	/**
@@ -122,16 +153,12 @@ public class EncryptedKeyset implements InputStreamSource, Serializable {
 	public static final class Builder {
 
 		private String name;
-
-		private String algorithm;
-
+		private String purpose;
+		private String factory;
 		private String provider;
-
 		private String kek;
-
 		private Duration rotationInterval;
-
-		private Instant nextRotationTime;
+		private Duration destructionGracePeriod;
 
 		/**
 		 * Specify the name of the {@link EncryptedKeyset}.
@@ -145,24 +172,25 @@ public class EncryptedKeyset implements InputStreamSource, Serializable {
 		}
 
 		/**
-		 * Specify the {@link Algorithm} that is used by the {@link Keyset}.
+		 * Specify the {@link KeysetPurpose} of the {@link Keyset}.
 		 *
-		 * @param algorithm algorithm name, can't be {@literal null}
+		 * @param purpose keyset purpose, can't be {@literal null}
 		 * @return builder
 		 */
-		public Builder algorithm(Algorithm algorithm) {
-			Assert.notNull(kek, "Algorithm can not be null");
-			return algorithm(algorithm.name());
+		public Builder purpose(KeysetPurpose purpose) {
+			Assert.notNull(purpose, "Keyset purpose can not be null");
+			this.purpose = purpose.name();
+			return this;
 		}
 
 		/**
-		 * Specify the name of the {@link Algorithm} that is used by the {@link Keyset}.
+		 * Specify the name of the {@link KeysetFactory} that manages this keyset.
 		 *
-		 * @param algorithm algorithm name, can't be {@literal null}
+		 * @param factory factory name, can't be {@literal null}
 		 * @return builder
 		 */
-		public Builder algorithm(String algorithm) {
-			this.algorithm = algorithm;
+		public Builder factory(String factory) {
+			this.factory = factory;
 			return this;
 		}
 
@@ -189,15 +217,13 @@ public class EncryptedKeyset implements InputStreamSource, Serializable {
 		}
 
 		/**
-		 * Specify the {@link KeyEncryptionKey} used to wrap and unwrap the {@link Keyset}. This method would
-		 * extract the identifier of the KEK as well as the {@link KeyEncryptionKeyProvider} name.
+		 * Specify the {@link KeyEncryptionKey} used to wrap and unwrap the {@link Keyset}.
 		 *
 		 * @param kek KEK, can't be {@literal null}
 		 * @return builder
 		 */
 		public Builder keyEncryptionKey(KeyEncryptionKey kek) {
 			Assert.notNull(kek, "Key Encryption Key can not be null");
-
 			return provider(kek.getProvider()).keyEncryptionKey(kek.getId());
 		}
 
@@ -214,53 +240,62 @@ public class EncryptedKeyset implements InputStreamSource, Serializable {
 		/**
 		 * Specify the rotation frequency of the {@link EncryptedKeyset}.
 		 *
-		 * @param rotationInterval rotation frequency, can't be {@literal null}
+		 * @param rotationInterval rotation frequency, can be {@literal null} to disable
 		 * @return builder
 		 */
-		public Builder rotationInterval(Duration rotationInterval) {
+		public Builder rotationInterval(@Nullable Duration rotationInterval) {
 			this.rotationInterval = rotationInterval;
 			return this;
 		}
 
 		/**
-		 * Specify the next rotation time of the {@link EncryptedKeyset}.
+		 * Specify the destruction grace period of the {@link EncryptedKeyset} in milliseconds.
 		 *
-		 * @param nextRotationTime next rotation time of the keyset, can't be {@literal null}
+		 * @param destructionGracePeriod destruction grace period, can be {@literal null} to disable
 		 * @return builder
 		 */
-		public Builder nextRotationTime(long nextRotationTime) {
-			return nextRotationTime(Instant.ofEpochMilli(nextRotationTime));
+		public Builder destructionGracePeriod(long destructionGracePeriod) {
+			return destructionGracePeriod(Duration.ofMillis(destructionGracePeriod));
 		}
 
 		/**
-		 * Specify the next rotation time of the {@link EncryptedKeyset}.
+		 * Specify the destruction grace period of the {@link EncryptedKeyset}.
 		 *
-		 * @param nextRotationTime next rotation time of the keyset, can't be {@literal null}
+		 * @param destructionGracePeriod destruction grace period, can be {@literal null} to disable
 		 * @return builder
 		 */
-		public Builder nextRotationTime(Instant nextRotationTime) {
-			this.nextRotationTime = nextRotationTime;
+		public Builder destructionGracePeriod(@Nullable Duration destructionGracePeriod) {
+			this.destructionGracePeriod = destructionGracePeriod;
 			return this;
 		}
 
 		/**
-		 * Creates a new instance of the {@link EncryptedKeyset} using the given {@link ByteArray} as the
-		 * encrypted key material from the {@link Keyset}.
+		 * Convenience overload that builds with a varargs array of {@link EncryptedKey keys}.
 		 *
-		 * @param data encrypted key material, cannot be {@literal null}
+		 * @param keys per-key encrypted material
+		 * @return encrypted keyset
+		 */
+		public EncryptedKeyset build(EncryptedKey... keys) {
+			return build(keys == null ? new ArrayList<>() : List.of(keys));
+		}
+
+		/**
+		 * Creates a new instance of the {@link EncryptedKeyset} with the given list of {@link EncryptedKey keys}.
+		 *
+		 * @param keys per-key encrypted material, cannot be {@literal null}
 		 * @return encrypted keyset
 		 * @throws IllegalArgumentException when required data to create encrypted keyset is not set
 		 */
-		public EncryptedKeyset build(ByteArray data) {
+		public EncryptedKeyset build(List<EncryptedKey> keys) {
 			Assert.hasText(name, "Keyset name can not be blank");
-			Assert.hasText(algorithm, "Keyset algorithm can not be blank");
+			Assert.hasText(purpose, "Keyset purpose can not be blank");
+			Assert.hasText(factory, "Keyset factory name can not be blank");
 			Assert.hasText(provider, "KEK provider name can not be blank");
 			Assert.hasText(kek, "KEK identifier can not be blank");
-			Assert.notNull(rotationInterval, "Keyset rotation interval can not be blank");
-			Assert.notNull(nextRotationTime, "Keyset next rotation time can not be blank");
-			Assert.notNull(data, "Encrypted key material can not be null");
+			Assert.notNull(keys, "Encrypted keys can not be null");
 
-			return new EncryptedKeyset(name, algorithm, provider, kek, data, rotationInterval, nextRotationTime);
+			return new EncryptedKeyset(name, purpose, factory, provider, kek,
+				List.copyOf(keys), rotationInterval, destructionGracePeriod);
 		}
 
 	}

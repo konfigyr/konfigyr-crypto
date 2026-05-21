@@ -1,6 +1,7 @@
 package com.konfigyr.crypto.jdbc;
 
 import com.konfigyr.crypto.*;
+import com.konfigyr.crypto.test.TestAlgorithm;
 import com.konfigyr.io.ByteArray;
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.DisplayName;
@@ -13,6 +14,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNoException;
@@ -21,8 +23,12 @@ import static org.assertj.core.api.Assertions.assertThatNoException;
 @SpringBootTest(classes = JdbcKeysetRepositoryTest.Config.class)
 class JdbcKeysetRepositoryTest {
 
-	private static final KeysetDefinition definition = KeysetDefinition.of("test", TestAlgorithm.ENCRYPTION,
-			Duration.ofDays(180), Instant.ofEpochMilli(System.currentTimeMillis()));
+	private static final KeysetDefinition definition = KeysetDefinition.builder()
+		.name("test")
+		.algorithm(TestAlgorithm.INSTANCE)
+		.rotationInterval(Duration.ofDays(180))
+		.destructionGracePeriod(Duration.ofDays(30))
+		.build();
 
 	@Autowired
 	KeysetRepository repository;
@@ -32,57 +38,76 @@ class JdbcKeysetRepositoryTest {
 	void shouldManageKeysets() throws IOException {
 		assertThat(repository.read(definition.getName())).isEmpty();
 
-		var keyset = EncryptedKeyset.builder(definition)
-			.provider("test-provider")
-			.keyEncryptionKey("test-kek")
-			.build(ByteArray.fromString("encrypted key material"));
+		final Instant t0 = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+
+		// --- initial write: one key ---
+		final EncryptedKey primaryKey = encryptedKey("key-1", true, t0, ByteArray.fromString("encrypted key material"));
+		final EncryptedKeyset keyset = encryptedKeyset(primaryKey);
 
 		assertThatNoException().isThrownBy(() -> repository.write(keyset));
-
 		assertThat(repository.read(definition.getName())).isNotEmpty().hasValue(keyset);
 
-		final var updated = EncryptedKeyset.builder(definition)
+		// --- update: rotate primary, keep key-1 unchanged, add key-2 ---
+		final Instant t1 = t0.plusSeconds(1);
+		final EncryptedKey demotedKey = encryptedKey("key-1", false, t0, ByteArray.fromString("encrypted key material"));
+		final EncryptedKey newPrimary = encryptedKey("key-2", true, t1, ByteArray.fromString("rotated key material"));
+
+		final EncryptedKeyset rotated = EncryptedKeyset.builder(definition)
 			.provider("test-provider")
 			.keyEncryptionKey("test-kek")
 			.rotationInterval(Duration.ofDays(90))
-			.build(ByteArray.fromString("updated key material"));
+			.build(demotedKey, newPrimary);
 
-		assertThatNoException().isThrownBy(() -> repository.write(updated));
+		assertThatNoException().isThrownBy(() -> repository.write(rotated));
+		assertThat(repository.read(definition.getName())).isNotEmpty().hasValue(rotated);
 
-		assertThat(repository.read(definition.getName())).isNotEmpty().hasValue(updated);
+		// --- second update: drop demoted key-1, leaving only key-2 — exercises single-key DELETE ---
+		final EncryptedKeyset pruned = EncryptedKeyset.builder(definition)
+			.provider("test-provider")
+			.keyEncryptionKey("test-kek")
+			.rotationInterval(Duration.ofDays(90))
+			.build(newPrimary);
 
-		assertThatNoException().isThrownBy(() -> repository.remove(updated.getName()));
+		assertThatNoException().isThrownBy(() -> repository.write(pruned));
+		assertThat(repository.read(definition.getName())).isNotEmpty().hasValue(pruned);
 
+		// --- third update: only metadata changes, key-2 identical — no key rows touched ---
+		final EncryptedKeyset metadataOnly = EncryptedKeyset.builder(definition)
+			.provider("test-provider")
+			.keyEncryptionKey("updated-kek")
+			.rotationInterval(Duration.ofDays(90))
+			.build(newPrimary);
+
+		assertThatNoException().isThrownBy(() -> repository.write(metadataOnly));
+		assertThat(repository.read(definition.getName())).isNotEmpty().hasValue(metadataOnly);
+
+		// --- remove ---
+		assertThatNoException().isThrownBy(() -> repository.remove(metadataOnly.getName()));
 		assertThat(repository.read(definition.getName())).isEmpty();
+	}
+
+	@NonNull
+	private static EncryptedKeyset encryptedKeyset(EncryptedKey... keys) {
+		return EncryptedKeyset.builder(definition)
+			.provider("test-provider")
+			.keyEncryptionKey("test-kek")
+			.build(keys);
+	}
+
+	@NonNull
+	private static EncryptedKey encryptedKey(String id, boolean primary, Instant createdAt, ByteArray data) {
+		return EncryptedKey.builder()
+			.id(id)
+			.algorithm(TestAlgorithm.INSTANCE.name())
+			.type(TestAlgorithm.INSTANCE.type())
+			.status(KeyStatus.ENABLED)
+			.primary(primary)
+			.createdAt(createdAt)
+			.build(data);
 	}
 
 	@SpringBootApplication
 	static class Config {
-
-	}
-
-	enum TestAlgorithm implements Algorithm {
-
-		ENCRYPTION(KeysetPurpose.ENCRYPTION),
-		SIGNING(KeysetPurpose.SIGNING);
-
-		private final KeysetPurpose purpose;
-
-		TestAlgorithm(KeysetPurpose purpose) {
-			this.purpose = purpose;
-		}
-
-		@NonNull
-		@Override
-		public KeysetPurpose purpose() {
-			return purpose;
-		}
-
-		@NonNull
-		@Override
-		public KeyType type() {
-			return KeyType.OCTET;
-		}
 
 	}
 

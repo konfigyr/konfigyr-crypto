@@ -18,7 +18,6 @@ import org.springframework.util.Assert;
 import java.time.Instant;
 import java.util.Date;
 import java.util.List;
-import java.util.UUID;
 import java.util.function.Supplier;
 
 /**
@@ -335,6 +334,11 @@ public final class JoseAlgorithm implements Algorithm {
 	}
 
 	@Override
+	public String factory() {
+		return JoseKeysetFactory.NAME;
+	}
+
+	@Override
 	public KeysetPurpose purpose() {
 		return purpose;
 	}
@@ -362,7 +366,6 @@ public final class JoseAlgorithm implements Algorithm {
 	@SuppressWarnings("unchecked")
 	public <T extends JWK> JWKGenerator<T> generator() {
 		return (JWKGenerator<T>) generator.get()
-			.keyID(UUID.randomUUID().toString())
 			.algorithm(algorithm)
 			.keyUse(JoseUtils.resolveKeyUse(purpose))
 			.keyOperations(JoseUtils.resolveKeyOperations(purpose))

@@ -1,7 +1,7 @@
 package com.konfigyr.crypto;
 
-import com.konfigyr.io.ByteArray;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -10,7 +10,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.cache.Cache;
 import org.springframework.cache.concurrent.ConcurrentMapCache;
 
-import java.time.Instant;
+import java.time.Duration;
+import java.util.List;
 import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.*;
@@ -34,6 +35,7 @@ class SpringKeysetCacheTest {
 	}
 
 	@Test
+	@DisplayName("should retrieve a cached keyset without invoking the supplier more than once")
 	void shouldRetrieveCachedKeysets() {
 		final var keyset = createEncryptedKeyset("test-keyset");
 		doReturn(keyset).when(supplier).get();
@@ -46,6 +48,7 @@ class SpringKeysetCacheTest {
 	}
 
 	@Test
+	@DisplayName("should store a keyset in the cache and evict it by key")
 	void shouldStoreKeysetInCacheAndEvict() {
 		final var keyset = createEncryptedKeyset("testing-keyset");
 
@@ -62,10 +65,12 @@ class SpringKeysetCacheTest {
 	}
 
 	@Test
+	@DisplayName("should throw when the supplier returns a null encrypted keyset")
 	void shouldNotStoreNullKeysets() {
-		assertThatThrownBy(() -> cache.get("cache-key", supplier)).isInstanceOf(IllegalStateException.class)
-			.hasNoCause()
-			.hasMessageContaining("Keyset cache detected a null encrypted keyset value for cache key 'cache-key'");
+		assertThatIllegalStateException()
+			.isThrownBy(() -> cache.get("cache-key", supplier))
+			.withNoCause()
+			.withMessageContaining("Keyset cache detected a null encrypted keyset value for cache key 'cache-key'");
 
 		verify(supplier).get();
 		verify(delegate).get(eq("cache-key"), eq(EncryptedKeyset.class));
@@ -74,12 +79,12 @@ class SpringKeysetCacheTest {
 	private static EncryptedKeyset createEncryptedKeyset(String name) {
 		return EncryptedKeyset.builder()
 			.name(name)
-			.algorithm("test-algorithm")
+			.purpose(KeysetPurpose.ENCRYPTION)
+			.factory("test-factory")
 			.provider("test-provider")
 			.keyEncryptionKey("test-kek")
-			.rotationInterval(60)
-			.nextRotationTime(Instant.now())
-			.build(ByteArray.fromString("encrypted material for " + name));
+			.rotationInterval(Duration.ofDays(90))
+			.build(List.of());
 	}
 
 }

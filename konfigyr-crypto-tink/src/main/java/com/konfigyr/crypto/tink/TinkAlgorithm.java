@@ -224,6 +224,11 @@ public final class TinkAlgorithm implements Algorithm {
 		return type;
 	}
 
+	@Override
+	public String factory() {
+		return TinkKeysetFactory.NAME;
+	}
+
 	KeyTemplate template() {
 		return template;
 	}
