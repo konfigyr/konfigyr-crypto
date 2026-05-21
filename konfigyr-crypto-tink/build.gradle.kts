@@ -7,4 +7,5 @@ dependencies {
     compileOnly(libs.tink)
 
     testImplementation(libs.tink)
+    testImplementation(project(":konfigyr-crypto-test"))
 }

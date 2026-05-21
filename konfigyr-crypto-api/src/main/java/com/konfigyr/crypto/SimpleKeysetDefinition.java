@@ -2,11 +2,12 @@ package com.konfigyr.crypto;
 
 import lombok.Value;
 import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 import java.io.Serial;
 import java.io.Serializable;
 import java.time.Duration;
-import java.time.Instant;
+import java.util.Optional;
 
 /**
  * Basic implementation of the {@link KeysetDefinition} that only contains the
@@ -24,8 +25,25 @@ class SimpleKeysetDefinition implements KeysetDefinition, Serializable {
 	private static final long serialVersionUID = 283753676517870624L;
 
 	String name;
+
+	KeysetPurpose purpose;
+
 	Algorithm algorithm;
+
+	@Nullable
 	Duration rotationInterval;
-	Instant nextRotationTime;
+
+	@Nullable
+	Duration destructionGracePeriod;
+
+	@Override
+	public Optional<@Nullable Duration> getRotationInterval() {
+		return Optional.ofNullable(rotationInterval);
+	}
+
+	@Override
+	public Optional<@Nullable Duration> getDestructionGracePeriod() {
+		return Optional.ofNullable(destructionGracePeriod);
+	}
 
 }

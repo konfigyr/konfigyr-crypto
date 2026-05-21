@@ -1,14 +1,10 @@
 package com.konfigyr.crypto.tink;
 
-import com.google.crypto.tink.KeysetHandle;
 import com.konfigyr.crypto.*;
+import com.konfigyr.crypto.test.KeysetAssert;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-
-import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -29,16 +25,16 @@ public class TinkIntegrationTest {
 			.get()
 			.satisfies(provider -> assertThat(provider.provide("random-kek")).isNotNull())
 			.satisfies(provider -> assertThat(provider.provide("aes-kek")).isNotNull())
-			.satisfies(provider -> assertThatThrownBy(() -> provider.provide("missing"))
-				.isInstanceOf(CryptoException.KeyEncryptionKeyNotFoundException.class));
+			.satisfies(provider -> assertThatExceptionOfType(CryptoException.KeyEncryptionKeyNotFoundException.class)
+				.isThrownBy(() -> provider.provide("missing")));
 
 		assertThat(store.provider("kms-provider")).isPresent()
 			.get()
 			.satisfies(provider -> assertThat(provider.provide(TinkIntegrationConfiguration.KMS_KEY_URI)).isNotNull())
 			.satisfies(provider -> assertThat(provider.provide(TinkIntegrationConfiguration.ENVELOPE_KMS_KEY_URI))
 				.isNotNull())
-			.satisfies(provider -> assertThatThrownBy(() -> provider.provide("missing"))
-				.isInstanceOf(CryptoException.KeyEncryptionKeyNotFoundException.class));
+			.satisfies(provider -> assertThatExceptionOfType(CryptoException.KeyEncryptionKeyNotFoundException.class)
+				.isThrownBy(() -> provider.provide("missing")));
 
 		assertThat(store.provider("unknown-provider")).isEmpty();
 	}
@@ -49,52 +45,46 @@ public class TinkIntegrationTest {
 	void shouldRetrieveKeyEncryptionKeys() {
 		assertThat(store.kek("aes-provider", "random-kek")).isNotNull();
 		assertThat(store.kek("aes-provider", "aes-kek")).isNotNull();
-		assertThatThrownBy(() -> store.kek("aes-provider", "missing"))
-			.isInstanceOf(CryptoException.KeyEncryptionKeyNotFoundException.class)
-			.extracting("provider", "id")
-			.isEqualTo(List.of("aes-provider", "missing"));
+		assertThatExceptionOfType(CryptoException.KeyEncryptionKeyNotFoundException.class)
+			.isThrownBy(() -> store.kek("aes-provider", "missing"))
+			.returns("aes-provider", CryptoException.ProviderException::getProvider)
+			.returns("missing", CryptoException.KeyEncryptionKeyNotFoundException::getId);
 
 		assertThat(store.kek("kms-provider", TinkIntegrationConfiguration.KMS_KEY_URI)).isNotNull();
 		assertThat(store.kek("kms-provider", TinkIntegrationConfiguration.ENVELOPE_KMS_KEY_URI)).isNotNull();
-		assertThatThrownBy(() -> store.kek("kms-provider", "missing"))
-			.isInstanceOf(CryptoException.KeyEncryptionKeyNotFoundException.class)
-			.extracting("provider", "id")
-			.isEqualTo(List.of("kms-provider", "missing"));
+		assertThatExceptionOfType(CryptoException.KeyEncryptionKeyNotFoundException.class)
+			.isThrownBy(() -> store.kek("kms-provider", "missing"))
+			.returns("kms-provider", CryptoException.ProviderException::getProvider)
+			.returns("missing", CryptoException.KeyEncryptionKeyNotFoundException::getId);
 
-		assertThatThrownBy(() -> store.kek("unknown-provider", "random-kek"))
-			.isInstanceOf(CryptoException.ProviderNotFoundException.class)
-			.extracting("provider")
-			.isEqualTo("unknown-provider");
+		assertThatExceptionOfType(CryptoException.ProviderNotFoundException.class)
+			.isThrownBy(() -> store.kek("unknown-provider", "random-kek"))
+			.returns("unknown-provider", CryptoException.ProviderException::getProvider);
 	}
 
 	@Test
 	@Order(2)
 	@DisplayName("should generate keyset using supported Tink algorithm")
 	void shouldGenerateKeyset() {
-		assertThatObject(store.create("aes-provider", "aes-kek", definition)).isInstanceOf(TinkKeyset.class)
-			.returns(definition.getName(), Keyset::getName)
-			.returns(definition.getAlgorithm(), Keyset::getAlgorithm)
-			.returns(store.kek("aes-provider", "aes-kek"), Keyset::getKeyEncryptionKey)
-			.returns(definition.getRotationInterval(), Keyset::getRotationInterval)
-			.returns(definition.getNextRotationTime(), Keyset::getNextRotationTime)
-			.satisfies(it -> assertThat(it.getKeys()).isNotNull()
-				.hasSize(1)
-				.extracting(Key::getType, Key::getStatus, Key::isPrimary)
-				.containsExactly(tuple(KeyType.OCTET, KeyStatus.ENABLED, true)));
+		KeysetAssert.assertThat(store.create("aes-provider", "aes-kek", definition))
+			.isInstanceOf(TinkKeyset.class)
+			.matchesDefinition(definition)
+			.hasKeyEncryptionKey("aes-provider", "aes-kek")
+			.assertThatKeys()
+			.hasSize(1)
+			.extracting(Key::getType, Key::getStatus, Key::isPrimary)
+			.containsExactly(tuple(KeyType.OCTET, KeyStatus.ENABLED, true));
 	}
 
 	@Test
 	@Order(3)
-	@DisplayName("should wrap and write keyset in the repository")
-	void shouldWriteKeyset() throws Exception {
-		final var handle = KeysetHandle.generateNew(TinkAlgorithm.ED25519.template());
+	@DisplayName("should wrap and write keyset with a signing algorithm in the repository")
+	void shouldWriteKeyset() {
+		final var definition = KeysetDefinition.of("signing-keyset", TinkAlgorithm.ED25519);
 
-		final var keyset = TinkKeyset.builder(handle)
-			.name("singing-key")
-			.algorithm(TinkAlgorithm.ED25519)
+		final var keyset = new TinkKeyset.Builder(definition)
 			.keyEncryptionKey(store.kek("kms-provider", TinkIntegrationConfiguration.KMS_KEY_URI))
-			.rotationInterval(Duration.ofDays(180))
-			.nextRotationTime(Instant.now().plus(Duration.ofDays(180)))
+			.key(TinkKey.generate(KeyDefinition.of(definition), TinkUtils.generateKeyId()))
 			.build();
 
 		assertThatNoException().isThrownBy(() -> store.write(keyset));
@@ -104,19 +94,15 @@ public class TinkIntegrationTest {
 	@Order(4)
 	@DisplayName("should read and unwrap keyset from the repository")
 	void shouldReadKeyset() {
-		final var kek = store.kek("aes-provider", "aes-kek");
-
-		assertThatObject(store.read(definition.getName())).isNotNull()
+		KeysetAssert.assertThat(store.read(definition.getName()))
+			.isNotNull()
 			.isInstanceOf(TinkKeyset.class)
-			.returns(definition.getName(), Keyset::getName)
-			.returns(definition.getAlgorithm(), Keyset::getAlgorithm)
-			.returns(kek, Keyset::getKeyEncryptionKey)
-			.returns(definition.getRotationInterval(), Keyset::getRotationInterval)
-			.returns(definition.getNextRotationTime(), Keyset::getNextRotationTime)
-			.satisfies(it -> assertThat(it.stream()).isNotNull()
-				.hasSize(1)
-				.extracting(Key::getType, Key::getStatus, Key::isPrimary)
-				.containsExactly(tuple(KeyType.OCTET, KeyStatus.ENABLED, true)));
+			.matchesDefinition(definition)
+			.hasKeyEncryptionKey("aes-provider", "aes-kek")
+			.assertThatKeys()
+			.hasSize(1)
+			.extracting(Key::getType, Key::getStatus, Key::isPrimary)
+			.containsExactly(tuple(KeyType.OCTET, KeyStatus.ENABLED, true));
 	}
 
 	@Test
@@ -125,13 +111,12 @@ public class TinkIntegrationTest {
 	void shouldReadCustomKeyset() {
 		final var kek = store.kek("kms-provider", TinkIntegrationConfiguration.KMS_KEY_URI);
 
-		assertThatObject(store.read("singing-key")).isNotNull()
+		KeysetAssert.assertThat(store.read("signing-keyset")).isNotNull()
 			.isInstanceOf(TinkKeyset.class)
-			.returns("singing-key", Keyset::getName)
-			.returns(TinkAlgorithm.ED25519, Keyset::getAlgorithm)
-			.returns(kek, Keyset::getKeyEncryptionKey)
-			.returns(Duration.ofDays(180), Keyset::getRotationInterval)
-			.returns(1, Keyset::size);
+			.hasName("signing-keyset")
+			.hasPurpose(KeysetPurpose.SIGNING)
+			.hasKeyEncryptionKey(kek)
+			.hasSize(1);
 	}
 
 	@Test
@@ -140,18 +125,19 @@ public class TinkIntegrationTest {
 	void shouldRotateKeyset() {
 		final var keyset = store.read(definition.getName());
 
-		assertThatObject(keyset).returns(1, Keyset::size)
-			.extracting("handle")
-			.extracting(KeysetHandle.class::cast)
-			.returns(1, KeysetHandle::size);
+		KeysetAssert.assertThat(keyset)
+			.hasSize(1);
 
-		assertThatNoException().isThrownBy(() -> store.rotate(definition.getName()));
+		assertThatNoException()
+			.isThrownBy(() -> store.rotate(definition.getName()));
 
-		assertThatObject(store.read(definition.getName())).isNotEqualTo(keyset)
-			.returns(2, Keyset::size)
-			.extracting("handle")
-			.extracting(KeysetHandle.class::cast)
-			.returns(2, KeysetHandle::size);
+		KeysetAssert.assertThat(store.read(definition.getName()))
+			.isNotEqualTo(keyset)
+			.hasSize(2)
+			.assertThatKeys()
+			.filteredOn(Key::isPrimary)
+			.map(Key::getId)
+			.isNotEqualTo(keyset.getPrimary().getId());
 	}
 
 	@Test

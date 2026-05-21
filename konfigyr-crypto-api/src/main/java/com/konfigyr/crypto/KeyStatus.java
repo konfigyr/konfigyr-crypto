@@ -1,7 +1,16 @@
 package com.konfigyr.crypto;
 
 /**
- * Defines in which status the {@link Key} can be in.
+ * Defines the lifecycle status of a {@link Key}.
+ * <p>
+ * Keys transition through statuses over their lifetime. Only {@link #ENABLED} keys
+ * participate in cryptographic operations. The full lifecycle is:
+ * <pre>
+ * INITIALIZING ──► ENABLED ──► COMPROMISED
+ *       │                  └──► DISABLED ──► PENDING_DESTRUCTION ──► DESTROYED
+ *       │                                                         └──► DESTRUCTION_FAILED
+ *       └──► INITIALIZATION_FAILED
+ * </pre>
  *
  * @author : Vladimir Spasic
  * @since : 04.09.23, Mon
@@ -9,24 +18,52 @@ package com.konfigyr.crypto;
 public enum KeyStatus {
 
 	/**
-	 * Unknown key status, usually returned by implementations of the {@link Key} that do
-	 * not track status of the key material.
+	 * Key material is being generated. The key is not yet usable. No cryptographic
+	 * operations are permitted.
 	 */
-	UNKNOWN,
+	INITIALIZING,
+
 	/**
-	 * When in this status, {@link Key} can be used perform all crypto operations.
+	 * Key is active and may perform all cryptographic operations permitted by its
+	 * {@link Algorithm}.
 	 */
 	ENABLED,
+
 	/**
-	 * {@link Key keys} in this status should not perform any crypto operations.
-	 * Implementations should support re-enabling or destroying of such keys.
+	 * Key material is suspected or confirmed to have been compromised. All cryptographic
+	 * operations are hard-blocked regardless of primary status.
+	 */
+	COMPROMISED,
+
+	/**
+	 * Key has been administratively disabled. No cryptographic operations are permitted.
+	 * The key may be re-enabled or scheduled for destruction.
 	 */
 	DISABLED,
+
 	/**
-	 * Marks the {@link Key} as destroyed and should not be used to perform any crypto
-	 * operations. It is advisable that key material of such keys is also removed from the
-	 * repository after a certain period.
+	 * Destruction has been scheduled; the key is in its grace period. No cryptographic
+	 * operations are permitted. The transition to {@link #DESTROYED} happens after the
+	 * {@link Keyset#getDestructionGracePeriod() destruction grace period} elapses.
 	 */
-	DESTROYED
+	PENDING_DESTRUCTION,
+
+	/**
+	 * Key material has been permanently erased. No cryptographic operations are permitted
+	 * and the key can no longer be recovered.
+	 */
+	DESTROYED,
+
+	/**
+	 * Key generation failed during {@link #INITIALIZING}. No cryptographic operations are
+	 * permitted. This is a terminal status.
+	 */
+	INITIALIZATION_FAILED,
+
+	/**
+	 * An attempt to destroy the key material failed. No cryptographic operations are
+	 * permitted. Manual intervention is required to complete destruction.
+	 */
+	DESTRUCTION_FAILED
 
 }

@@ -1,13 +1,12 @@
 package com.konfigyr.crypto.jose;
 
 import com.konfigyr.crypto.*;
+import com.konfigyr.crypto.test.KeysetAssert;
 import com.nimbusds.jose.jwk.gen.OctetSequenceKeyGenerator;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
-import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 
 import static com.konfigyr.crypto.jose.JoseIntegrationConfiguration.KEK_IDENTIFIER;
@@ -43,19 +42,19 @@ public class JoseIntegrationTest {
 	void shouldGenerateSigningKeyset() {
 		final var kek = store.kek(KEK_PROVIDER, KEK_IDENTIFIER);
 
-		assertThatObject(store.create(kek, jwsDefinition))
+		KeysetAssert.assertThat(store.create(kek, jwsDefinition))
 			.isInstanceOf(JsonWebKeyset.class)
-			.returns(jwsDefinition.getName(), Keyset::getName)
-			.returns(jwsDefinition.getAlgorithm(), Keyset::getAlgorithm)
-			.returns(kek, Keyset::getKeyEncryptionKey)
-			.returns(jwsDefinition.getRotationInterval(), Keyset::getRotationInterval)
-			.returns(jwsDefinition.getNextRotationTime(), Keyset::getNextRotationTime)
-			.satisfies(it -> assertThat(it.getKeys())
-				.isNotNull()
-				.hasSize(1)
-				.extracting(Key::getType, Key::getStatus, Key::isPrimary)
-				.containsExactly(tuple(KeyType.RSA, KeyStatus.ENABLED, true))
-			);
+			.hasName(jwsDefinition.getName())
+			.hasPurpose(jwsDefinition.getPurpose())
+			.createdByFactory(JoseKeysetFactory.NAME)
+			.hasKeyEncryptionKey(kek)
+			.hasRotationInterval(jwsDefinition.getRotationInterval().orElse(null))
+			.hasDestructionGracePeriod(jwsDefinition.getDestructionGracePeriod().orElse(null))
+			.assertThatKeys()
+			.isNotNull()
+			.hasSize(1)
+			.extracting(Key::getAlgorithm, Key::getStatus, Key::isPrimary)
+			.containsExactly(tuple(JoseAlgorithm.PS256, KeyStatus.ENABLED, true));
 	}
 
 	@Test
@@ -64,19 +63,19 @@ public class JoseIntegrationTest {
 	void shouldGenerateEncryptingKeyset() {
 		final var kek = store.kek(KEK_PROVIDER, KEK_IDENTIFIER);
 
-		assertThatObject(store.create(kek, jweDefinition))
+		KeysetAssert.assertThat(store.create(kek, jweDefinition))
 			.isInstanceOf(JsonWebKeyset.class)
-			.returns(jweDefinition.getName(), Keyset::getName)
-			.returns(jweDefinition.getAlgorithm(), Keyset::getAlgorithm)
-			.returns(kek, Keyset::getKeyEncryptionKey)
-			.returns(jweDefinition.getRotationInterval(), Keyset::getRotationInterval)
-			.returns(jweDefinition.getNextRotationTime(), Keyset::getNextRotationTime)
-			.satisfies(it -> assertThat(it.getKeys())
-				.isNotNull()
-				.hasSize(1)
-				.extracting(Key::getType, Key::getStatus, Key::isPrimary)
-				.containsExactly(tuple(KeyType.OCTET, KeyStatus.ENABLED, true))
-			);
+			.hasName(jweDefinition.getName())
+			.hasPurpose(jweDefinition.getPurpose())
+			.createdByFactory(JoseKeysetFactory.NAME)
+			.hasKeyEncryptionKey(kek)
+			.hasRotationInterval(jweDefinition.getRotationInterval().orElse(null))
+			.hasDestructionGracePeriod(jweDefinition.getDestructionGracePeriod().orElse(null))
+			.assertThatKeys()
+			.isNotNull()
+			.hasSize(1)
+			.extracting(Key::getAlgorithm, Key::getStatus, Key::isPrimary)
+			.containsExactly(tuple(JoseAlgorithm.A128KW, KeyStatus.ENABLED, true));
 	}
 
 	@Test
@@ -87,14 +86,17 @@ public class JoseIntegrationTest {
 			.keyID("test-id")
 			.generate();
 
-		final var primary = new JsonWebKey(jwk, KeyStatus.ENABLED, true);
-
-		final var keyset = JsonWebKeyset.builder(List.of(primary))
-			.name("simple-keyset")
+		final var primary = new JsonWebKey.Builder(jwk)
+			.id("test-key")
 			.algorithm(JoseAlgorithm.A128KW)
+			.primary()
+			.status(KeyStatus.ENABLED)
+			.build();
+
+		final var keyset = new JsonWebKeyset.Builder(List.of(primary))
+			.name("simple-keyset")
+			.purpose(JoseAlgorithm.A128KW.purpose())
 			.keyEncryptionKey(store.kek(KEK_PROVIDER, KEK_IDENTIFIER))
-			.rotationInterval(Duration.ofDays(180))
-			.nextRotationTime(Instant.now().plus(Duration.ofDays(180)))
 			.build();
 
 		assertThatNoException().isThrownBy(() -> store.write(keyset));
@@ -109,19 +111,19 @@ public class JoseIntegrationTest {
 	void shouldReadSigningKeyset() {
 		final var kek = store.kek(KEK_PROVIDER, KEK_IDENTIFIER);
 
-		assertThatObject(store.read(jwsDefinition.getName()))
+		KeysetAssert.assertThat(store.read(jwsDefinition.getName()))
 			.isInstanceOf(JsonWebKeyset.class)
-			.returns(jwsDefinition.getName(), Keyset::getName)
-			.returns(jwsDefinition.getAlgorithm(), Keyset::getAlgorithm)
-			.returns(kek, Keyset::getKeyEncryptionKey)
-			.returns(jwsDefinition.getRotationInterval(), Keyset::getRotationInterval)
-			.returns(jwsDefinition.getNextRotationTime(), Keyset::getNextRotationTime)
-			.satisfies(it -> assertThat(it.getKeys())
-				.isNotNull()
-				.hasSize(1)
-				.extracting(Key::getType, Key::getStatus, Key::isPrimary)
-				.containsExactly(tuple(KeyType.RSA, KeyStatus.ENABLED, true))
-			);
+			.hasName(jwsDefinition.getName())
+			.hasPurpose(jwsDefinition.getPurpose())
+			.createdByFactory(JoseKeysetFactory.NAME)
+			.hasKeyEncryptionKey(kek)
+			.hasRotationInterval(jwsDefinition.getRotationInterval().orElse(null))
+			.hasDestructionGracePeriod(jwsDefinition.getDestructionGracePeriod().orElse(null))
+			.assertThatKeys()
+			.isNotNull()
+			.hasSize(1)
+			.extracting(Key::getAlgorithm, Key::getStatus, Key::isPrimary)
+			.containsExactly(tuple(JoseAlgorithm.PS256, KeyStatus.ENABLED, true));
 	}
 
 	@Test
@@ -130,19 +132,19 @@ public class JoseIntegrationTest {
 	void shouldReadEncryptingKeyset() {
 		final var kek = store.kek(KEK_PROVIDER, KEK_IDENTIFIER);
 
-		assertThatObject(store.read(jweDefinition.getName()))
+		KeysetAssert.assertThat(store.read(jweDefinition.getName()))
 			.isInstanceOf(JsonWebKeyset.class)
-			.returns(jweDefinition.getName(), Keyset::getName)
-			.returns(jweDefinition.getAlgorithm(), Keyset::getAlgorithm)
-			.returns(kek, Keyset::getKeyEncryptionKey)
-			.returns(jweDefinition.getRotationInterval(), Keyset::getRotationInterval)
-			.returns(jweDefinition.getNextRotationTime(), Keyset::getNextRotationTime)
-			.satisfies(it -> assertThat(it.getKeys())
-				.isNotNull()
-				.hasSize(1)
-				.extracting(Key::getType, Key::getStatus, Key::isPrimary)
-				.containsExactly(tuple(KeyType.OCTET, KeyStatus.ENABLED, true))
-			);
+			.hasName(jweDefinition.getName())
+			.hasPurpose(jweDefinition.getPurpose())
+			.createdByFactory(JoseKeysetFactory.NAME)
+			.hasKeyEncryptionKey(kek)
+			.hasRotationInterval(jweDefinition.getRotationInterval().orElse(null))
+			.hasDestructionGracePeriod(jweDefinition.getDestructionGracePeriod().orElse(null))
+			.assertThatKeys()
+			.isNotNull()
+			.hasSize(1)
+			.extracting(Key::getAlgorithm, Key::getStatus, Key::isPrimary)
+			.containsExactly(tuple(JoseAlgorithm.A128KW, KeyStatus.ENABLED, true));
 	}
 
 	@Test

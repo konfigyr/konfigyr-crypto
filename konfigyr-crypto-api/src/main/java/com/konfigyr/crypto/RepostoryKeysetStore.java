@@ -97,14 +97,28 @@ public class RepostoryKeysetStore implements KeysetStore {
 	@Override
 	public void rotate(String name) {
 		final EncryptedKeyset encryptedKeyset = lookupKeyset(name);
-		final KeysetFactory factory = lookupFactory(encryptedKeyset);
 
-		rotate(factory, read(factory, encryptedKeyset));
+		rotate(read(lookupFactory(encryptedKeyset), encryptedKeyset));
 	}
 
 	@Override
 	public void rotate(Keyset keyset) {
 		rotate(lookupFactory(keyset), keyset);
+	}
+
+	@Override
+	public void rotate(String name, KeyDefinition definition) {
+		final EncryptedKeyset encryptedKeyset = lookupKeyset(name);
+
+		rotate(read(lookupFactory(encryptedKeyset), encryptedKeyset), definition);
+	}
+
+	@Override
+	public void rotate(Keyset keyset, KeyDefinition definition) {
+		if (keyset.getPurpose() != definition.getAlgorithm().purpose()) {
+			throw new CryptoException.UnsupportedAlgorithmException(definition.getAlgorithm());
+		}
+		rotate(lookupFactory(keyset), keyset, definition);
 	}
 
 	@Override
@@ -181,6 +195,19 @@ public class RepostoryKeysetStore implements KeysetStore {
 			.filter(it -> it.supports(encryptedKeyset))
 			.findFirst()
 			.orElseThrow(() -> new UnsupportedKeysetException(encryptedKeyset));
+	}
+
+	/**
+	 * Attempts to resolve the {@link KeysetFactory} that supports this {@link Keyset}.
+	 * @param keyset keyset for which the factory is looked up, can't be {@literal null}
+	 * @return supported keyset factory
+	 * @throws UnsupportedKeysetException when no factory supports the keyset
+	 */
+	protected KeysetFactory lookupFactory(Keyset keyset) {
+		return factories.stream()
+			.filter(it -> Objects.equals(it.getName(), keyset.getFactory()))
+			.findFirst()
+			.orElseThrow(() -> new UnsupportedKeysetException(keyset));
 	}
 
 	/**
@@ -286,8 +313,29 @@ public class RepostoryKeysetStore implements KeysetStore {
 		write(factory, rotated);
 
 		if (logger.isDebugEnabled()) {
-			logger.debug("Keyset '{}' has been successfully rotated, next rotation time is scheduled at: {}",
-					rotated.getName(), rotated.getNextRotationTime());
+			logger.debug("Keyset '{}' has been successfully rotated.", rotated.getName());
+		}
+	}
+
+	/**
+	 * Attempts to rotate the key material of the given {@link Keyset} using the provided
+	 * {@link KeyDefinition} and writes the result to the {@link KeysetRepository} using
+	 * the responsible {@link KeysetFactory}.
+	 * @param factory    factory used to encrypt the keyset, can't be {@literal null}
+	 * @param keyset     keyset to be rotated, can't be {@literal null}
+	 * @param definition parameters for the new key, can't be {@literal null}
+	 */
+	protected void rotate(KeysetFactory factory, Keyset keyset, KeyDefinition definition) {
+		if (logger.isDebugEnabled()) {
+			logger.debug("Attempting to rotate keyset '{}' with definition: {}", keyset.getName(), definition);
+		}
+
+		final Keyset rotated = keyset.rotate(definition);
+
+		write(factory, rotated);
+
+		if (logger.isDebugEnabled()) {
+			logger.debug("Keyset '{}' has been successfully rotated.", rotated.getName());
 		}
 	}
 

@@ -1,44 +1,91 @@
 package com.konfigyr.crypto.tink;
 
-import com.google.crypto.tink.proto.KeyStatusType;
-import com.google.crypto.tink.proto.KeysetInfo;
-import com.konfigyr.crypto.Key;
+import com.google.crypto.tink.Key;
+import com.google.crypto.tink.Parameters;
+import com.google.crypto.tink.internal.MutableKeyCreationRegistry;
+import com.konfigyr.crypto.AbstractKey;
+import com.konfigyr.crypto.CryptoException;
+import com.konfigyr.crypto.KeyDefinition;
 import com.konfigyr.crypto.KeyStatus;
-import com.konfigyr.crypto.KeyType;
-import lombok.Value;
+import lombok.Getter;
 import org.jspecify.annotations.NullMarked;
 
+import java.security.GeneralSecurityException;
+
 /**
- * Implementation of the {@link Key} that contains public key information obtained from
+ * Implementation of the {@link com.google.crypto.tink.Key} that contains public key information obtained from
  * the Tink {@link com.google.crypto.tink.proto.KeysetInfo.KeyInfo} type.
  *
  * @author : Vladimir Spasic
  * @since : 05.09.23, Tue
  **/
-@Value
+@Getter
 @NullMarked
-class TinkKey implements Key {
+class TinkKey extends AbstractKey<TinkAlgorithm> {
 
-	String id;
+	private final com.google.crypto.tink.Key value;
 
-	KeyType type;
-
-	KeyStatus status;
-
-	boolean primary;
-
-	static TinkKey from(KeyType type, KeysetInfo keyset, KeysetInfo.KeyInfo key) {
-		return new TinkKey(String.valueOf(key.getKeyId()), type, toKeyStatus(key.getStatus()),
-				keyset.getPrimaryKeyId() == key.getKeyId());
+	/**
+	 * Internal constructor used by the {@link AbstractKey} implementations to create the {@link Key} instances.
+	 *
+	 * @param builder the builder instance used to create the {@link Key} instance.
+	 */
+	private TinkKey(Builder builder) {
+		super(builder);
+		this.value = builder.value;
 	}
 
-	private static KeyStatus toKeyStatus(KeyStatusType type) {
-		return switch (type) {
-			case ENABLED -> KeyStatus.ENABLED;
-			case DISABLED -> KeyStatus.DISABLED;
-			case DESTROYED -> KeyStatus.DESTROYED;
-			default -> KeyStatus.UNKNOWN;
-		};
+	static TinkKey generate(KeyDefinition definition, String id) {
+		if (!(definition.getAlgorithm() instanceof TinkAlgorithm tinkAlgorithm)) {
+			throw new CryptoException.UnsupportedAlgorithmException(definition.getAlgorithm());
+		}
+
+		final Key value;
+
+		try {
+			final Parameters parameters = tinkAlgorithm.template().toParameters();
+
+			value = MutableKeyCreationRegistry.globalInstance()
+				.createKey(parameters, Integer.parseInt(id));
+		} catch (GeneralSecurityException ex) {
+			throw new CryptoException.KeysetException(
+				definition.getAlgorithm().name(), "Failed to create Tink Key with id '" + id + "'", ex);
+		}
+
+		return new Builder(definition, value)
+			.id(id)
+			.status(KeyStatus.ENABLED)
+			.build();
 	}
 
+	static class Builder extends AbstractKey.Builder<TinkAlgorithm, TinkKey, Builder> {
+
+		private final Key value;
+
+		Builder(Key value) {
+			super();
+			this.value = value;
+			this.initializedAt = this.createdAt;
+		}
+
+		Builder(TinkKey key) {
+			this(key, key.value);
+		}
+
+		Builder(KeyDefinition definition, Key value) {
+			super(definition);
+			this.value = value;
+			this.initializedAt = this.createdAt;
+		}
+
+		Builder(TinkKey key, Key value) {
+			super(key);
+			this.value = value;
+		}
+
+		@Override
+		public TinkKey build() {
+			return new TinkKey(this);
+		}
+	}
 }

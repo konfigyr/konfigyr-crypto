@@ -168,7 +168,26 @@ public interface KeysetStore {
 	 *
 	 * @param keyset keyset name to be rotated, can't be {@literal null}
 	 */
-	void rotate(String keyset);
+	default void rotate(String keyset) {
+		rotate(read(keyset));
+	}
+
+	/**
+	 * Performs a rotation of the named {@link Keyset} using the given {@link KeyDefinition}
+	 * to control the algorithm and expiry interval of the new key.
+	 * <p>
+	 * The definition's {@link Algorithm#purpose()} must match the stored keyset's
+	 * {@link Keyset#getPurpose()}. The store validates this before invoking the keyset.
+	 *
+	 * @param keyset     keyset name to be rotated, can't be {@literal null}
+	 * @param definition parameters for the new key, can't be {@literal null}
+	 * @throws CryptoException.KeysetNotFoundException when no keyset exists with the given name
+	 * @throws CryptoException.UnsupportedAlgorithmException when the definition's algorithm
+	 *         purpose does not match the keyset's purpose
+	 */
+	default void rotate(String keyset, KeyDefinition definition) {
+		rotate(read(keyset), definition);
+	}
 
 	/**
 	 * Performs a rotation of a {@link Keyset} where a new primary key is replaced by a newly generated one.
@@ -176,6 +195,20 @@ public interface KeysetStore {
 	 * @param keyset keyset to be rotated, can't be {@literal null}
 	 */
 	void rotate(Keyset keyset);
+
+	/**
+	 * Performs a rotation of the given {@link Keyset} using the given {@link KeyDefinition}
+	 * to control the algorithm and expiry interval of the new key.
+	 * <p>
+	 * The definition's {@link Algorithm#purpose()} must match the keyset's
+	 * {@link Keyset#getPurpose()}. The store validates this before invoking the keyset.
+	 *
+	 * @param keyset     keyset to be rotated, can't be {@literal null}
+	 * @param definition parameters for the new key, can't be {@literal null}
+	 * @throws CryptoException.UnsupportedAlgorithmException when the definition's algorithm
+	 *         purpose does not match the keyset's purpose
+	 */
+	void rotate(Keyset keyset, KeyDefinition definition);
 
 	/**
 	 * Deletes the {@link Keyset} by the matching key name from the store.

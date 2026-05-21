@@ -4,6 +4,7 @@ import com.konfigyr.io.ByteArray;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
+import java.time.Duration;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
@@ -46,17 +47,51 @@ import java.util.stream.Stream;
  * @see KeysetFactory
  **/
 @NullMarked
-public interface Keyset extends KeysetDefinition, Iterable<Key> {
+public interface Keyset extends Iterable<Key> {
 
 	/**
+	 * Name that uniquely identifies the {@link Keyset}.
+	 *
+	 * @return keyset name, never {@literal null}.
+	 */
+	String getName();
+
+	/**
+	 * The name of the {@link KeysetFactory} that is responsible for creating the {@link Keyset} and it's
+	 * underlying {@link Key keys}.
+	 *
+	 * @return keyset factory name, never {@literal null}.
+	 */
+	String getFactory();
+
+	/**
+	 * The purpose of the key material that describes the cryptographic capabilities of this {@link Keyset}.
+	 *
+	 * @return the purpose for this {@link Keyset}, never {@literal null}.
+	 * @see KeysetPurpose
+	 */
+	KeysetPurpose getPurpose();
+
+	/**
+	 * Retrieves the {@link KeyEncryptionKey} that is used to encrypt the {@link Keyset} metadata.
+	 *
 	 * @return key encryption key, or {@code KEK} that generated this keyset, never {@literal null}.
 	 */
 	KeyEncryptionKey getKeyEncryptionKey();
 
 	/**
+	 * Retrieves all {@link Key keys} contained within this {@link Keyset}.
+	 *
 	 * @return collection of {@link Key keys} contained within this {@link Keyset}, never {@literal null}.
 	 */
-	List<Key> getKeys();
+	List<? extends Key> getKeys();
+
+	/**
+	 * Retrieves the primary {@link Key} from this {@link Keyset}.
+	 *
+	 * @return primary key, never {@literal null}.
+	 */
+	Key getPrimary();
 
 	/**
 	 * Retrieves a single {@link Key} by its identifier from this {@link Keyset}.
@@ -64,7 +99,7 @@ public interface Keyset extends KeysetDefinition, Iterable<Key> {
 	 * @param id key identifier, can't be {@literal null}
 	 * @return matching key or an empty {@link Optional}
 	 */
-	default Optional<Key> getKey(String id) {
+	default Optional<? extends Key> getKey(String id) {
 		return getKeys().stream().filter(key -> id.equals(key.getId())).findFirst();
 	}
 
@@ -94,7 +129,7 @@ public interface Keyset extends KeysetDefinition, Iterable<Key> {
 	 */
 	default ByteArray encrypt(ByteArray data, @Nullable ByteArray context) {
 		throw new CryptoException.UnsupportedKeysetOperationException(
-				getName(), KeysetOperation.ENCRYPT, getAlgorithm().operations());
+				getName(), KeysetOperation.ENCRYPT, getPurpose().operations());
 	}
 
 	/**
@@ -123,7 +158,7 @@ public interface Keyset extends KeysetDefinition, Iterable<Key> {
 	 */
 	default ByteArray decrypt(ByteArray cipher, @Nullable ByteArray context) {
 		throw new CryptoException.UnsupportedKeysetOperationException(
-				getName(), KeysetOperation.DECRYPT, getAlgorithm().operations());
+				getName(), KeysetOperation.DECRYPT, getPurpose().operations());
 	}
 
 	/**
@@ -137,7 +172,7 @@ public interface Keyset extends KeysetDefinition, Iterable<Key> {
 	 */
 	default ByteArray sign(ByteArray data) {
 		throw new CryptoException.UnsupportedKeysetOperationException(
-				getName(), KeysetOperation.SIGN, getAlgorithm().operations());
+				getName(), KeysetOperation.SIGN, getPurpose().operations());
 	}
 
 	/**
@@ -152,15 +187,89 @@ public interface Keyset extends KeysetDefinition, Iterable<Key> {
 	 */
 	default boolean verify(ByteArray signature, ByteArray data) {
 		throw new CryptoException.UnsupportedKeysetOperationException(
-				getName(), KeysetOperation.VERIFY, getAlgorithm().operations());
+				getName(), KeysetOperation.VERIFY, getPurpose().operations());
 	}
 
 	/**
-	 * Lifecycle method that is used to rotate cryptographic keys within the {@link Keyset}.
+	 * Rotates the cryptographic keys within this {@link Keyset} using the algorithm and
+	 * expiry interval from the given {@link KeyDefinition}.
+	 * <p>
+	 * Implementations must:
+	 * <ol>
+	 *     <li>Reject definitions whose {@link Algorithm#purpose()} differs from this
+	 *         keyset's {@link #getPurpose()} by throwing
+	 *         {@link CryptoException.UnsupportedAlgorithmException}.</li>
+	 *     <li>Generate a key identifier that is unique within this keyset.</li>
+	 *     <li>Create a new key, promote it to primary when
+	 *         {@link KeyDefinition#isPrimary()} is {@literal true}, and demote or
+	 *         retain existing keys as appropriate.</li>
+	 *     <li>Return a new immutable keyset containing the updated key set.</li>
+	 * </ol>
+	 *
+	 * @param definition parameters for the new key, can't be {@literal null}
+	 * @return new keyset with the rotated keys, never {@literal null}
+	 * @throws CryptoException.UnsupportedAlgorithmException when the definition's
+	 *         algorithm purpose does not match this keyset's purpose
+	 */
+	Keyset rotate(KeyDefinition definition);
+
+	/**
+	 * Rotates the cryptographic keys within this {@link Keyset} using the same algorithm
+	 * as the current primary key and the keyset's configured rotation interval.
+	 * <p>
+	 * This is a convenience method equivalent to:
+	 * <pre>{@code
+	 * keyset.rotate(KeyDefinition.builder()
+	 *     .algorithm(keyset.getPrimary().getAlgorithm())
+	 *     .rotationInterval(keyset.getRotationInterval().orElse(null))
+	 *     .build());
+	 * }</pre>
 	 *
 	 * @return new keyset with the rotated keys, never {@literal null}
 	 */
-	Keyset rotate();
+	default Keyset rotate() {
+		return rotate(KeyDefinition.builder()
+			.algorithm(getPrimary().getAlgorithm())
+			.rotationInterval(getRotationInterval().orElse(null))
+			.build());
+	}
+
+	/**
+	 * Retrieves the currently configured interval for automatic key material rotation.
+	 * <p>
+	 * This value determines the lifespan of a specific version of key material before the system automatically
+	 * generates a new version to mitigate cryptographic wear-out.
+	 * <p>
+	 * <b>Security Note:</b> If this returns a value greater than 365 days, the key may be out of compliance
+	 * with standard security frameworks (e.g., NIST SP 800-57). If automatic rotation is disabled, this may
+	 * return an empty {@link Optional}.
+	 *
+	 * @return rotation frequency, it may return an {@link Optional#empty()} if automatic key rotation is
+	 * not enabled for this {@link Keyset}.
+	 * @see Keyset#rotate()
+	 */
+	Optional<Duration> getRotationInterval();
+
+	/**
+	 * Retrieves the grace period duration that will be applied if the {@link Key} is scheduled for destruction.
+	 * <p>
+	 * This represents the safety buffer or cooling-off period. Once a key is marked for deletion, it will remain
+	 * in a {@link KeyStatus#PENDING_DESTRUCTION} state for this duration before the key material is permanently
+	 * purged from the system.
+	 * <p>
+	 * <b>Audit Requirement:</b> Security auditors use this value to verify that the organization has enough
+	 * time to recover from accidental or unauthorized deletion requests. A value of 30 days is the recommended
+	 * industry default.
+	 * <p>
+	 * <b>Security Note:</b> If this returns a value greater than 120 or less than 7 days, the key may be out
+	 * of compliance with standard security frameworks (e.g., NIST SP 800-57). If the destruction grace period
+	 * is disabled, this may return an empty {@link Optional}.
+	 *
+	 * @return destruction grace period, may be an {@link Optional#empty()} if cryptograhic key material should
+	 * be destroyed immediately when the key is marked for deletion.
+	 * @see KeyStatus#PENDING_DESTRUCTION
+	 */
+	Optional<Duration> getDestructionGracePeriod();
 
 	/**
 	 * Returns the number of {@link Key keys} that are present in this {@link Keyset}.
@@ -172,14 +281,14 @@ public interface Keyset extends KeysetDefinition, Iterable<Key> {
 
 	@Override
 	default Iterator<Key> iterator() {
-		return getKeys().iterator();
+		return stream().map(Key.class::cast).iterator();
 	}
 
 	/**
 	 * Returns a sequential stream of {@link Key keys} from this {@link Keyset}.
 	 * @return key stream, never {@literal null}
 	 */
-	default Stream<Key> stream() {
+	default Stream<? extends Key> stream() {
 		return getKeys().stream();
 	}
 

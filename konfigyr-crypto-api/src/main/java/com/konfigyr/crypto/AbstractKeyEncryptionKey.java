@@ -13,7 +13,7 @@ import java.util.Objects;
  * identifier are the same.
  * <p>
  * Implementations of this class could also include the crypto material when checking the
- * identity if such check is needed.
+ * identity if such a check is needed.
  *
  * @author : Vladimir Spasic
  * @since : 26.08.23, Sat

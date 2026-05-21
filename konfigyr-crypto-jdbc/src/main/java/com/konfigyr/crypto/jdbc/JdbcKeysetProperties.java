@@ -38,9 +38,15 @@ public class JdbcKeysetProperties {
 
 	/**
 	 * Name of the database table used to store {@link com.konfigyr.crypto.EncryptedKeyset
-	 * keysets}.
+	 * keyset} metadata.
 	 */
 	private String tableName = JdbcKeysetRepository.DEFAULT_TABLE_NAME;
+
+	/**
+	 * Name of the database table used to store {@link com.konfigyr.crypto.EncryptedKey
+	 * encrypted keys} with their lifecycle metadata.
+	 */
+	private String keysTableName = JdbcKeysetRepository.DEFAULT_KEYS_TABLE_NAME;
 
 	/**
 	 * Specifies the transaction isolation level that is used by the {@link JdbcKeysetRepository} when writing

@@ -52,6 +52,7 @@ public class JdbcKeysetAutoConfiguration {
 				createTransactionOperations(txManager, properties));
 
 		repository.setTableName(properties.getTableName());
+		repository.setKeysTableName(properties.getKeysTableName());
 
 		return repository;
 	}

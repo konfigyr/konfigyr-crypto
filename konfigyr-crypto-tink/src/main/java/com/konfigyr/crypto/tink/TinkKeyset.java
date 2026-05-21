@@ -1,25 +1,17 @@
 package com.konfigyr.crypto.tink;
 
 import com.google.crypto.tink.*;
-import com.google.crypto.tink.proto.KeysetInfo;
-import com.google.protobuf.InvalidProtocolBufferException;
+import com.google.crypto.tink.Key;
+import com.google.crypto.tink.internal.MutablePrimitiveRegistry;
+import com.google.crypto.tink.internal.PrefixMap;
 import com.konfigyr.crypto.*;
-import com.konfigyr.crypto.Key;
 import com.konfigyr.io.ByteArray;
-import lombok.AccessLevel;
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
-import lombok.Value;
-import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 import org.springframework.util.Assert;
 import org.springframework.util.ClassUtils;
 
 import java.security.GeneralSecurityException;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
-import java.util.Objects;
 
 import static com.konfigyr.crypto.CryptoException.KeysetOperationException;
 
@@ -30,45 +22,43 @@ import static com.konfigyr.crypto.CryptoException.KeysetOperationException;
  * @author : Vladimir Spasic
  * @since : 21.08.23, Mon
  **/
-@Value
-@RequiredArgsConstructor(access = AccessLevel.PRIVATE)
-class TinkKeyset implements Keyset {
+@NullMarked
+class TinkKeyset extends AbstractKeyset<TinkKey> {
 
-	@NonNull
-	String name;
+	PrefixMap<TinkKey> prefixMap;
 
-	@NonNull
-	TinkAlgorithm algorithm;
+	private TinkKeyset(Builder builder) {
+		super(builder);
 
-	@NonNull
-	KeyEncryptionKey keyEncryptionKey;
+		PrefixMap.Builder<TinkKey> prefixMap = new PrefixMap.Builder<>();
 
-	@NonNull
-	@Getter(value = AccessLevel.PACKAGE)
-	KeysetHandle handle;
+		for (TinkKey key : keys) {
+			try {
+				prefixMap.put(TinkUtils.extractKeyOutputPrefix(key.getValue()), key);
+			} catch (GeneralSecurityException ex) {
+				throw new IllegalArgumentException("Failed to register Tink key: " + key, ex);
+			}
+		}
 
-	@NonNull
-	List<Key> keys;
+		this.prefixMap = prefixMap.build();
+	}
 
-	@NonNull
-	Duration rotationInterval;
-
-	@NonNull
-	Instant nextRotationTime;
-
-	@NonNull
 	@Override
-	public ByteArray encrypt(@NonNull ByteArray data, @Nullable ByteArray context) {
+	public ByteArray encrypt(ByteArray data, @Nullable ByteArray context) {
 		assertSupportedOperation(KeysetOperation.ENCRYPT);
 
 		final byte[] associatedData = context == null ? null : context.array();
 		final byte[] encrypted;
 
 		try {
-			if (KeyType.OCTET == algorithm.type()) {
-				encrypted = primitive(handle, Aead.class).encrypt(data.array(), associatedData);
+			final TinkKey key = getPrimary();
+
+			if (KeyType.OCTET == key.getType()) {
+				encrypted = primitive(key, Aead.class)
+					.encrypt(data.array(), associatedData);
 			} else {
-				encrypted = primitive(publicKeysetHandle(), HybridEncrypt.class).encrypt(data.array(), associatedData);
+				encrypted = primitive(key, HybridEncrypt.class)
+					.encrypt(data.array(), associatedData);
 			}
 		} catch (GeneralSecurityException e) {
 			throw new KeysetOperationException(name, KeysetOperation.ENCRYPT, e);
@@ -77,40 +67,47 @@ class TinkKeyset implements Keyset {
 		return new ByteArray(encrypted);
 	}
 
-	@NonNull
 	@Override
-	public ByteArray decrypt(@NonNull ByteArray cipher, @Nullable ByteArray context) {
+	public ByteArray decrypt(ByteArray cipher, @Nullable ByteArray context) {
 		assertSupportedOperation(KeysetOperation.DECRYPT);
 
 		final byte[] associatedData = context == null ? null : context.array();
-		final byte[] decrypted;
+		GeneralSecurityException lastException = null;
 
-		try {
-			if (KeyType.OCTET == algorithm.type()) {
-				decrypted = primitive(handle, Aead.class).decrypt(cipher.array(), associatedData);
-			}
-			else {
-				decrypted = primitive(handle, HybridDecrypt.class).decrypt(cipher.array(), associatedData);
+		for (TinkKey key : prefixMap.getAllWithMatchingPrefix(cipher.array())) {
+			try {
+				final byte[] decrypted;
+
+				if (KeyType.OCTET == key.getType()) {
+					decrypted = primitive(key, Aead.class).decrypt(cipher.array(), associatedData);
+				} else {
+					decrypted = primitive(key, HybridDecrypt.class).decrypt(cipher.array(), associatedData);
+				}
+
+				return new ByteArray(decrypted);
+			} catch (GeneralSecurityException e) {
+				lastException = e;
 			}
 		}
-		catch (GeneralSecurityException e) {
-			throw new KeysetOperationException(name, KeysetOperation.DECRYPT, e);
+
+		if (lastException != null) {
+			throw new KeysetOperationException(name, KeysetOperation.DECRYPT, lastException);
 		}
 
-		return new ByteArray(decrypted);
+		throw new KeysetOperationException(name, KeysetOperation.DECRYPT, "Failed to decrypt cipher");
 	}
 
-	@NonNull
 	@Override
-	public ByteArray sign(@NonNull ByteArray data) {
+	public ByteArray sign(ByteArray data) {
 		assertSupportedOperation(KeysetOperation.SIGN);
 
 		final byte[] signature;
 
 		try {
-			signature = primitive(handle, PublicKeySign.class).sign(data.array());
-		}
-		catch (GeneralSecurityException e) {
+			final TinkKey key = getPrimary();
+
+			signature = primitive(key, PublicKeySign.class).sign(data.array());
+		} catch (GeneralSecurityException e) {
 			throw new KeysetOperationException(name, KeysetOperation.SIGN, e);
 		}
 
@@ -118,88 +115,63 @@ class TinkKeyset implements Keyset {
 	}
 
 	@Override
-	public boolean verify(@NonNull ByteArray signature, @NonNull ByteArray data) {
+	public boolean verify(ByteArray signature, ByteArray data) {
 		assertSupportedOperation(KeysetOperation.VERIFY);
 
-		try {
-			primitive(publicKeysetHandle(), PublicKeyVerify.class).verify(signature.array(), data.array());
-		}
-		catch (GeneralSecurityException e) {
-			return false;
-		}
-
-		return true;
-	}
-
-	@NonNull
-	@Override
-	public Keyset rotate() {
-		final KeysetHandle handle;
-
-		try {
-			handle = KeysetManager.withKeysetHandle(this.handle).rotate(parseKeyTemplateProto()).getKeysetHandle();
-		}
-		catch (GeneralSecurityException e) {
-			throw new CryptoException.KeysetException(name, "Failed to rotate keyset", e);
+		for (TinkKey key : prefixMap.getAllWithMatchingPrefix(signature.array())) {
+			try {
+				primitive(key, PublicKeyVerify.class).verify(signature.array(), data.array());
+				return true;
+			} catch (GeneralSecurityException e) {
+				// try the next key in the chain...
+			}
 		}
 
-		return TinkKeyset.builder(handle)
-			.name(name)
-			.algorithm(algorithm)
-			.keyEncryptionKey(keyEncryptionKey)
-			.rotationInterval(rotationInterval)
-			.nextRotationTime(Instant.now().plus(rotationInterval))
-			.build();
+		return false;
 	}
 
 	@Override
-	public boolean equals(Object o) {
-		if (this == o)
-			return true;
-		if (o == null || getClass() != o.getClass())
-			return false;
-		TinkKeyset that = (TinkKeyset) o;
-
-		return name.equals(that.name) && algorithm.equals(that.algorithm)
-				&& keyEncryptionKey.equals(that.keyEncryptionKey)
-				&& handle.equalsKeyset(that.getHandle())
-				&& rotationInterval.equals(that.rotationInterval) && nextRotationTime.equals(that.nextRotationTime);
+	protected String generateId() {
+		return TinkUtils.generateKeyId();
 	}
 
 	@Override
-	@SuppressWarnings("deprecation")
-	public int hashCode() {
-		return Objects.hash(name, algorithm, keyEncryptionKey, handle.getKeysetInfo(), rotationInterval,
-				nextRotationTime);
-	}
+	protected Keyset doRotate(KeyDefinition definition, String uniqueId) {
+		final TinkKeyset.Builder builder = new TinkKeyset.Builder(this)
+			.key(TinkKey.generate(definition, uniqueId));
 
-	@Override
-	public String toString() {
-		return "TinkKeyset[" + "name='" + name + '\'' + ", algorithm=" + algorithm + ", keyEncryptionKey="
-				+ keyEncryptionKey + ", rotationInterval=" + rotationInterval + ", nextRotationTime=" + nextRotationTime
-				+ ']';
+		stream().map(TinkKey.class::cast).forEach(existing -> {
+			if (existing.isPrimary() && definition.isPrimary()) {
+				builder.key(new TinkKey.Builder(existing).primary(false).build());
+			} else {
+				builder.key(existing);
+			}
+		});
+
+		return builder.build();
 	}
 
 	private void assertSupportedOperation(KeysetOperation operation) {
-		if (!algorithm.operations().contains(operation)) {
-			throw new CryptoException.UnsupportedKeysetOperationException(name, operation, algorithm.operations());
+		if (!purpose.operations().contains(operation)) {
+			throw new CryptoException.UnsupportedKeysetOperationException(name, operation, purpose.operations());
 		}
 	}
 
-	private KeysetHandle publicKeysetHandle() {
-		try {
-			return handle.getPublicKeysetHandle();
-		}
-		catch (GeneralSecurityException e) {
-			throw new CryptoException.KeysetException(name, "Failed to load public key material", e);
-		}
-	}
-
-	private <T> T primitive(KeysetHandle handle, Class<T> type) {
+	private <T> T primitive(TinkKey key, Class<T> type) {
 		final T primitive;
 
 		try {
-			primitive = handle.getPrimitive(RegistryConfiguration.get(), type);
+			final Key cryptographicKey;
+
+			if (ClassUtils.isAssignable(PublicKeyVerify.class, type)) {
+				cryptographicKey = TinkUtils.extractPublicKey(key.getValue());
+			} else if (ClassUtils.isAssignable(HybridEncrypt.class, type)) {
+				cryptographicKey = TinkUtils.extractPublicKey(key.getValue());
+			} else {
+				cryptographicKey = key.getValue();
+			}
+
+			primitive = MutablePrimitiveRegistry.globalInstance().getPrimitive(cryptographicKey, type);
 		}
 		catch (GeneralSecurityException e) {
 			throw new CryptoException.KeysetException(name,
@@ -213,88 +185,24 @@ class TinkKeyset implements Keyset {
 		return primitive;
 	}
 
-	private com.google.crypto.tink.proto.KeyTemplate parseKeyTemplateProto() throws GeneralSecurityException {
-		final Parameters parameters = algorithm.template().toParameters();
+	static final class Builder extends AbstractKeyset.Builder<TinkKey, TinkKeyset, Builder> {
 
-		try {
-			return com.google.crypto.tink.proto.KeyTemplate.parseFrom(TinkProtoParametersFormat.serialize(parameters));
-		}
-		catch (InvalidProtocolBufferException e) {
-			throw new IllegalStateException("Failed to parse Tink key template data", e);
-		}
-	}
-
-	static Builder builder(KeysetHandle handle) {
-		return new Builder(handle);
-	}
-
-	static final class Builder {
-
-		private final KeysetHandle handle;
-
-		private String name;
-
-		private TinkAlgorithm algorithm;
-
-		private KeyEncryptionKey keyEncryptionKey;
-
-		private Duration rotationInterval;
-
-		private Instant nextRotationTime;
-
-		@SuppressWarnings("deprecation")
-		private Builder(KeysetHandle handle) {
-			Assert.notNull(handle, "Tink keyset can not be null");
-			Assert.notNull(handle.getKeysetInfo(), "Tink keyset information can not be null");
-			Assert.state(handle.size() > 0, "Can not create Tink Keyset with an empty key set handle");
-
-			this.handle = handle;
+		Builder(KeysetDefinition definition) {
+			super(definition);
 		}
 
-		Builder name(String name) {
-			this.name = name;
-			return this;
+		Builder(TinkKeyset keyset) {
+			super(keyset);
 		}
 
-		Builder algorithm(TinkAlgorithm algorithm) {
-			this.algorithm = algorithm;
-			return this;
+		Builder(EncryptedKeyset keyset) {
+			super(keyset);
 		}
 
-		Builder keyEncryptionKey(KeyEncryptionKey keyEncryptionKey) {
-			this.keyEncryptionKey = keyEncryptionKey;
-			return this;
+		@Override
+		public TinkKeyset build() {
+			return new TinkKeyset(this);
 		}
-
-		Builder rotationInterval(Duration rotationInterval) {
-			this.rotationInterval = rotationInterval;
-			return this;
-		}
-
-		Builder nextRotationTime(Instant nextRotationTime) {
-			this.nextRotationTime = nextRotationTime;
-			return this;
-		}
-
-		@SuppressWarnings("deprecation")
-		TinkKeyset build() {
-			Assert.hasText(name, "Keyset name can not be blank");
-			Assert.notNull(algorithm, "Keyset algorithm can not be null");
-			Assert.notNull(keyEncryptionKey, "Keyset key encryption key can not be null");
-			Assert.notNull(rotationInterval, "Keyset rotation interval can not be null");
-			Assert.notNull(nextRotationTime, "Keyset next rotation time can not be null");
-
-			final KeysetInfo info = handle.getKeysetInfo();
-
-			final List<Key> keys = info.getKeyInfoList()
-				.stream()
-				.map(it -> TinkKey.from(algorithm.type(), info, it))
-				.map(Key.class::cast)
-				.toList();
-
-			return new TinkKeyset(name, algorithm, keyEncryptionKey, handle, keys, rotationInterval, nextRotationTime);
-		}
-
 	}
 
 }

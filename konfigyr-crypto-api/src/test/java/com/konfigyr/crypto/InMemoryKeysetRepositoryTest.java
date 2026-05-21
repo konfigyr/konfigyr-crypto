@@ -1,5 +1,6 @@
 package com.konfigyr.crypto;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -20,18 +21,24 @@ class InMemoryKeysetRepositoryTest {
 	KeysetRepository repository = new InMemoryKeysetRepository();
 
 	@Test
+	@DisplayName("should manage encrypted keysets in memory")
 	void shouldManageEncryptionKeysets() throws IOException {
 		doReturn("test-keyset").when(keyset).getName();
 
-		assertThat(repository.read(keyset.getName())).isEmpty();
+		assertThat(repository.read(keyset.getName()))
+			.isEmpty();
 
-		assertThatNoException().isThrownBy(() -> repository.write(keyset));
+		assertThatNoException()
+			.isThrownBy(() -> repository.write(keyset));
 
-		assertThat(repository.read(keyset.getName())).isNotEmpty().hasValue(keyset);
+		assertThat(repository.read(keyset.getName()))
+			.hasValue(keyset);
 
-		assertThatNoException().isThrownBy(() -> repository.remove(keyset.getName()));
+		assertThatNoException()
+			.isThrownBy(() -> repository.remove(keyset.getName()));
 
-		assertThat(repository.read(keyset.getName())).isEmpty();
+		assertThat(repository.read(keyset.getName()))
+			.isEmpty();
 	}
 
 }

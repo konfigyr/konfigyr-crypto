@@ -7,4 +7,5 @@ dependencies {
     compileOnly(libs.jose.jwt)
 
     testImplementation(libs.jose.jwt)
+    testImplementation(project(":konfigyr-crypto-test"))
 }

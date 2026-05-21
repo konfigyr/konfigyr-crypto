@@ -6,4 +6,5 @@ dependencies {
 
 	testImplementation(libs.spring.starter.jdbc.test)
     testImplementation("org.hsqldb:hsqldb")
+    testImplementation(project(":konfigyr-crypto-test"))
 }

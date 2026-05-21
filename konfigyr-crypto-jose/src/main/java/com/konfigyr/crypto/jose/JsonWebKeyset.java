@@ -12,19 +12,13 @@ import com.nimbusds.jose.jwk.KeyType;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.*;
 import com.nimbusds.jose.produce.JWSSignerFactory;
-import lombok.AccessLevel;
-import lombok.RequiredArgsConstructor;
-import lombok.Value;
 import org.jspecify.annotations.NullMarked;
-import org.jspecify.annotations.NullUnmarked;
 import org.jspecify.annotations.Nullable;
 import org.springframework.util.Assert;
 import org.springframework.util.function.ThrowingFunction;
 
 import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -39,17 +33,12 @@ import java.util.stream.Collectors;
  * @since : 24.11.25, Mon
  * @see JWKSource
  */
-@Value
 @NullMarked
-@RequiredArgsConstructor(access = AccessLevel.PRIVATE)
-class JsonWebKeyset implements Keyset, JWKSource<SecurityContext> {
+class JsonWebKeyset extends AbstractKeyset<JsonWebKey> implements JWKSource<SecurityContext> {
 
-	String name;
-	JoseAlgorithm algorithm;
-	KeyEncryptionKey keyEncryptionKey;
-	List<Key> keys;
-	Duration rotationInterval;
-	Instant nextRotationTime;
+	private JsonWebKeyset(Builder builder) {
+		super(builder);
+	}
 
 	@Override
 	public List<JWK> get(JWKSelector selector, @Nullable SecurityContext context) {
@@ -65,16 +54,10 @@ class JsonWebKeyset implements Keyset, JWKSource<SecurityContext> {
 	public ByteArray encrypt(ByteArray data, @Nullable ByteArray context) {
 		assertKeysetOperation(KeysetOperation.ENCRYPT);
 
-		final JWK key = getPrimaryKey().orElseThrow(() -> new CryptoException.KeysetOperationException(
-			name, KeysetOperation.ENCRYPT, "No primary key for encryption found for Keyset: " + name
-		));
+		final JsonWebKey key = getPrimary();
 
 		try {
-			final JWEHeader header = new JWEHeader.Builder(
-				(JWEAlgorithm) algorithm.algorithm(),
-				EncryptionMethod.A256GCM
-			).keyID(key.getKeyID()).build();
-
+			final JWEHeader header = JoseUtils.createEncryptionHeader(key, context);
 			final JWEObject object = new JWEObject(header, new Payload(data.array()));
 			object.encrypt(createEncrypter(key));
 
@@ -90,6 +73,13 @@ class JsonWebKeyset implements Keyset, JWKSource<SecurityContext> {
 
 		try {
 			final JWEObject object = JWEObject.parse(new String(cipher.array(), StandardCharsets.UTF_8));
+			final ByteArray aad = JoseUtils.resolveAdditionalAuthenticationData(object.getHeader());
+
+			if (!Objects.equals(context, aad)) {
+				throw new CryptoException.KeysetOperationException(name, KeysetOperation.DECRYPT,
+					"AAD does not match the expected value");
+			}
+
 			object.decrypt(createDecrypter(object.getHeader()));
 
 			return new ByteArray(object.getPayload().toBytes());
@@ -102,13 +92,11 @@ class JsonWebKeyset implements Keyset, JWKSource<SecurityContext> {
 	public ByteArray sign(ByteArray data) {
 		assertKeysetOperation(KeysetOperation.SIGN);
 
-		final JWK key = getPrimaryKey().orElseThrow(() -> new CryptoException.KeysetOperationException(
-			name, KeysetOperation.SIGN, "No primary key for signing found for Keyset: " + name
-		));
+		final JsonWebKey key = getPrimary();
 
 		try {
-			final JWSHeader header = new JWSHeader.Builder((JWSAlgorithm) algorithm.algorithm())
-				.keyID(key.getKeyID())
+			final JWSHeader header = new JWSHeader.Builder((JWSAlgorithm) key.getAlgorithm().algorithm())
+				.keyID(key.getId())
 				.build();
 
 			final JWSObject object = new JWSObject(header, new Payload(data.array()));
@@ -132,95 +120,79 @@ class JsonWebKeyset implements Keyset, JWKSource<SecurityContext> {
 			}
 
 			return Arrays.equals(object.getPayload().toBytes(), data.array());
-		} catch (ParseException | JOSEException e) {
+		} catch (ParseException e) {
+			return false;
+		} catch (JOSEException e) {
 			throw new CryptoException.KeysetOperationException(name, KeysetOperation.VERIFY, e);
 		}
 	}
 
 	@Override
-	public Keyset rotate() {
-		final JWK key;
+	protected String generateId() {
+		return JoseUtils.generateKeyId();
+	}
 
-		try {
-			key = algorithm.generator().generate();
-		} catch (JOSEException ex) {
-			throw new CryptoException.KeysetException(this, "Failed to create JWK", ex);
-		}
-
-		final List<JsonWebKey> keys = new ArrayList<>(size());
-		keys.add(new JsonWebKey(key, KeyStatus.ENABLED, true));
+	@Override
+	protected Keyset doRotate(KeyDefinition definition, String uniqueId) {
+		final JsonWebKeyset.Builder builder = new JsonWebKeyset.Builder(this)
+			.key(JsonWebKey.generate(definition, uniqueId));
 
 		stream().map(JsonWebKey.class::cast).forEach(existing -> {
-			if (existing.isPrimary()) {
-				keys.add(rotateKey(existing));
+			if (existing.isPrimary() && definition.isPrimary()) {
+				builder.key(rotateKey(existing));
 			} else {
-				keys.add(existing);
+				builder.key(existing);
 			}
 		});
 
-		return JsonWebKeyset.builder(keys)
-				.name(name)
-				.algorithm(algorithm)
-				.keyEncryptionKey(keyEncryptionKey)
-				.rotationInterval(rotationInterval)
-				.nextRotationTime(Instant.now().plus(rotationInterval))
-				.build();
+		return builder.build();
 	}
 
-	private JWEEncrypter createEncrypter(JWK key) throws JOSEException {
-		return switch (key) {
+	private JWEEncrypter createEncrypter(JsonWebKey key) throws JOSEException {
+		return switch (key.getValue()) {
 			case RSAKey rsa -> new RSAEncrypter(rsa);
 			case ECKey ec -> new ECDHEncrypter(ec);
 			case OctetSequenceKey secret -> new AESEncrypter(secret);
-			default -> throw new CryptoException.UnsupportedAlgorithmException(algorithm);
+			default -> throw new CryptoException.UnsupportedAlgorithmException(key.getAlgorithm());
 		};
 	}
 
 	private JWEDecrypter createDecrypter(JWEHeader header) throws JOSEException {
-		final JWEDecrypterFactory factory = new DefaultJWEDecrypterFactory();
-		final java.security.Key key = resolveMatchingKey(JWKMatcher.forJWEHeader(header), AsymmetricJWK::toPrivateKey);
+		final JsonWebKey key = resolveMatchingKey(JWKMatcher.forJWEHeader(header));
+		final java.security.Key cryptographicKey = resolveCryptographicKey(key, AsymmetricJWK::toPrivateKey);
 
 		try {
-			return factory.createJWEDecrypter(header, key);
+			final JWEDecrypterFactory factory = new DefaultJWEDecrypterFactory();
+			return factory.createJWEDecrypter(header, cryptographicKey);
 		} catch (JOSEException e) {
-			throw new CryptoException.UnsupportedAlgorithmException(algorithm, e);
+			throw new CryptoException.UnsupportedAlgorithmException(key.getAlgorithm(), e);
 		}
 	}
 
-	private JWSSigner createSigner(JWK key) throws JOSEException {
+	private JWSSigner createSigner(JsonWebKey key) throws JOSEException {
 		final JWSSignerFactory factory = new DefaultJWSSignerFactory();
 
 		try {
-			return factory.createJWSSigner(key, (JWSAlgorithm) algorithm.algorithm());
+			return factory.createJWSSigner(key.getValue(), (JWSAlgorithm) key.getAlgorithm().algorithm());
 		} catch (JOSEException e) {
-			throw new CryptoException.UnsupportedAlgorithmException(algorithm, e);
+			throw new CryptoException.UnsupportedAlgorithmException(key.getAlgorithm(), e);
 		}
 	}
 
 	private JWSVerifier createVerifier(JWSHeader header) throws JOSEException {
-		final JWSVerifierFactory factory = new DefaultJWSVerifierFactory();
-		final java.security.Key key = resolveMatchingKey(JWKMatcher.forJWSHeader(header), AsymmetricJWK::toPublicKey);
+		final JsonWebKey key = resolveMatchingKey(JWKMatcher.forJWSHeader(header));
+		final java.security.Key cryptographicKey = resolveCryptographicKey(key, AsymmetricJWK::toPublicKey);
 
 		try {
-			return factory.createJWSVerifier(header, key);
+			final JWSVerifierFactory factory = new DefaultJWSVerifierFactory();
+			return factory.createJWSVerifier(header, cryptographicKey);
 		} catch (JOSEException e) {
-			throw new CryptoException.UnsupportedAlgorithmException(algorithm, e);
+			throw new CryptoException.UnsupportedAlgorithmException(key.getAlgorithm(), e);
 		}
 	}
 
-	private Optional<JWK> getPrimaryKey() {
-		return stream()
-			.map(JsonWebKey.class::cast)
-			.filter(JsonWebKey::isPrimary)
-			.map(JsonWebKey::getValue)
-			.findFirst();
-	}
-
-	private java.security.Key resolveMatchingKey(
-		JWKMatcher matcher,
-		ThrowingFunction<AsymmetricJWK, java.security.Key> resolver
-	) throws JOSEException {
-		final List<JWK> keys = get(new JWKSelector(matcher), null);
+	private JsonWebKey resolveMatchingKey(JWKMatcher matcher) throws JOSEException {
+		final List<JWK> keys = get(new JWKSelector(matcher), new SimpleSecurityContext());
 
 		if (keys.isEmpty()) {
 			throw new KeySourceException("No matching key found for JWK matcher: " + matcher);
@@ -232,19 +204,28 @@ class JsonWebKeyset implements Keyset, JWKSource<SecurityContext> {
 
 		final JWK key = keys.getFirst();
 
-		if (KeyType.RSA.equals(key.getKeyType())) {
-			return resolver.apply(key.toRSAKey());
+		return getKey(key.getKeyID()).orElseThrow(() -> new IllegalStateException(
+			"Failed to find JSON Web key with identifier: " + key.getKeyID()
+		));
+	}
+
+	private java.security.Key resolveCryptographicKey(
+		JsonWebKey key,
+		ThrowingFunction<AsymmetricJWK, java.security.Key> resolver
+	) {
+		if (KeyType.RSA.equals(key.getValue().getKeyType())) {
+			return resolver.apply(key.getValue().toRSAKey());
 		}
 
-		if (KeyType.EC.equals(key.getKeyType())) {
-			return resolver.apply(key.toECKey());
+		if (KeyType.EC.equals(key.getValue().getKeyType())) {
+			return resolver.apply(key.getValue().toECKey());
 		}
 
-		if (KeyType.OCT.equals(key.getKeyType())) {
-			return key.toOctetSequenceKey().toSecretKey();
+		if (KeyType.OCT.equals(key.getValue().getKeyType())) {
+			return key.getValue().toOctetSequenceKey().toSecretKey();
 		}
 
-		throw new IllegalArgumentException("Unsupported JWK key type: " + key.getKeyType());
+		throw new IllegalArgumentException("Unsupported JWK key type: " + key.getValue().getKeyType());
 	}
 
 	/**
@@ -274,105 +255,40 @@ class JsonWebKeyset implements Keyset, JWKSource<SecurityContext> {
 			default -> throw new IllegalStateException("Unsupported JWK type: " + key.getValue().getKeyType());
 		};
 
-		return new JsonWebKey(jwk, key.getStatus(), false);
+		return new JsonWebKey.Builder(key, jwk)
+			.primary(false)
+			.build();
 	}
 
 	private void assertKeysetOperation(KeysetOperation operation) {
-		if (!algorithm.supports(operation)) {
-			throw new CryptoException.UnsupportedKeysetOperationException(name, operation, algorithm.operations());
+		if (!purpose.isOperationSupported(operation)) {
+			throw new CryptoException.UnsupportedKeysetOperationException(name, operation, purpose.operations());
 		}
 	}
 
-	@Override
-	public boolean equals(Object o) {
-		if (this == o)
-			return true;
-		if (o == null || getClass() != o.getClass())
-			return false;
-		JsonWebKeyset that = (JsonWebKeyset) o;
-		return name.equals(that.name)
-				&& algorithm.equals(that.algorithm)
-				&& keyEncryptionKey.equals(that.keyEncryptionKey)
-				&& keys.equals(that.keys)
-				&& rotationInterval.equals(that.rotationInterval)
-				&& nextRotationTime.equals(that.nextRotationTime);
-	}
+	static final class Builder extends AbstractKeyset.Builder<JsonWebKey, JsonWebKeyset, Builder> {
 
-	@Override
-	public int hashCode() {
-		return Objects.hash(name, algorithm, keyEncryptionKey, keys, rotationInterval, nextRotationTime);
-	}
+		Builder(KeysetDefinition definition) {
+			super(definition);
+		}
 
-	@Override
-	public String toString() {
-		return "JsonWebKeyset[name='" + name + "', algorithm=" + algorithm + ", keys=" + keys
-			+ ", keyEncryptionKey=" + keyEncryptionKey + ", rotationInterval=" + rotationInterval
-			+ ", nextRotationTime=" + nextRotationTime + ']';
-	}
+		Builder(JsonWebKeyset keyset) {
+			super(keyset);
+		}
 
-	static Builder builder(JsonWebKey... keys) {
-		return new Builder(Arrays.asList(keys));
-	}
+		Builder(EncryptedKeyset keyset) {
+			super(keyset);
+		}
 
-	static Builder builder(Collection<JsonWebKey> keys) {
-		return new Builder(keys);
-	}
-
-	@NullUnmarked
-	static final class Builder {
-
-		private final List<Key> keys;
-
-		private String name;
-
-		private JoseAlgorithm algorithm;
-
-		private KeyEncryptionKey keyEncryptionKey;
-
-		private Duration rotationInterval;
-
-		private Instant nextRotationTime;
-
-		private Builder(Collection<JsonWebKey> keys) {
+		Builder(Collection<JsonWebKey> keys) {
 			Assert.notNull(keys, "JWK set can not be null");
 			Assert.state(!keys.isEmpty(), "Can not create JSON Web Keyset with an empty key set");
-
-			this.keys = List.copyOf(keys);
+			factory(JoseKeysetFactory.NAME).keys(keys);
 		}
 
-		Builder name(String name) {
-			this.name = name;
-			return this;
-		}
-
-		Builder algorithm(JoseAlgorithm algorithm) {
-			this.algorithm = algorithm;
-			return this;
-		}
-
-		Builder keyEncryptionKey(KeyEncryptionKey keyEncryptionKey) {
-			this.keyEncryptionKey = keyEncryptionKey;
-			return this;
-		}
-
-		Builder rotationInterval(Duration rotationInterval) {
-			this.rotationInterval = rotationInterval;
-			return this;
-		}
-
-		Builder nextRotationTime(Instant nextRotationTime) {
-			this.nextRotationTime = nextRotationTime;
-			return this;
-		}
-
-		JsonWebKeyset build() {
-			Assert.hasText(name, "Keyset name can not be blank");
-			Assert.notNull(algorithm, "Keyset algorithm can not be null");
-			Assert.notNull(keyEncryptionKey, "Keyset key encryption key can not be null");
-			Assert.notNull(rotationInterval, "Keyset rotation interval can not be null");
-			Assert.notNull(nextRotationTime, "Keyset next rotation time can not be null");
-
-			return new JsonWebKeyset(name, algorithm, keyEncryptionKey, keys, rotationInterval, nextRotationTime);
+		@Override
+		public JsonWebKeyset build() {
+			return new JsonWebKeyset(this);
 		}
 
 	}

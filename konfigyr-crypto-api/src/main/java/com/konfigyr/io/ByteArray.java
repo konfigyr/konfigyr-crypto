@@ -38,24 +38,24 @@ public final class ByteArray implements InputStreamSource, Serializable {
 	/**
 	 * The implementation of the {@link Encoder} that uses {@link Base64.Encoder} to encode the byte array.
 	 */
-	static final Encoder BASE_64_ENCODER = Base64.getEncoder()::encodeToString;
+	public static final Encoder BASE_64_ENCODER = Base64.getEncoder()::encodeToString;
 
 	/**
 	 * The implementation of the {@link Decoder} that uses {@link Base64.Decoder} to decode the byte array.
 	 */
-	static final Decoder BASE_64_DECODER = Base64.getDecoder()::decode;
+	public static final Decoder BASE_64_DECODER = Base64.getDecoder()::decode;
 
 	/**
 	 * The implementation of the {@link Encoder} that uses URL Safe variant of the {@link Base64.Encoder} to
 	 * encode the value to a byte array.
 	 */
-	static final Encoder BASE_64_URL_SAFE_ENCODER = Base64.getUrlEncoder()::encodeToString;
+	public static final Encoder BASE_64_URL_SAFE_ENCODER = Base64.getUrlEncoder()::encodeToString;
 
 	/**
 	 * The implementation of the {@link Decoder} that uses URL Safe variant of the {@link Base64.Decoder} to
 	 * decode the value to a byte array.
 	 */
-	static final Decoder BASE_64_URL_SAFE_DECODER = Base64.getUrlDecoder()::decode;
+	public static final Decoder BASE_64_URL_SAFE_DECODER = Base64.getUrlDecoder()::decode;
 
 	/**
 	 * The underlying byte array that contains the actual data.
@@ -234,6 +234,8 @@ public final class ByteArray implements InputStreamSource, Serializable {
 	}
 
 	/**
+	 * Returns the size of the underlying byte array.
+	 *
 	 * @return byte array size, {@literal 0} if empty.
 	 */
 	public int size() {
