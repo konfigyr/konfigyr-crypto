@@ -45,6 +45,7 @@ class TinkKeyset extends AbstractKeyset<TinkKey> {
 
 	@Override
 	public ByteArray encrypt(ByteArray data, @Nullable ByteArray context) {
+		Assert.isTrue(!data.isEmpty(), "Cannot encrypt an empty byte array");
 		assertSupportedOperation(KeysetOperation.ENCRYPT);
 
 		final byte[] associatedData = context == null ? null : context.array();
@@ -69,6 +70,7 @@ class TinkKeyset extends AbstractKeyset<TinkKey> {
 
 	@Override
 	public ByteArray decrypt(ByteArray cipher, @Nullable ByteArray context) {
+		Assert.isTrue(!cipher.isEmpty(), "Cannot decrypt an empty byte array");
 		assertSupportedOperation(KeysetOperation.DECRYPT);
 
 		final byte[] associatedData = context == null ? null : context.array();
@@ -99,6 +101,7 @@ class TinkKeyset extends AbstractKeyset<TinkKey> {
 
 	@Override
 	public ByteArray sign(ByteArray data) {
+		Assert.isTrue(!data.isEmpty(), "Cannot sign an empty byte array");
 		assertSupportedOperation(KeysetOperation.SIGN);
 
 		final byte[] signature;
@@ -116,6 +119,8 @@ class TinkKeyset extends AbstractKeyset<TinkKey> {
 
 	@Override
 	public boolean verify(ByteArray signature, ByteArray data) {
+		Assert.isTrue(!signature.isEmpty(), "Cannot verify an empty signature");
+		Assert.isTrue(!data.isEmpty(), "Cannot verify a signature against an empty byte array");
 		assertSupportedOperation(KeysetOperation.VERIFY);
 
 		for (TinkKey key : prefixMap.getAllWithMatchingPrefix(signature.array())) {
