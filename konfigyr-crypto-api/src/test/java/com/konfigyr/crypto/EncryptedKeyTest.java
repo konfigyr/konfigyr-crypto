@@ -6,6 +6,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
+import java.io.NotSerializableException;
 import java.io.ObjectOutputStream;
 import java.time.Instant;
 
@@ -245,11 +246,11 @@ class EncryptedKeyTest {
 			.createdAt(now)
 			.build(data);
 
-		assertThatThrownBy(() -> {
+		assertThatExceptionOfType(NotSerializableException.class).isThrownBy(() -> {
 			try (var out = new ObjectOutputStream(new ByteArrayOutputStream())) {
 				out.writeObject(key);
 			}
-		}).isInstanceOf(java.io.NotSerializableException.class);
+		});
 	}
 
 }

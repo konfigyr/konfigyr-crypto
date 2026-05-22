@@ -36,16 +36,6 @@ public final class WrappedKeyMaterial implements InputStreamSource {
 	}
 
 	/**
-	 * Creates a new {@link WrappedKeyMaterial} from the given raw byte array.
-	 *
-	 * @param bytes the wrapped key bytes, can't be {@literal null}
-	 * @return a new {@link WrappedKeyMaterial} instance, never {@literal null}
-	 */
-	public static WrappedKeyMaterial of(byte[] bytes) {
-		return of(new ByteArray(bytes));
-	}
-
-	/**
 	 * Creates a new {@link WrappedKeyMaterial} from the given {@link ByteArray}.
 	 *
 	 * @param bytes the wrapped key bytes, can't be {@literal null}
@@ -53,7 +43,18 @@ public final class WrappedKeyMaterial implements InputStreamSource {
 	 */
 	public static WrappedKeyMaterial of(ByteArray bytes) {
 		Assert.notNull(bytes, "Wrapped key material bytes can't be null");
+		Assert.isTrue(!bytes.isEmpty(), "Wrapped key material bytes can't be empty");
 		return new WrappedKeyMaterial(bytes);
+	}
+
+	/**
+	 * Creates a new {@link WrappedKeyMaterial} from the given raw byte array.
+	 *
+	 * @param bytes the wrapped key bytes, can't be {@literal null}
+	 * @return a new {@link WrappedKeyMaterial} instance, never {@literal null}
+	 */
+	public static WrappedKeyMaterial of(byte[] bytes) {
+		return of(new ByteArray(bytes));
 	}
 
 	/**
