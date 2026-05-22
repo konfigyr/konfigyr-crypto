@@ -554,7 +554,8 @@ class RepostoryKeysetStoreTest {
 		repository.write(keysetWith("key-1", KeyStatus.ENABLED));
 
 		assertThatExceptionOfType(CryptoException.InvalidKeyStatusTransitionException.class)
-			.isThrownBy(() -> store.scheduleDestruction(definition.getName(), "key-1", Instant.now()))
+			.isThrownBy(() -> store.scheduleDestruction(definition.getName(), "key-1",
+					Instant.now().plusSeconds(60)))
 			.returns(definition.getName(), CryptoException.KeysetException::getName)
 			.returns("key-1", CryptoException.InvalidKeyStatusTransitionException::getKeyId)
 			.returns(KeyStatus.ENABLED, CryptoException.InvalidKeyStatusTransitionException::getCurrentStatus)
@@ -579,6 +580,101 @@ class RepostoryKeysetStoreTest {
 		assertThatExceptionOfType(CryptoException.KeysetNotFoundException.class)
 			.isThrownBy(() -> store.disable("missing-keyset", "key-1"))
 			.returns("missing-keyset", CryptoException.KeysetException::getName);
+	}
+
+	@Test
+	@DisplayName("should reject null or blank names on read")
+	void shouldRejectBlankNameOnRead() {
+		assertThatIllegalArgumentException().isThrownBy(() -> store.read(null));
+		assertThatIllegalArgumentException().isThrownBy(() -> store.read(""));
+		assertThatIllegalArgumentException().isThrownBy(() -> store.read("  "));
+	}
+
+	@Test
+	@DisplayName("should reject null or blank provider/kek names on create")
+	void shouldRejectBlankNamesOnCreate() {
+		assertThatIllegalArgumentException().isThrownBy(() -> store.create(null, kek.getId(), definition));
+		assertThatIllegalArgumentException().isThrownBy(() -> store.create("", kek.getId(), definition));
+		assertThatIllegalArgumentException().isThrownBy(() -> store.create(kek.getProvider(), null, definition));
+		assertThatIllegalArgumentException().isThrownBy(() -> store.create(kek.getProvider(), "", definition));
+	}
+
+	@Test
+	@DisplayName("should reject null or blank names on rotate")
+	void shouldRejectBlankNameOnRotate() {
+		assertThatIllegalArgumentException().isThrownBy(() -> store.rotate(""));
+		assertThatIllegalArgumentException().isThrownBy(() -> store.rotate("  "));
+	}
+
+	@Test
+	@DisplayName("should reject null or blank names on remove")
+	void shouldRejectBlankNameOnRemove() {
+		assertThatIllegalArgumentException().isThrownBy(() -> store.remove((String) null));
+		assertThatIllegalArgumentException().isThrownBy(() -> store.remove(""));
+		assertThatIllegalArgumentException().isThrownBy(() -> store.remove("  "));
+	}
+
+	@Test
+	@DisplayName("should reject null or blank names on disable")
+	void shouldRejectBlankNamesOnDisable() {
+		assertThatIllegalArgumentException().isThrownBy(() -> store.disable(null, "key-1"));
+		assertThatIllegalArgumentException().isThrownBy(() -> store.disable("", "key-1"));
+		assertThatIllegalArgumentException().isThrownBy(() -> store.disable(definition.getName(), null));
+		assertThatIllegalArgumentException().isThrownBy(() -> store.disable(definition.getName(), ""));
+	}
+
+	@Test
+	@DisplayName("should reject null or blank names on enable")
+	void shouldRejectBlankNamesOnEnable() {
+		assertThatIllegalArgumentException().isThrownBy(() -> store.enable(null, "key-1"));
+		assertThatIllegalArgumentException().isThrownBy(() -> store.enable("", "key-1"));
+		assertThatIllegalArgumentException().isThrownBy(() -> store.enable(definition.getName(), null));
+		assertThatIllegalArgumentException().isThrownBy(() -> store.enable(definition.getName(), ""));
+	}
+
+	@Test
+	@DisplayName("should reject null or blank names on scheduleDestruction")
+	void shouldRejectBlankNamesOnScheduleDestruction() {
+		final Instant future = Instant.now().plusSeconds(60);
+		assertThatIllegalArgumentException().isThrownBy(() -> store.scheduleDestruction(null, "key-1"));
+		assertThatIllegalArgumentException().isThrownBy(() -> store.scheduleDestruction("", "key-1"));
+		assertThatIllegalArgumentException().isThrownBy(() -> store.scheduleDestruction(definition.getName(), null));
+		assertThatIllegalArgumentException().isThrownBy(() -> store.scheduleDestruction(definition.getName(), ""));
+		assertThatIllegalArgumentException().isThrownBy(
+			() -> store.scheduleDestruction(null, "key-1", future));
+		assertThatIllegalArgumentException().isThrownBy(
+			() -> store.scheduleDestruction("", "key-1", future));
+		assertThatIllegalArgumentException().isThrownBy(
+			() -> store.scheduleDestruction(definition.getName(), null, future));
+		assertThatIllegalArgumentException().isThrownBy(
+			() -> store.scheduleDestruction(definition.getName(), "", future));
+	}
+
+	@Test
+	@DisplayName("should reject a destruction time in the past or present")
+	void shouldRejectPastDestructionTime() {
+		assertThatIllegalArgumentException().isThrownBy(
+			() -> store.scheduleDestruction(definition.getName(), "key-1", Instant.now()));
+		assertThatIllegalArgumentException().isThrownBy(
+			() -> store.scheduleDestruction(definition.getName(), "key-1", Instant.now().minusSeconds(1)));
+	}
+
+	@Test
+	@DisplayName("should reject null or blank names on cancelDestruction")
+	void shouldRejectBlankNamesOnCancelDestruction() {
+		assertThatIllegalArgumentException().isThrownBy(() -> store.cancelDestruction(null, "key-1"));
+		assertThatIllegalArgumentException().isThrownBy(() -> store.cancelDestruction("", "key-1"));
+		assertThatIllegalArgumentException().isThrownBy(() -> store.cancelDestruction(definition.getName(), null));
+		assertThatIllegalArgumentException().isThrownBy(() -> store.cancelDestruction(definition.getName(), ""));
+	}
+
+	@Test
+	@DisplayName("should reject null or blank names on destroy")
+	void shouldRejectBlankNamesOnDestroy() {
+		assertThatIllegalArgumentException().isThrownBy(() -> store.destroy(null, "key-1"));
+		assertThatIllegalArgumentException().isThrownBy(() -> store.destroy("", "key-1"));
+		assertThatIllegalArgumentException().isThrownBy(() -> store.destroy(definition.getName(), null));
+		assertThatIllegalArgumentException().isThrownBy(() -> store.destroy(definition.getName(), ""));
 	}
 
 	private EncryptedKeyset keysetWith(String keyId, KeyStatus status) {

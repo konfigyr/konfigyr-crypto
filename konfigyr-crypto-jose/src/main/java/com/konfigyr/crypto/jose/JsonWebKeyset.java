@@ -52,6 +52,7 @@ class JsonWebKeyset extends AbstractKeyset<JsonWebKey> implements JWKSource<Secu
 
 	@Override
 	public ByteArray encrypt(ByteArray data, @Nullable ByteArray context) {
+		Assert.isTrue(!data.isEmpty(), "Cannot encrypt an empty byte array");
 		assertKeysetOperation(KeysetOperation.ENCRYPT);
 
 		final JsonWebKey key = getPrimary();
@@ -69,6 +70,7 @@ class JsonWebKeyset extends AbstractKeyset<JsonWebKey> implements JWKSource<Secu
 
 	@Override
 	public ByteArray decrypt(ByteArray cipher, @Nullable ByteArray context) {
+		Assert.isTrue(!cipher.isEmpty(), "Cannot decrypt an empty byte array");
 		assertKeysetOperation(KeysetOperation.DECRYPT);
 
 		try {
@@ -90,6 +92,7 @@ class JsonWebKeyset extends AbstractKeyset<JsonWebKey> implements JWKSource<Secu
 
 	@Override
 	public ByteArray sign(ByteArray data) {
+		Assert.isTrue(!data.isEmpty(), "Cannot sign an empty byte array");
 		assertKeysetOperation(KeysetOperation.SIGN);
 
 		final JsonWebKey key = getPrimary();
@@ -110,6 +113,8 @@ class JsonWebKeyset extends AbstractKeyset<JsonWebKey> implements JWKSource<Secu
 
 	@Override
 	public boolean verify(ByteArray signature, ByteArray data) {
+		Assert.isTrue(!signature.isEmpty(), "Cannot verify an empty signature");
+		Assert.isTrue(!data.isEmpty(), "Cannot verify a signature against an empty byte array");
 		assertKeysetOperation(KeysetOperation.VERIFY);
 
 		try {

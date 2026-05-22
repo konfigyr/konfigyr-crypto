@@ -3,6 +3,7 @@ package com.konfigyr.crypto;
 import org.jspecify.annotations.NullMarked;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.util.Assert;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -69,6 +70,9 @@ public class RepostoryKeysetStore implements KeysetStore {
 
 	@Override
 	public Keyset create(String provider, String kek, KeysetDefinition definition) {
+		Assert.hasText(provider, "Provider name must not be blank");
+		Assert.hasText(kek, "Key encryption key ID must not be blank");
+
 		final KeysetFactory factory = lookupFactory(definition);
 
 		return create(factory, kek(provider, kek), definition);
@@ -83,6 +87,8 @@ public class RepostoryKeysetStore implements KeysetStore {
 
 	@Override
 	public Keyset read(String name) {
+		Assert.hasText(name, "Keyset name must not be blank");
+
 		final EncryptedKeyset encryptedKeyset = lookupKeyset(name);
 		final KeysetFactory factory = lookupFactory(encryptedKeyset);
 
@@ -98,6 +104,8 @@ public class RepostoryKeysetStore implements KeysetStore {
 
 	@Override
 	public void rotate(String name) {
+		Assert.hasText(name, "Keyset name must not be blank");
+
 		final EncryptedKeyset encryptedKeyset = lookupKeyset(name);
 
 		rotate(read(lookupFactory(encryptedKeyset), encryptedKeyset));
@@ -110,6 +118,8 @@ public class RepostoryKeysetStore implements KeysetStore {
 
 	@Override
 	public void rotate(String name, KeyDefinition definition) {
+		Assert.hasText(name, "Keyset name must not be blank");
+
 		final EncryptedKeyset encryptedKeyset = lookupKeyset(name);
 
 		rotate(read(lookupFactory(encryptedKeyset), encryptedKeyset), definition);
@@ -125,6 +135,8 @@ public class RepostoryKeysetStore implements KeysetStore {
 
 	@Override
 	public void remove(String name) {
+		Assert.hasText(name, "Keyset name must not be blank");
+
 		if (logger.isDebugEnabled()) {
 			logger.debug("Removing encrypted keyset data with name: {}", name);
 		}
@@ -146,40 +158,63 @@ public class RepostoryKeysetStore implements KeysetStore {
 
 	@Override
 	public void disable(String keysetName, String keyId) {
+		Assert.hasText(keysetName, "Keyset name must not be blank");
+		Assert.hasText(keyId, "Key ID must not be blank");
+
 		performKeyTransition(KeyTransition.disable(keysetName, keyId), KeyStatus.ENABLED);
 	}
 
 	@Override
 	public void enable(String keysetName, String keyId) {
+		Assert.hasText(keysetName, "Keyset name must not be blank");
+		Assert.hasText(keyId, "Key ID must not be blank");
+
 		performKeyTransition(KeyTransition.enable(keysetName, keyId), KeyStatus.DISABLED);
 	}
 
 	@Override
 	public void scheduleDestruction(String keysetName, String keyId) {
+		Assert.hasText(keysetName, "Keyset name must not be blank");
+		Assert.hasText(keyId, "Key ID must not be blank");
+
 		final EncryptedKeyset encryptedKeyset = lookupKeyset(keysetName);
 		final Duration gracePeriod = encryptedKeyset.getDestructionGracePeriod();
+		final Instant destructionTime = gracePeriod != null
+				? Instant.now().plus(gracePeriod)
+				: Instant.now();
+
+		performKeyTransition(KeyTransition.scheduleDestruction(keysetName, keyId, destructionTime),
+				KeyStatus.DISABLED);
+
 		if (gracePeriod == null) {
-			scheduleDestruction(keysetName, keyId, Instant.now());
 			destroy(keysetName, keyId);
-		} else {
-			scheduleDestruction(keysetName, keyId, Instant.now().plus(gracePeriod));
 		}
 	}
 
 	@Override
 	public void scheduleDestruction(String keysetName, String keyId, Instant destructionTime) {
+		Assert.hasText(keysetName, "Keyset name must not be blank");
+		Assert.hasText(keyId, "Key ID must not be blank");
+		Assert.isTrue(destructionTime.isAfter(Instant.now()), "Destruction time must be in the future");
+
 		performKeyTransition(KeyTransition.scheduleDestruction(keysetName, keyId, destructionTime),
 				KeyStatus.DISABLED);
 	}
 
 	@Override
 	public void cancelDestruction(String keysetName, String keyId) {
+		Assert.hasText(keysetName, "Keyset name must not be blank");
+		Assert.hasText(keyId, "Key ID must not be blank");
+
 		performKeyTransition(KeyTransition.cancelDestruction(keysetName, keyId),
 				KeyStatus.PENDING_DESTRUCTION);
 	}
 
 	@Override
 	public void destroy(String keysetName, String keyId) {
+		Assert.hasText(keysetName, "Keyset name must not be blank");
+		Assert.hasText(keyId, "Key ID must not be blank");
+
 		performKeyTransition(KeyTransition.destroy(keysetName, keyId, Instant.now()),
 				KeyStatus.PENDING_DESTRUCTION);
 	}
@@ -296,7 +331,8 @@ public class RepostoryKeysetStore implements KeysetStore {
 	 */
 	protected Keyset create(KeysetFactory factory, KeyEncryptionKey kek, KeysetDefinition definition) {
 		if (logger.isDebugEnabled()) {
-			logger.debug("Attempting to generate Keyset with [definition={}, kek={}]", definition, kek);
+			logger.debug("Attempting to generate Keyset with [definition={}, kek={}]", definition,
+					KeyEncryptionKey.format(kek));
 		}
 
 		final Keyset keyset;
@@ -357,7 +393,7 @@ public class RepostoryKeysetStore implements KeysetStore {
 		}
 
 		if (logger.isDebugEnabled()) {
-			logger.debug("Writing encrypted keyset data for: {}", keyset);
+			logger.debug("Writing encrypted keyset data for: {}", keyset.getName());
 		}
 
 		try {

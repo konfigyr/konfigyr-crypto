@@ -340,6 +340,18 @@ public abstract class AbstractKeysetFactoryTest {
 			assertThatExceptionOfType(CryptoException.UnsupportedKeysetOperationException.class)
 				.as("Keyset '%s' must reject decrypt on a signing keyset", keyset.getName())
 				.isThrownBy(() -> keyset.decrypt(data));
+
+			assertThatIllegalArgumentException()
+				.as("sign must reject empty data for algorithm '%s'", label)
+				.isThrownBy(() -> keyset.sign(ByteArray.empty()));
+
+			assertThatIllegalArgumentException()
+				.as("verify must reject empty signature for algorithm '%s'", label)
+				.isThrownBy(() -> keyset.verify(ByteArray.empty(), data));
+
+			assertThatIllegalArgumentException()
+				.as("verify must reject empty data for algorithm '%s'", label)
+				.isThrownBy(() -> keyset.verify(signature, ByteArray.empty()));
 		} else {
 			final ByteArray context = ByteArray.fromString("konfigyr-crypto-test-context");
 			final ByteArray cipher = keyset.encrypt(data);
@@ -372,6 +384,14 @@ public abstract class AbstractKeysetFactoryTest {
 			assertThatExceptionOfType(CryptoException.UnsupportedKeysetOperationException.class)
 				.as("Keyset '%s' must reject verify on an encryption keyset", keyset.getName())
 				.isThrownBy(() -> keyset.verify(data, data));
+
+			assertThatIllegalArgumentException()
+				.as("encrypt must reject empty data for algorithm '%s'", label)
+				.isThrownBy(() -> keyset.encrypt(ByteArray.empty()));
+
+			assertThatIllegalArgumentException()
+				.as("decrypt must reject empty cipher for algorithm '%s'", label)
+				.isThrownBy(() -> keyset.decrypt(ByteArray.empty()));
 		}
 	}
 

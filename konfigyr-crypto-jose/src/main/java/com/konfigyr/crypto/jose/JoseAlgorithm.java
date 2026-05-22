@@ -165,11 +165,18 @@ public final class JoseAlgorithm implements Algorithm {
 	 * ---------------------------------------------------------------------- */
 
 	/**
+	 * Preferred RSA key size in bits (3072), meeting NIST SP 800-131A Rev 2 guidance
+	 * for keys with security lifetimes beyond 2030 (112-bit strength minimum requires 2048;
+	 * 3072 provides 128-bit strength).
+	 */
+	private static final int PREFERRED_RSA_KEY_SIZE = 3072;
+
+	/**
 	 * RSA-OAEP with SHA-256. NIST SP 800-56B Rev 2.
 	 */
 	public static final JoseAlgorithm RSA_OAEP_256 = new JoseAlgorithm(
 		"jose:RSA-OAEP-256", KeyType.RSA, KeysetPurpose.ENCRYPTION, JWEAlgorithm.RSA_OAEP_256,
-		() -> new RSAKeyGenerator(RSAKeyGenerator.MIN_KEY_SIZE_BITS)
+		() -> new RSAKeyGenerator(PREFERRED_RSA_KEY_SIZE)
 	);
 
 	/**
@@ -177,7 +184,7 @@ public final class JoseAlgorithm implements Algorithm {
 	 */
 	public static final JoseAlgorithm RSA_OAEP_384 = new JoseAlgorithm(
 		"jose:RSA-OAEP-384", KeyType.RSA, KeysetPurpose.ENCRYPTION, JWEAlgorithm.RSA_OAEP_384,
-		() -> new RSAKeyGenerator(RSAKeyGenerator.MIN_KEY_SIZE_BITS)
+		() -> new RSAKeyGenerator(PREFERRED_RSA_KEY_SIZE)
 	);
 
 	/**
@@ -281,18 +288,33 @@ public final class JoseAlgorithm implements Algorithm {
 	);
 
 	/**
-	 * List of all built-in JOSE algorithm constants.
+	 * List of all built-in JOSE algorithm constants that are registered automatically.
+	 * <p>
+	 * RSA-PKCS1v1.5 signing algorithms ({@link #RS256}, {@link #RS384}, {@link #RS512}) are
+	 * intentionally excluded. They are conditionally acceptable for JOSE interoperability only
+	 * (NIST SP 800-131A Rev 2) and must be opted in explicitly via {@link #LEGACY_ALGORITHMS}.
 	 */
 	public static final List<JoseAlgorithm> DEFAULT_ALGORITHMS = List.of(
 		HS256, HS384, HS512,
 		ES256, ES384, ES512,
 		PS256, PS384, PS512,
-		RS256, RS384, RS512,
 		RSA_OAEP_256, RSA_OAEP_384, RSA_OAEP_512,
 		A128KW, A192KW, A256KW,
 		A128GCMKW, A192GCMKW, A256GCMKW,
 		ECDH_ES, ECDH_ES_A128KW, ECDH_ES_A192KW, ECDH_ES_A256KW
 	);
+
+	/**
+	 * RSA-PKCS1v1.5 signing algorithms retained exclusively for interoperability with external
+	 * relying parties that require PKCS1v1.5 signatures (e.g. legacy JOSE / JWT consumers).
+	 * <p>
+	 * These algorithms are <strong>not</strong> registered automatically. They must be explicitly
+	 * enabled by setting {@code konfigyr.crypto.jose.register-legacy-algorithms=true}.
+	 * <p>
+	 * Do not use these algorithms in new designs. Prefer {@link #PS256}, {@link #PS384},
+	 * or {@link #PS512} instead (NIST SP 800-131A Rev 2).
+	 */
+	public static final List<JoseAlgorithm> LEGACY_ALGORITHMS = List.of(RS256, RS384, RS512);
 
 	private final String name;
 	private final KeyType type;

@@ -11,10 +11,12 @@ import org.springframework.beans.factory.BeanCreationException;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.context.annotation.Configurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@ExtendWith(MockitoExtension.class)
+@ExtendWith({ MockitoExtension.class, OutputCaptureExtension.class })
 class CryptoAutoConfigurationTest {
 
 	final Configurations configurations = AutoConfigurations.of(CryptoAutoConfiguration.class);
@@ -97,6 +99,30 @@ class CryptoAutoConfigurationTest {
 				.getBean(KeysetRepository.class)
 				.isEqualTo(repository)
 			);
+	}
+
+	@Test
+	@DisplayName("should emit a WARN log when InMemoryKeysetRepository is auto-configured")
+	void shouldWarnWhenInMemoryRepositoryIsAutoConfigured(CapturedOutput output) {
+		runner.withBean(KeyEncryptionKeyProvider.class, () -> provider).run(ctx -> {
+			assertThat(ctx).hasNotFailed().hasSingleBean(InMemoryKeysetRepository.class);
+			assertThat(output).contains("InMemoryKeysetRepository is being used")
+					.contains("konfigyr-crypto-jdbc")
+					.contains("KeysetRepository");
+		});
+	}
+
+	@Test
+	@DisplayName("should not emit in-memory WARN when a custom KeysetRepository is provided")
+	void shouldNotWarnWhenCustomRepositoryIsProvided(CapturedOutput output) {
+		final var repository = Mockito.mock(KeysetRepository.class);
+
+		runner.withBean(KeysetRepository.class, () -> repository)
+			.withBean(KeyEncryptionKeyProvider.class, () -> provider)
+			.run(ctx -> {
+				assertThat(ctx).hasNotFailed().doesNotHaveBean(InMemoryKeysetRepository.class);
+				assertThat(output).doesNotContain("InMemoryKeysetRepository is being used");
+			});
 	}
 
 }
