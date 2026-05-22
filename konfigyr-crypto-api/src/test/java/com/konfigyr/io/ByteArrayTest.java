@@ -185,6 +185,18 @@ class ByteArrayTest {
 	}
 
 	@Test
+	@DisplayName("should compare byte arrays in constant time")
+	void shouldCompareInConstantTime() {
+		final var data = ByteArray.fromString(TEST_ORIGINAL);
+
+		assertThat(data.constantTimeEquals(ByteArray.fromString(TEST_ORIGINAL))).isTrue();
+		assertThat(data.constantTimeEquals(ByteArray.fromString("different string"))).isFalse();
+		assertThat(data.constantTimeEquals(ByteArray.fromString("short"))).isFalse();
+		assertThat(data.constantTimeEquals((ByteArray) null)).isFalse();
+		assertThat(ByteArray.empty().constantTimeEquals(ByteArray.empty())).isTrue();
+	}
+
+	@Test
 	@DisplayName("should perform identity and equality checks based on the contents")
 	void shouldCheckEquality() {
 		final var foo = ByteArray.fromString("foo array");
