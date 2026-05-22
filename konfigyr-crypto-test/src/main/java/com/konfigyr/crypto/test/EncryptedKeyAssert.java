@@ -1,6 +1,7 @@
 package com.konfigyr.crypto.test;
 
 import com.konfigyr.crypto.*;
+import com.konfigyr.crypto.WrappedKeyMaterial;
 import com.konfigyr.io.ByteArray;
 import org.assertj.core.api.AbstractObjectAssert;
 import org.assertj.core.api.Assertions;
@@ -13,6 +14,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 
+@SuppressWarnings("unused")
 public class EncryptedKeyAssert extends AbstractObjectAssert<EncryptedKeyAssert, EncryptedKey> {
 
 	public static InstanceOfAssertFactory<EncryptedKey, EncryptedKeyAssert> factory() {
@@ -99,10 +101,14 @@ public class EncryptedKeyAssert extends AbstractObjectAssert<EncryptedKeyAssert,
 	}
 
 	public EncryptedKeyAssert hasMaterial(String material) {
-		return hasMaterial(material == null ? null : ByteArray.fromString(material));
+		return hasMaterial(material == null ? null : WrappedKeyMaterial.of(material));
 	}
 
 	public EncryptedKeyAssert hasMaterial(ByteArray material) {
+		return hasMaterial(material == null ? null : WrappedKeyMaterial.of(material));
+	}
+
+	public EncryptedKeyAssert hasMaterial(WrappedKeyMaterial material) {
 		isNotNull();
 		if (!Objects.equals(actual.getData(), material)) {
 			failWithMessage("Expected key to have key material of <%s> but was <%s>",

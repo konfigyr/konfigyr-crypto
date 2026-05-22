@@ -1,6 +1,5 @@
 package com.konfigyr.crypto;
 
-import com.konfigyr.io.ByteArray;
 import org.jspecify.annotations.NullMarked;
 
 import java.io.IOException;
@@ -74,7 +73,7 @@ public interface KeysetRepository {
 		final List<EncryptedKey> updatedKeys = new ArrayList<>(keyset.size());
 		for (EncryptedKey key : keyset) {
 			if (key.getId().equals(transition.getKeyId())) {
-				final ByteArray data = transition.getStatus() == KeyStatus.DESTROYED ? null : key.getData();
+				final WrappedKeyMaterial data = transition.getStatus() == KeyStatus.DESTROYED ? null : key.getData();
 				updatedKeys.add(EncryptedKey.builder(key)
 					.status(transition.getStatus())
 					.destructionScheduledAt(transition.getDestructionScheduledAt())

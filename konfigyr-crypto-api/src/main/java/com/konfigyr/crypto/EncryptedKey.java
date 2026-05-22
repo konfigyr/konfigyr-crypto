@@ -11,8 +11,6 @@ import org.springframework.core.io.InputStreamSource;
 import org.springframework.util.Assert;
 
 import java.io.InputStream;
-import java.io.Serial;
-import java.io.Serializable;
 import java.time.Instant;
 
 /**
@@ -35,10 +33,7 @@ import java.time.Instant;
  **/
 @Value
 @NullMarked
-public class EncryptedKey implements Comparable<EncryptedKey>, InputStreamSource, Serializable {
-
-	@Serial
-	private static final long serialVersionUID = -7568519341937720112L;
+public class EncryptedKey implements Comparable<EncryptedKey>, InputStreamSource {
 
 	/**
 	 * Unique identifier of this key within the encrypted keyset.
@@ -66,10 +61,12 @@ public class EncryptedKey implements Comparable<EncryptedKey>, InputStreamSource
 	boolean primary;
 
 	/**
-	 * Encrypted cryptographic key material that was wrapped by the {@link KeyEncryptionKey}.
+	 * Wrapped cryptographic key material produced by {@link KeyEncryptionKey#wrap}. Is
+	 * {@literal null} when the key is in {@link KeyStatus#INITIALIZING} or
+	 * {@link KeyStatus#DESTROYED} state.
 	 */
 	@Nullable
-	ByteArray data;
+	WrappedKeyMaterial data;
 
 	/**
 	 * Timestamp that tells the time when this key was created.
@@ -123,7 +120,7 @@ public class EncryptedKey implements Comparable<EncryptedKey>, InputStreamSource
 	 * Creates a new instance of the {@link Builder} pre-populated from an existing {@link EncryptedKey}.
 	 * <p>
 	 * All fields are copied as-is. Callers can then override individual fields (e.g. {@code status},
-	 * {@code destructionScheduledAt}) before calling {@link Builder#build(ByteArray)}.
+	 * {@code destructionScheduledAt}) before calling {@link Builder#build(WrappedKeyMaterial)}.
 	 *
 	 * @param existing the source {@link EncryptedKey} to copy, can't be {@literal null}
 	 * @return a pre-populated builder, never {@literal null}
@@ -143,14 +140,14 @@ public class EncryptedKey implements Comparable<EncryptedKey>, InputStreamSource
 	}
 
 	/**
-	 * Creates a new instance of the {@link EncryptedKey} from the given {@link Key} and encrypted
-	 * key material represented by the {@link ByteArray}.
+	 * Creates a new instance of the {@link EncryptedKey} from the given {@link Key} and wrapped
+	 * key material produced by {@link KeyEncryptionKey#wrap}.
 	 *
 	 * @param key key that is encrypted by the {@link KeyEncryptionKey}, can't be {@literal null}
-	 * @param data encrypted private key material, if the key material is initialized
+	 * @param data wrapped key material, {@literal null} when the key material is not yet initialized
 	 * @return encrypted key, never {@literal  null}
 	 */
-	public static EncryptedKey from(Key key, @Nullable ByteArray data) {
+	public static EncryptedKey from(Key key, @Nullable WrappedKeyMaterial data) {
 		return builder()
 			.id(key.getId())
 			.algorithm(key.getAlgorithm())
@@ -305,14 +302,26 @@ public class EncryptedKey implements Comparable<EncryptedKey>, InputStreamSource
 		}
 
 		/**
-		 * Creates a new instance of the {@link EncryptedKey} using the given {@link ByteArray} as the
-		 * encrypted key material from the matching {@link Key}.
+		 * Convenience overload that wraps the given {@link ByteArray} in a {@link WrappedKeyMaterial}
+		 * before delegating to {@link #build(WrappedKeyMaterial)}.
 		 *
-		 * @param data encrypted key material, can be {@literal null} if the key is not yet initialized
+		 * @param data key material bytes, can be {@literal null} if the key is not yet initialized
 		 * @return encrypted key
 		 * @throws IllegalArgumentException when required information to create the encrypted key is missing
 		 */
 		public EncryptedKey build(@Nullable ByteArray data) {
+			return build(data != null ? WrappedKeyMaterial.of(data) : null);
+		}
+
+		/**
+		 * Creates a new instance of the {@link EncryptedKey} using the given {@link WrappedKeyMaterial}
+		 * as the wrapped key material from the matching {@link Key}.
+		 *
+		 * @param data wrapped key material, can be {@literal null} if the key is not yet initialized
+		 * @return encrypted key
+		 * @throws IllegalArgumentException when required information to create the encrypted key is missing
+		 */
+		public EncryptedKey build(@Nullable WrappedKeyMaterial data) {
 			Assert.hasText(id, "Key identifier can not be blank");
 			Assert.hasText(algorithm, "Key algorithm can not be blank");
 			Assert.notNull(type, "Key type can not be null");

@@ -7,6 +7,9 @@ import com.konfigyr.io.ByteArray;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
+import java.io.NotSerializableException;
+import java.io.ObjectOutputStream;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -293,6 +296,22 @@ class EncryptedKeysetTest {
 				.provider("test-provider")
 				.build())
 			.withMessage("KEK identifier can not be blank");
+	}
+
+	@Test
+	@DisplayName("should not be Java-serializable")
+	void shouldNotBeSerializable() {
+		assertThatExceptionOfType(NotSerializableException.class).isThrownBy(() -> {
+			try (var out = new ObjectOutputStream(new ByteArrayOutputStream())) {
+				out.writeObject(EncryptedKeyset.builder()
+					.name("test-keyset")
+					.purpose(KeysetPurpose.ENCRYPTION)
+					.factory("test-factory")
+					.provider("test-provider")
+					.keyEncryptionKey("test-kek")
+					.build());
+			}
+		});
 	}
 
 }

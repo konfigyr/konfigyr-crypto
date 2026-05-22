@@ -8,8 +8,6 @@ import org.jspecify.annotations.NullUnmarked;
 import org.jspecify.annotations.Nullable;
 import org.springframework.util.Assert;
 
-import java.io.Serial;
-import java.io.Serializable;
 import java.time.Duration;
 import java.util.*;
 
@@ -36,10 +34,7 @@ import java.util.*;
 @Value
 @NullMarked
 @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
-public class EncryptedKeyset implements Iterable<EncryptedKey>, Serializable {
-
-	@Serial
-	private static final long serialVersionUID = -5051833454368671211L;
+public class EncryptedKeyset implements Iterable<EncryptedKey> {
 
 	/**
 	 * Unique keyset name.
