@@ -2,10 +2,11 @@ package com.konfigyr.crypto;
 
 import com.konfigyr.crypto.test.EncryptedKeyAssert;
 import com.konfigyr.crypto.test.TestAlgorithm;
-import com.konfigyr.io.ByteArray;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectOutputStream;
 import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.*;
@@ -15,7 +16,7 @@ import static org.mockito.Mockito.mock;
 class EncryptedKeyTest {
 
 	static final Algorithm algorithm = TestAlgorithm.INSTANCE;
-	static final ByteArray data = ByteArray.fromString("encrypted-key-material");
+	static final WrappedKeyMaterial data = WrappedKeyMaterial.of("encrypted-key-material");
 	static final Instant now = Instant.parse("2026-01-01T00:00:00Z");
 
 	@Test
@@ -77,11 +78,11 @@ class EncryptedKeyTest {
 			.primary(false)
 			.createdAt(now)
 			.destroyedAt(now)
-			.build(null);
+			.build((WrappedKeyMaterial) null);
 
 		EncryptedKeyAssert.assertThat(key)
 			.hasStatus(KeyStatus.DESTROYED)
-			.hasMaterial((ByteArray) null)
+			.hasMaterial((WrappedKeyMaterial) null)
 			.isDestroyedAt(now);
 	}
 
@@ -131,7 +132,7 @@ class EncryptedKeyTest {
 			.build(data);
 
 		assertThat(key.getInputStream())
-			.hasBinaryContent(data.array());
+			.hasBinaryContent(data.toByteArray());
 	}
 
 	@Test
@@ -142,7 +143,7 @@ class EncryptedKeyTest {
 			.algorithm(algorithm)
 			.status(KeyStatus.DESTROYED)
 			.createdAt(now)
-			.build(null);
+			.build((WrappedKeyMaterial) null);
 
 		assertThat(key.getInputStream())
 			.hasBinaryContent(new byte[0]);
@@ -232,6 +233,23 @@ class EncryptedKeyTest {
 				.status(KeyStatus.ENABLED)
 				.build(data))
 			.withMessage("Key creation time can not be null");
+	}
+
+	@Test
+	@DisplayName("should not be Java-serializable")
+	void shouldNotBeSerializable() {
+		final var key = EncryptedKey.builder()
+			.id("key-id")
+			.algorithm(algorithm)
+			.status(KeyStatus.ENABLED)
+			.createdAt(now)
+			.build(data);
+
+		assertThatThrownBy(() -> {
+			try (var out = new ObjectOutputStream(new ByteArrayOutputStream())) {
+				out.writeObject(key);
+			}
+		}).isInstanceOf(java.io.NotSerializableException.class);
 	}
 
 }

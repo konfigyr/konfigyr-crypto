@@ -8,6 +8,7 @@ import com.google.crypto.tink.proto.OutputPrefixType;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.konfigyr.crypto.*;
 import com.konfigyr.crypto.Key;
+import com.konfigyr.crypto.WrappedKeyMaterial;
 import com.konfigyr.io.ByteArray;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NullMarked;
@@ -69,7 +70,7 @@ public class TinkKeysetFactory implements KeysetFactory {
 		final List<EncryptedKey> keys = new ArrayList<>(keyset.getKeys().size());
 
 		for (Key key : keyset.getKeys()) {
-			final ByteArray encrypted;
+			final WrappedKeyMaterial encrypted;
 
 			try {
 				final ProtoKeySerialization serialization = MutableSerializationRegistry.globalInstance()

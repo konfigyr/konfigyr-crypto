@@ -1,6 +1,7 @@
 package com.konfigyr.crypto.jose;
 
 import com.konfigyr.crypto.*;
+import com.konfigyr.crypto.WrappedKeyMaterial;
 import com.konfigyr.io.ByteArray;
 import com.nimbusds.jose.jwk.JWK;
 import lombok.RequiredArgsConstructor;
@@ -64,7 +65,7 @@ public class JoseKeysetFactory implements KeysetFactory {
 		final List<EncryptedKey> keys = new ArrayList<>(keyset.getKeys().size());
 
 		for (Key key : keyset.getKeys()) {
-			final ByteArray encrypted;
+			final WrappedKeyMaterial encrypted;
 
 			try {
 				final JWK value = ((JsonWebKey) key).getValue();

@@ -2,6 +2,7 @@ package com.konfigyr.crypto.test;
 
 import com.konfigyr.crypto.AbstractKeyEncryptionKey;
 import com.konfigyr.crypto.KeyEncryptionKey;
+import com.konfigyr.crypto.WrappedKeyMaterial;
 import com.konfigyr.io.ByteArray;
 import org.jspecify.annotations.NullMarked;
 
@@ -68,7 +69,7 @@ public class TestKeyEncryptionKey extends AbstractKeyEncryptionKey {
 	 * @throws IOException when encryption fails
 	 */
 	@Override
-	public ByteArray wrap(ByteArray data) throws IOException {
+	public WrappedKeyMaterial wrap(ByteArray data) throws IOException {
 		try {
 			final byte[] iv = new byte[IV_LENGTH];
 			new SecureRandom().nextBytes(iv);
@@ -81,7 +82,7 @@ public class TestKeyEncryptionKey extends AbstractKeyEncryptionKey {
 			System.arraycopy(iv, 0, result, 0, IV_LENGTH);
 			System.arraycopy(ciphertext, 0, result, IV_LENGTH, ciphertext.length);
 
-			return new ByteArray(result);
+			return WrappedKeyMaterial.of(result);
 		} catch (GeneralSecurityException e) {
 			throw new IOException("Failed to wrap key material using AES-256-GCM", e);
 		}
@@ -96,9 +97,9 @@ public class TestKeyEncryptionKey extends AbstractKeyEncryptionKey {
 	 * @throws IOException when decryption or authentication fails
 	 */
 	@Override
-	public ByteArray unwrap(ByteArray data) throws IOException {
+	public ByteArray unwrap(WrappedKeyMaterial data) throws IOException {
 		try {
-			final byte[] raw = data.array();
+			final byte[] raw = data.toByteArray();
 			final byte[] iv = Arrays.copyOfRange(raw, 0, IV_LENGTH);
 			final byte[] ciphertext = Arrays.copyOfRange(raw, IV_LENGTH, raw.length);
 

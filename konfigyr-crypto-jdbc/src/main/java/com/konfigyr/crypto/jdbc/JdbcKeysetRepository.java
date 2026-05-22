@@ -1,6 +1,7 @@
 package com.konfigyr.crypto.jdbc;
 
 import com.konfigyr.crypto.*;
+import com.konfigyr.crypto.WrappedKeyMaterial;
 import com.konfigyr.io.ByteArray;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -576,11 +577,10 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 		}
 	}
 
-	private static void setBytes(PreparedStatement ps, int index, @Nullable ByteArray data) throws SQLException {
+	private static void setBytes(PreparedStatement ps, int index, @Nullable WrappedKeyMaterial data) throws SQLException {
 		if (data != null) {
-			ps.setBytes(index, data.array());
-		}
-		else {
+			ps.setBytes(index, data.toByteArray());
+		} else {
 			ps.setNull(index, Types.BINARY);
 		}
 	}

@@ -46,24 +46,24 @@ public interface KeyEncryptionKey {
 	String getProvider();
 
 	/**
-	 * Wraps or encrypts the {@link Keyset} private material. The encryption algorithm that used to encrypt the
-	 * data depends on the implementation of the {@link KeyEncryptionKey}.
+	 * Wraps or encrypts the {@link Keyset} private material using this
+	 * {@link KeyEncryptionKey}. The encryption algorithm depends on the implementation.
 	 *
-	 * @param data private keyset material, can't be {@literal null}
-	 * @return encrypted private keyset material, never {@literal null}
+	 * @param data private keyset material to wrap, can't be {@literal null}
+	 * @return wrapped key material, never {@literal null}
 	 * @throws IOException when there is an issue while wrapping the private key material.
 	 */
-	ByteArray wrap(ByteArray data) throws IOException;
+	WrappedKeyMaterial wrap(ByteArray data) throws IOException;
 
 	/**
-	 * Unwraps or decrypts the {@link EncryptedKeyset} and returns the decrypted {@link ByteArray} containing
-	 * the private keyset material.
+	 * Unwraps or decrypts the given {@link WrappedKeyMaterial} and returns the plaintext
+	 * {@link ByteArray} containing the private keyset material.
 	 *
-	 * @param data encrypted keyset material to be unwrapped, can't be {@literal null}
+	 * @param data wrapped key material to unwrap, can't be {@literal null}
 	 * @return decrypted private keyset material, never {@literal null}
 	 * @throws IOException when there is an issue while unwrapping the encrypted private key material.
 	 */
-	ByteArray unwrap(ByteArray data) throws IOException;
+	ByteArray unwrap(WrappedKeyMaterial data) throws IOException;
 
 	/**
 	 * Formats the given {@link KeyEncryptionKey} as a safe log-friendly reference string

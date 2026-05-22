@@ -13,6 +13,7 @@ import com.google.crypto.tink.subtle.Random;
 import com.konfigyr.crypto.AbstractKeyEncryptionKey;
 import com.konfigyr.crypto.KeyEncryptionKey;
 import com.konfigyr.crypto.Keyset;
+import com.konfigyr.crypto.WrappedKeyMaterial;
 import com.konfigyr.io.ByteArray;
 import org.jspecify.annotations.NonNull;
 import org.springframework.util.Assert;
@@ -43,9 +44,9 @@ public class TinkKeyEncryptionKey extends AbstractKeyEncryptionKey {
 
 	@NonNull
 	@Override
-	public ByteArray wrap(@NonNull ByteArray data) throws IOException {
+	public WrappedKeyMaterial wrap(@NonNull ByteArray data) throws IOException {
 		try {
-			return new ByteArray(factory.get().encrypt(data.array(), null));
+			return WrappedKeyMaterial.of(factory.get().encrypt(data.array(), null));
 		}
 		catch (GeneralSecurityException e) {
 			throw new IOException("Failed to encrypt private key material", e);
@@ -54,9 +55,9 @@ public class TinkKeyEncryptionKey extends AbstractKeyEncryptionKey {
 
 	@NonNull
 	@Override
-	public ByteArray unwrap(@NonNull ByteArray data) throws IOException {
+	public ByteArray unwrap(@NonNull WrappedKeyMaterial data) throws IOException {
 		try {
-			return new ByteArray(factory.get().decrypt(data.array(), null));
+			return new ByteArray(factory.get().decrypt(data.toByteArray(), null));
 		}
 		catch (GeneralSecurityException e) {
 			throw new IOException("Failed to decrypt private key material", e);

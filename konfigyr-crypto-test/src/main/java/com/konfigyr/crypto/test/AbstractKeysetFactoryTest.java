@@ -1,6 +1,7 @@
 package com.konfigyr.crypto.test;
 
 import com.konfigyr.crypto.*;
+import com.konfigyr.crypto.WrappedKeyMaterial;
 import com.konfigyr.io.ByteArray;
 import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.DisplayName;
@@ -75,12 +76,12 @@ public abstract class AbstractKeysetFactoryTest {
 	protected KeyEncryptionKey wrongKek() {
 		return new AbstractKeyEncryptionKey("wrong-kek", kek().getProvider()) {
 			@Override
-			public ByteArray wrap(ByteArray data) {
-				return data;
+			public WrappedKeyMaterial wrap(ByteArray data) {
+				return WrappedKeyMaterial.of(data);
 			}
 
 			@Override
-			public ByteArray unwrap(ByteArray data) {
+			public ByteArray unwrap(WrappedKeyMaterial data) {
 				throw new CryptoException.UnwrappingException("unknown", this,
 					new IllegalStateException("wrong key encryption key"));
 			}
@@ -412,14 +413,14 @@ public abstract class AbstractKeysetFactoryTest {
 
 			for (int j = 0; j < history.size(); j++) {
 				assertCryptoAccess(purpose, keyset, history.get(j), data,
-					"after rotation #" + i + ", must still access data produced in step #" + j);
+					label + ": after rotation #" + i + ", must still access data produced in step #" + j);
 			}
 
 			keyset = decryptKeyset(encryptKeyset(keyset));
 
 			for (int j = 0; j < history.size(); j++) {
 				assertCryptoAccess(purpose, keyset, history.get(j), data,
-					"after round-trip following rotation #" + i + ", must still access data produced in step #" + j);
+					label + ": after round-trip following rotation #" + i + ", must still access data produced in step #" + j);
 			}
 		}
 	}
