@@ -31,8 +31,8 @@ import java.util.List;
  * Custom Tink-based algorithms can be created by constructing an instance directly and
  * registering it via an {@link com.konfigyr.crypto.AlgorithmRegistrar} bean.
  *
- * @author : Vladimir Spasic
- * @since : 15.05.26, Fri
+ * @author Vladimir Spasic
+ * @since 1.0.0
  * @see <a href="https://developers.google.com/tink/supported-key-types">Tink - Supported Key Types</a>
  **/
 @NullMarked

@@ -8,8 +8,8 @@ import java.time.Instant;
 /**
  * Interface that describes the public attributes of a key within the {@link Keyset}.
  *
- * @author : Vladimir Spasic
- * @since : 04.09.23, Mon
+ * @author Vladimir Spasic
+ * @since 1.0.0
  **/
 @NullMarked
 public interface Key {

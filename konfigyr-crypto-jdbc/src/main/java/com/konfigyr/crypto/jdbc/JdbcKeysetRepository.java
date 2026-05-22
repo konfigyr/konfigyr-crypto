@@ -66,8 +66,8 @@ import java.util.Optional;
  * );
  * </pre>
  *
- * @author : Vladimir Spasic
- * @since : 28.08.23, Mon
+ * @author Vladimir Spasic
+ * @since 1.0.0
  **/
 @Slf4j
 @Setter
@@ -167,6 +167,18 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 			ORDER BY K.KEYSET_NAME, E.KEY_ID
 			""";
 
+	private static final String FIND_PENDING_ROTATION_QUERY = """
+			SELECT K.KEYSET_NAME, K.KEYSET_PURPOSE, K.KEYSET_FACTORY, K.KEYSET_PROVIDER, K.KEYSET_KEK,
+				K.ROTATION_INTERVAL, K.DESTRUCTION_GRACE_PERIOD
+			FROM %TABLE_NAME% K
+			INNER JOIN %KEYS_TABLE_NAME% E ON E.KEYSET_NAME = K.KEYSET_NAME
+			WHERE E.KEY_PRIMARY = TRUE
+				AND E.KEY_STATUS = 'ENABLED'
+				AND E.EXPIRES_AT IS NOT NULL
+				AND E.EXPIRES_AT <= ?
+			ORDER BY K.KEYSET_NAME
+			""";
+
 	/* Configurable table names and query overrides */
 
 	private String tableName = DEFAULT_TABLE_NAME;
@@ -199,6 +211,8 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 
 	private String findPendingDestructionQuery;
 
+	private String findPendingRotationQuery;
+
 	private final JdbcOperations jdbcOperations;
 
 	private final TransactionOperations transactionOperations;
@@ -221,6 +235,7 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 		updateKeyStatusQuery = sql(updateKeyStatusQuery, UPDATE_KEY_STATUS_QUERY);
 		destroyKeyQuery = sql(destroyKeyQuery, DESTROY_KEY_QUERY);
 		findPendingDestructionQuery = sql(findPendingDestructionQuery, FIND_PENDING_DESTRUCTION_QUERY);
+		findPendingRotationQuery = sql(findPendingRotationQuery, FIND_PENDING_ROTATION_QUERY);
 	}
 
 	@NonNull
@@ -406,6 +421,27 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 				findPendingDestructionQuery,
 				pss -> pss.setLong(1, Instant.now().toEpochMilli()),
 				this::extractPendingDestruction));
+	}
+
+	@NonNull
+	@Override
+	public List<EncryptedKeyset> findPendingRotation() {
+		log.debug("Querying for keysets pending rotation");
+
+		return transactionOperations.execute(status ->
+			jdbcOperations.query(
+				findPendingRotationQuery,
+				pss -> pss.setLong(1, Instant.now().toEpochMilli()),
+				this::extractPendingRotation));
+	}
+
+	private List<EncryptedKeyset> extractPendingRotation(
+			@NonNull ResultSet rs) throws SQLException, DataAccessException {
+		final List<EncryptedKeyset> result = new ArrayList<>();
+		while (rs.next()) {
+			result.add(extractKeysetRow(rs).build(List.of()));
+		}
+		return result;
 	}
 
 	private List<EncryptedKeyset> extractPendingDestruction(

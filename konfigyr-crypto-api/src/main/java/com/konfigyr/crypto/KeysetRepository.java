@@ -12,8 +12,8 @@ import java.util.Optional;
  * Repository interface that is responsible for managing {@link EncryptedKeyset encrypted
  * keysts} at rest.
  *
- * @author : Vladimir Spasic
- * @since : 21.08.23, Mon
+ * @author Vladimir Spasic
+ * @since 1.0.0
  * @see EncryptedKeyset
  * @see KeysetStore
  **/
@@ -115,6 +115,36 @@ public interface KeysetRepository {
 	 * @throws IOException if there is an issue while querying for pending destruction keys
 	 */
 	default List<EncryptedKeyset> findPendingDestruction() throws IOException {
+		return List.of();
+	}
+
+	/**
+	 * Returns a list of partial {@link EncryptedKeyset} objects for keysets whose rotation
+	 * interval has elapsed. A keyset is eligible for rotation when its primary
+	 * {@link KeyStatus#ENABLED} key's {@link EncryptedKey#getExpiresAt() expiry time} is in
+	 * the past, i.e.:
+	 * <pre>
+	 *     primaryKey.expiresAt &lt;= now
+	 * </pre>
+	 * <p>
+	 * Each returned {@link EncryptedKeyset} is a <em>metadata-only view</em> — it carries
+	 * the full keyset metadata but an <strong>empty key list</strong>. Callers use only the
+	 * keyset name to trigger rotation:
+	 * <pre>{@code
+	 * for (EncryptedKeyset keyset : repository.findPendingRotation()) {
+	 *     store.rotate(keyset.getName());
+	 * }
+	 * }</pre>
+	 * <p>
+	 * The default implementation returns an empty list. Repositories that can scan all
+	 * stored keysets (e.g. {@link InMemoryKeysetRepository}) or issue an efficient query
+	 * (e.g. {@code JdbcKeysetRepository}) should override this method.
+	 *
+	 * @return list of partial {@link EncryptedKeyset} objects with empty key lists for
+	 *         keysets pending rotation, never {@literal null}
+	 * @throws IOException if there is an issue while querying for keysets pending rotation
+	 */
+	default List<EncryptedKeyset> findPendingRotation() throws IOException {
 		return List.of();
 	}
 

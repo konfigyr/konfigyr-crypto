@@ -63,8 +63,8 @@ import java.util.Optional;
  * event of a compromise, expired crypto period, when an algorithm is no longer secure. You can access the state
  * of each key within the {@link Keyset} and check what is the key identifier, its status, and algorithm.
  *
- * @author : Vladimir Spasic
- * @since : 21.08.23, Mon
+ * @author Vladimir Spasic
+ * @since 1.0.0
  **/
 @NullMarked
 public interface KeysetStore {

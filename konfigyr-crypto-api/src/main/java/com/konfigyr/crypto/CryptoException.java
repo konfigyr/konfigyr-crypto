@@ -12,8 +12,8 @@ import static org.springframework.util.StringUtils.collectionToCommaDelimitedStr
  * Base exception type that is thrown when dealing with the services within the crypto
  * package.
  *
- * @author : Vladimir Spasic
- * @since : 01.09.22, Thu
+ * @author Vladimir Spasic
+ * @since 1.0.0
  **/
 public abstract class CryptoException extends RuntimeException {
 

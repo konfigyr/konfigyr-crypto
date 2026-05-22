@@ -40,8 +40,8 @@ import java.util.*;
  * </ul>
  *
  * @param <T> the type of {@link Key} managed by this keyset
- * @author : Vladimir Spasic
- * @since : 21.08.23, Mon
+ * @author Vladimir Spasic
+ * @since 1.0.0
  * @see Keyset
  * @see Key
  * @see KeysetFactory
@@ -267,6 +267,8 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 	 *     .build();
 	 * }</pre>
 	 *
+	 * @param <T> the type of {@link Key} managed by this keyset
+	 * @param <K> the concrete keyset type for fluent chaining
 	 * @param <B> the concrete builder type for fluent chaining
 	 */
 	@NullMarked

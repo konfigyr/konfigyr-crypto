@@ -28,8 +28,8 @@ import java.util.*;
  * Each individual {@link Key} has its own encrypted material stored as an {@link EncryptedKey},
  * which also carries the per-key lifecycle metadata (status, timestamps).
  *
- * @author : Vladimir Spasic
- * @since : 25.08.23, Fri
+ * @author Vladimir Spasic
+ * @since 1.0.0
  * @see KeysetFactory
  * @see KeysetRepository
  **/

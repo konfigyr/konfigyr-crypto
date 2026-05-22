@@ -12,8 +12,8 @@ import java.time.Duration;
  * Configuration properties for JDBC backed {@link com.konfigyr.crypto.KeysetRepository}
  * implementation.
  *
- * @author : Vladimir Spasic
- * @since : 28.08.23, Mon
+ * @author Vladimir Spasic
+ * @since 1.0.0
  * @see JdbcKeysetRepository
  **/
 @Data

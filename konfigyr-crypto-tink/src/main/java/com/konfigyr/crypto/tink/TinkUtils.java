@@ -18,8 +18,8 @@ import lombok.experimental.UtilityClass;
 import java.security.GeneralSecurityException;
 
 /**
- * @author : Vladimir Spasic
- * @since : 25.08.23, Fri
+ * @author Vladimir Spasic
+ * @since 1.0.0
  **/
 @UtilityClass
 class TinkUtils {

@@ -16,8 +16,8 @@ import java.security.GeneralSecurityException;
  * Implementation of the {@link com.google.crypto.tink.Key} that contains public key information obtained from
  * the Tink {@link com.google.crypto.tink.proto.KeysetInfo.KeyInfo} type.
  *
- * @author : Vladimir Spasic
- * @since : 05.09.23, Tue
+ * @author Vladimir Spasic
+ * @since 1.0.0
  **/
 @Getter
 @NullMarked

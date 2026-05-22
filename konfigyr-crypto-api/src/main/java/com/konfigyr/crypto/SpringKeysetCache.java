@@ -11,8 +11,8 @@ import java.util.function.Supplier;
  * Implementation of the {@link KeysetCache} that uses Spring {@link Cache} implementation
  * as the actual cache store.
  *
- * @author : Vladimir Spasic
- * @since : 06.09.23, Wed
+ * @author Vladimir Spasic
+ * @since 1.0.0
  **/
 @NullMarked
 @RequiredArgsConstructor

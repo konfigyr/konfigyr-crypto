@@ -13,8 +13,8 @@ import org.springframework.context.annotation.Bean;
  * used by the {@link com.konfigyr.crypto.KeysetStore} to manage {@link JsonWebKeyset} using the
  * Java JSON Object Signing and Encryption (JOSE) library.
  *
- * @author : Vladimir Spasic
- * @since : 24.11.25, Mon
+ * @author Vladimir Spasic
+ * @since 1.0.0
  **/
 @AutoConfiguration
 @AutoConfigureBefore(CryptoAutoConfiguration.class)

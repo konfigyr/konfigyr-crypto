@@ -28,8 +28,8 @@ import java.time.Instant;
  * {@link #getData()} will be {@literal null} because the key material either has not yet
  * been generated or has been permanently erased.
  *
- * @author : Vladimir Spasic
- * @since : 15.05.26, Fri
+ * @author Vladimir Spasic
+ * @since 1.0.0
  * @see EncryptedKeyset
  * @see Key
  **/

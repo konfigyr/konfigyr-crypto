@@ -1,1 +1,2 @@
 com.konfigyr.crypto.CryptoAutoConfiguration
+com.konfigyr.crypto.KeysetTaskAutoConfiguration

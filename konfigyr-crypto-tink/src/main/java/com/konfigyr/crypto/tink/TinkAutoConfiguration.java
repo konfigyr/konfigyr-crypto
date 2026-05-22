@@ -13,8 +13,8 @@ import org.springframework.context.annotation.Bean;
  * implementation that can be used by the {@link com.konfigyr.crypto.KeysetStore} to
  * manage {@link TinkKeyset}.
  *
- * @author : Vladimir Spasic
- * @since : 28.08.23, Mon
+ * @author Vladimir Spasic
+ * @since 1.0.0
  **/
 @AutoConfiguration
 @AutoConfigureBefore(CryptoAutoConfiguration.class)

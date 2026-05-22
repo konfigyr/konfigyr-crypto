@@ -16,6 +16,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNoException;
@@ -206,6 +207,59 @@ class JdbcKeysetRepositoryTest {
 			.doesNotContain("lifecycle-future");
 
 		repository.remove("lifecycle-future");
+	}
+
+	@Test
+	@DisplayName("should return keysets whose primary key expiry time has elapsed")
+	void shouldFindKeysetsPendingRotation() throws IOException {
+		final Instant t0 = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+		final Instant pastExpiry = t0.minus(Duration.ofDays(1));
+		final EncryptedKey primaryKey = EncryptedKey.builder()
+			.id("pk-expired")
+			.algorithm(TestAlgorithm.INSTANCE)
+			.status(KeyStatus.ENABLED)
+			.primary(true)
+			.createdAt(pastExpiry.minus(Duration.ofDays(90)))
+			.expiresAt(pastExpiry)
+			.build(ByteArray.fromString("enc-key-material"));
+
+		repository.write(encryptedKeyset("rotation-due", primaryKey));
+
+		final var results = repository.findPendingRotation();
+
+		assertThat(results)
+			.extracting(EncryptedKeyset::getName)
+			.contains("rotation-due");
+		assertThat(results)
+			.filteredOn(ks -> "rotation-due".equals(ks.getName()))
+			.first()
+			.extracting(EncryptedKeyset::getKeys)
+			.isEqualTo(List.of());
+
+		repository.remove("rotation-due");
+	}
+
+	@Test
+	@DisplayName("should not return keysets whose primary key expiry time is in the future")
+	void shouldNotFindKeysetsPendingRotationIfNotDue() throws IOException {
+		final Instant t0 = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+		final Instant futureExpiry = t0.plus(Duration.ofDays(30));
+		final EncryptedKey primaryKey = EncryptedKey.builder()
+			.id("pk-fresh")
+			.algorithm(TestAlgorithm.INSTANCE)
+			.status(KeyStatus.ENABLED)
+			.primary(true)
+			.createdAt(t0)
+			.expiresAt(futureExpiry)
+			.build(ByteArray.fromString("enc-material"));
+
+		repository.write(encryptedKeyset("rotation-not-due", primaryKey));
+
+		assertThat(repository.findPendingRotation())
+			.extracting(EncryptedKeyset::getName)
+			.doesNotContain("rotation-not-due");
+
+		repository.remove("rotation-not-due");
 	}
 
 	@NonNull

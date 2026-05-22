@@ -29,8 +29,8 @@ import java.util.List;
  * When encrypting or decrypting the {@link KeysetHandle} a {@link TinkProtoKeysetFormat} would be used to
  * serialize the sensitive key material.
  *
- * @author : Vladimir Spasic
- * @since : 21.08.23, Mon
+ * @author Vladimir Spasic
+ * @since 1.0.0
  * @see TinkAlgorithm
  * @see TinkKeyset
  **/

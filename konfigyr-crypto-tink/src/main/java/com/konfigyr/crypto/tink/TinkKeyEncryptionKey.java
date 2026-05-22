@@ -29,8 +29,8 @@ import java.security.GeneralSecurityException;
  * decide to perform the operations against a KMS service using the Tink
  * {@link com.google.crypto.tink.KmsClient}.
  *
- * @author : Vladimir Spasic
- * @since : 26.08.23, Sat
+ * @author Vladimir Spasic
+ * @since 1.0.0
  **/
 public class TinkKeyEncryptionKey extends AbstractKeyEncryptionKey {
 

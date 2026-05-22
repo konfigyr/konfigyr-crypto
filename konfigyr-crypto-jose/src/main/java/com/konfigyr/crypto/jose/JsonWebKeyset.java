@@ -29,8 +29,8 @@ import java.util.stream.Collectors;
  * Internally, it wraps a {@link JWKSet} to manage the JSON Web Key (JWK) representation and
  * facilitates key selection via a {@link JWKSource}.
  *
- * @author : Vladimir Spasic
- * @since : 24.11.25, Mon
+ * @author Vladimir Spasic
+ * @since 1.0.0
  * @see JWKSource
  */
 @NullMarked

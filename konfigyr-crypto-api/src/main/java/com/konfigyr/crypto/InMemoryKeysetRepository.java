@@ -13,8 +13,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * Implementation of the {@link KeysetRepository} that would store the
  * {@link EncryptedKeyset}s in memory.
  *
- * @author : Vladimir Spasic
- * @since : 27.08.23, Sun
+ * @author Vladimir Spasic
+ * @since 1.0.0
  **/
 @NullMarked
 public class InMemoryKeysetRepository implements KeysetRepository {
@@ -58,6 +58,30 @@ public class InMemoryKeysetRepository implements KeysetRepository {
 			}
 			if (!pending.isEmpty()) {
 				result.add(EncryptedKeyset.builder(keyset).build(pending));
+			}
+		}
+		return result;
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * <p>
+	 * Scans all stored keysets and returns metadata-only {@link EncryptedKeyset} views (empty
+	 * key list) for keysets whose primary {@link KeyStatus#ENABLED} key's
+	 * {@link EncryptedKey#getExpiresAt() expiry time} is in the past.
+	 */
+	@Override
+	public List<EncryptedKeyset> findPendingRotation() {
+		final Instant now = Instant.now();
+		final List<EncryptedKeyset> result = new ArrayList<>();
+		for (EncryptedKeyset keyset : store.values()) {
+			for (EncryptedKey key : keyset.getKeys()) {
+				if (key.getStatus() == KeyStatus.ENABLED && key.isPrimary()) {
+					if (key.getExpiresAt() != null && !key.getExpiresAt().isAfter(now)) {
+						result.add(EncryptedKeyset.builder(keyset).build(List.of()));
+					}
+					break;
+				}
 			}
 		}
 		return result;

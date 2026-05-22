@@ -22,8 +22,8 @@ import java.io.Serializable;
  * therefore be unique across all registered algorithms and must not change once
  * key material has been encrypted with it.
  *
- * @author : Vladimir Spasic
- * @since : 21.08.23, Mon
+ * @author Vladimir Spasic
+ * @since 1.0.0
  * @see KeysetPurpose
  * @see AlgorithmRegistry
  **/

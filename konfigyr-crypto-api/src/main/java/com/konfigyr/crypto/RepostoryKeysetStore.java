@@ -26,8 +26,8 @@ import static com.konfigyr.crypto.CryptoException.*;
  * generating the {@link Keyset keysets} and defines which {@link Algorithm algorithms}
  * are supported when performing {@link KeysetOperation cryptographic operatins}.
  *
- * @author : Vladimir Spasic
- * @since : 26.08.23, Sat
+ * @author Vladimir Spasic
+ * @since 1.0.0
  **/
 @NullMarked
 public class RepostoryKeysetStore implements KeysetStore {

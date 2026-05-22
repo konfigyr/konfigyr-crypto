@@ -25,8 +25,8 @@ import java.util.Optional;
  * {@link Algorithm} instances under the same name will throw an
  * {@link IllegalArgumentException}.
  *
- * @author : Vladimir Spasic
- * @since : 15.05.26, Fri
+ * @author Vladimir Spasic
+ * @since 1.0.0
  * @see AlgorithmRegistrar
  * @see KeysetFactory
  **/

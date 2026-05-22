@@ -13,8 +13,8 @@ import java.util.List;
  * {@link DataSourceScriptDatabaseInitializer} for the Konfigyr Keyseet JDBC database. May
  * be registered as a bean to override autoconfiguration.
  *
- * @author : Vladimir Spasic
- * @since : 28.08.23, Mon
+ * @author Vladimir Spasic
+ * @since 1.0.0
  **/
 public class JdbcKeysetDataSourceScriptDatabaseInitializer extends DataSourceScriptDatabaseInitializer {
 

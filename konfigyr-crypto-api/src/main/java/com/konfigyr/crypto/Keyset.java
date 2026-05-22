@@ -41,8 +41,8 @@ import java.util.stream.Stream;
  * Galois/Counter Mode (GCM) is based on the number of messages encrypted, as noted
  * <a href= "https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-38d.pdf">here</a>.
  *
- * @author : Vladimir Spasic
- * @since : 21.08.23, Mon
+ * @author Vladimir Spasic
+ * @since 1.0.0
  * @see Key
  * @see KeysetFactory
  **/

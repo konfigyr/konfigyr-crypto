@@ -22,8 +22,8 @@ import java.util.Objects;
  * Usually the answer lies in the {@link Algorithm} as there has to be a reason why such a library was included
  * in the first place. Because it performs a certain cryptographic operation using a specific cryptographic algorithm.
  *
- * @author : Vladimir Spasic
- * @since : 21.08.23, Mon
+ * @author Vladimir Spasic
+ * @since 1.0.0
  **/
 @NullMarked
 public interface KeysetFactory {

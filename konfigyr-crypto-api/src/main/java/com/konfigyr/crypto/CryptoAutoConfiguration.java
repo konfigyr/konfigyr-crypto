@@ -22,8 +22,8 @@ import org.springframework.context.annotation.Bean;
  * use a JDBC implementation or create your own implementation if you wish to use this
  * library in a productive system.
  *
- * @author : Vladimir Spasic
- * @since : 28.08.23, Mon
+ * @author Vladimir Spasic
+ * @since 1.0.0
  **/
 @AutoConfiguration
 @ConditionalOnBean(KeysetFactory.class)

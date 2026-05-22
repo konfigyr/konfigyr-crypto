@@ -148,6 +148,73 @@ class InMemoryKeysetRepositoryTest {
 			repository.updateKeyStatus(KeyTransition.disable("missing-keyset", "key-1")));
 	}
 
+	@Test
+	@DisplayName("should return keysets whose primary key expiry time has elapsed")
+	void shouldFindKeysetsPendingRotation() throws Exception {
+		final Instant pastExpiry = Instant.now().minus(Duration.ofDays(1));
+		final EncryptedKey expiredKey = EncryptedKey.builder()
+			.id("key-1")
+			.algorithm(TestAlgorithm.INSTANCE)
+			.status(KeyStatus.ENABLED)
+			.primary(true)
+			.createdAt(pastExpiry.minus(Duration.ofDays(90)))
+			.expiresAt(pastExpiry)
+			.build(ByteArray.fromString("key-material"));
+		repository.write(encryptedKeyset("due-for-rotation", expiredKey));
+
+		final List<EncryptedKeyset> results = repository.findPendingRotation();
+
+		assertThat(results)
+			.hasSize(1)
+			.first()
+			.returns("due-for-rotation", EncryptedKeyset::getName)
+			.extracting(EncryptedKeyset::getKeys)
+			.isEqualTo(List.of());
+	}
+
+	@Test
+	@DisplayName("should not return keysets whose primary key expiry time is in the future")
+	void shouldNotFindKeysetsPendingRotationIfExpiryInFuture() throws Exception {
+		final Instant futureExpiry = Instant.now().plus(Duration.ofDays(30));
+		final EncryptedKey freshKey = EncryptedKey.builder()
+			.id("key-1")
+			.algorithm(TestAlgorithm.INSTANCE)
+			.status(KeyStatus.ENABLED)
+			.primary(true)
+			.createdAt(Instant.now())
+			.expiresAt(futureExpiry)
+			.build(ByteArray.fromString("key-material"));
+		repository.write(encryptedKeyset("not-due", freshKey));
+
+		assertThat(repository.findPendingRotation())
+			.extracting(EncryptedKeyset::getName)
+			.doesNotContain("not-due");
+	}
+
+	@Test
+	@DisplayName("should not return keysets whose primary key has no expiry time")
+	void shouldNotFindKeysetsPendingRotationIfNoExpiry() throws Exception {
+		final EncryptedKey keyWithoutExpiry = EncryptedKey.builder()
+			.id("key-1")
+			.algorithm(TestAlgorithm.INSTANCE)
+			.status(KeyStatus.ENABLED)
+			.primary(true)
+			.createdAt(Instant.now().minus(Duration.ofDays(365)))
+			.build(ByteArray.fromString("key-material"));
+		final EncryptedKeyset keyset = EncryptedKeyset.builder()
+			.name("no-expiry")
+			.purpose(KeysetPurpose.ENCRYPTION)
+			.factory(TestAlgorithm.INSTANCE.factory())
+			.provider("test-provider")
+			.keyEncryptionKey("test-kek")
+			.build(keyWithoutExpiry);
+		repository.write(keyset);
+
+		assertThat(repository.findPendingRotation())
+			.extracting(EncryptedKeyset::getName)
+			.doesNotContain("no-expiry");
+	}
+
 	private static EncryptedKeyset encryptedKeyset(String name, EncryptedKey... keys) {
 		return EncryptedKeyset.builder()
 			.name(name)
