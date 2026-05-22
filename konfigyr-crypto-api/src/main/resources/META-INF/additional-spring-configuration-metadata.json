@@ -1,0 +1,31 @@
+{
+  "groups": [
+    {
+      "name": "konfigyr.crypto.tasks",
+      "sourceType": "com.konfigyr.crypto.KeysetTaskRegistration"
+    }
+  ],
+  "properties": [
+    {
+      "name": "konfigyr.crypto.tasks",
+      "type": "java.util.Map<java.lang.String,com.konfigyr.crypto.KeysetTaskRegistration.TriggerProperties>",
+      "description": "Trigger configuration for keyset maintenance tasks. Each key is the task name, and the value is a task trigger configuration.",
+      "sourceType": "com.konfigyr.crypto.KeysetTaskRegistration"
+    }
+  ],
+  "hints": [
+    {
+      "name": "konfigyr.crypto.tasks.keys",
+      "values": [
+        {
+          "value": "keyset-rotation",
+          "description": "Configures the Keyset rotation task."
+        },
+        {
+          "value": "keyset-destruction",
+          "description": "Configures the Keyset destruction task."
+        }
+      ]
+    }
+  ]
+}

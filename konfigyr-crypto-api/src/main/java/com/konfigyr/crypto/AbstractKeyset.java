@@ -267,6 +267,8 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 	 *     .build();
 	 * }</pre>
 	 *
+	 * @param <T> the type of {@link Key} managed by this keyset
+	 * @param <K> the concrete keyset type for fluent chaining
 	 * @param <B> the concrete builder type for fluent chaining
 	 */
 	@NullMarked
