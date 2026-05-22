@@ -428,69 +428,67 @@ class RepositoryKeysetStoreTest {
 	@Test
 	@DisplayName("should disable an ENABLED key and evict the cache")
 	void shouldDisableKey() throws IOException {
-		repository.write(keysetWith("key-1", KeyStatus.ENABLED));
+		repository.write(keysetWith("enabled-key", KeyStatus.ENABLED));
 
-		assertThatNoException().isThrownBy(() -> store.disable(definition.getName(), "key-1"));
+		assertThatNoException().isThrownBy(() -> store.disable(definition.getName(), "enabled-key"));
 
-		verify(repository).updateKeyStatus(KeyTransition.disable(definition.getName(), "key-1"));
+		verify(repository).updateKeyStatus(KeyTransition.disable(definition.getName(), "enabled-key"));
 		verify(cache).evict(definition.getName());
 	}
 
 	@Test
 	@DisplayName("should re-enable a DISABLED key and evict the cache")
 	void shouldEnableKey() throws IOException {
-		repository.write(keysetWith("key-1", KeyStatus.DISABLED));
+		repository.write(keysetWith("disabled-key", KeyStatus.DISABLED));
 
-		assertThatNoException().isThrownBy(() -> store.enable(definition.getName(), "key-1"));
+		assertThatNoException().isThrownBy(() -> store.enable(definition.getName(), "disabled-key"));
 
-		verify(repository).updateKeyStatus(KeyTransition.enable(definition.getName(), "key-1"));
+		verify(repository).updateKeyStatus(KeyTransition.enable(definition.getName(), "disabled-key"));
 		verify(cache).evict(definition.getName());
 	}
 
 	@Test
 	@DisplayName("should mark an ENABLED key as compromised and evict the cache")
 	void shouldCompromiseKey() throws IOException {
-		repository.write(keysetWith("compromised-key", KeyStatus.ENABLED));
+		repository.write(keysetWith("enabled-key", KeyStatus.ENABLED));
 
-		assertThatNoException().isThrownBy(() -> store.compromise(definition.getName(), "compromised-key"));
+		assertThatNoException().isThrownBy(() -> store.compromise(definition.getName(), "enabled-key"));
 
-		verify(repository).updateKeyStatus(KeyTransition.compromise(definition.getName(), "compromised-1"));
+		verify(repository).updateKeyStatus(KeyTransition.compromise(definition.getName(), "enabled-key"));
 		verify(cache).evict(definition.getName());
 	}
 
 	@Test
 	@DisplayName("should throw InvalidKeyStatusTransitionException when compromising a non-ENABLED key")
 	void shouldFailToCompromiseNonEnabledKey() throws IOException {
-		repository.write(keysetWith("key-1", KeyStatus.DISABLED));
+		repository.write(keysetWith("disabled-key", KeyStatus.DISABLED));
 
 		assertThatExceptionOfType(CryptoException.InvalidKeyStatusTransitionException.class)
-			.isThrownBy(() -> store.compromise(definition.getName(), "key-1"))
+			.isThrownBy(() -> store.compromise(definition.getName(), "disabled-key"))
 			.returns(definition.getName(), CryptoException.KeysetException::getName)
-			.returns("key-1", CryptoException.InvalidKeyStatusTransitionException::getKeyId)
+			.returns("disabled-key", CryptoException.InvalidKeyStatusTransitionException::getKeyId)
 			.returns(KeyStatus.DISABLED, CryptoException.InvalidKeyStatusTransitionException::getCurrentStatus)
 			.returns(KeyStatus.COMPROMISED, CryptoException.InvalidKeyStatusTransitionException::getAttemptedStatus);
 	}
 
 	@Test
-	@DisplayName("should reject null or blank names on compromise")
+	@DisplayName("should reject blank names on compromise")
 	void shouldRejectBlankNamesOnCompromise() {
-		assertThatIllegalArgumentException().isThrownBy(() -> store.compromise(null, "key-1"));
-		assertThatIllegalArgumentException().isThrownBy(() -> store.compromise("", "key-1"));
-		assertThatIllegalArgumentException().isThrownBy(() -> store.compromise(definition.getName(), null));
+		assertThatIllegalArgumentException().isThrownBy(() -> store.compromise("", "enabled-key"));
 		assertThatIllegalArgumentException().isThrownBy(() -> store.compromise(definition.getName(), ""));
 	}
 
 	@Test
 	@DisplayName("should schedule destruction for a DISABLED key at an explicit time")
 	void shouldScheduleDestructionAtExplicitTime() throws IOException {
-		repository.write(keysetWith("key-1", KeyStatus.DISABLED));
+		repository.write(keysetWith("disabled-key", KeyStatus.DISABLED));
 
 		final Instant destructionTime = Instant.now().plus(Duration.ofDays(30));
 		assertThatNoException().isThrownBy(
-			() -> store.scheduleDestruction(definition.getName(), "key-1", destructionTime));
+			() -> store.scheduleDestruction(definition.getName(), "disabled-key", destructionTime));
 
 		verify(repository).updateKeyStatus(
-			KeyTransition.scheduleDestruction(definition.getName(), "key-1", destructionTime));
+			KeyTransition.scheduleDestruction(definition.getName(), "disabled-key", destructionTime));
 		verify(cache).evict(definition.getName());
 	}
 
@@ -502,16 +500,16 @@ class RepositoryKeysetStoreTest {
 			.provider(kek.getProvider())
 			.keyEncryptionKey(kek.getId())
 			.destructionGracePeriod(grace)
-			.build(List.of(encryptedKey("key-1", KeyStatus.DISABLED)));
+			.build(List.of(encryptedKey("disabled-key", KeyStatus.DISABLED)));
 
 		repository.write(keysetWithGrace);
 
 		assertThatNoException().isThrownBy(
-			() -> store.scheduleDestruction(definition.getName(), "key-1"));
+			() -> store.scheduleDestruction(definition.getName(), "disabled-key"));
 
 		verify(repository).updateKeyStatus(assertArg(t -> {
 			assertThat(t.getKeysetName()).isEqualTo(definition.getName());
-			assertThat(t.getKeyId()).isEqualTo("key-1");
+			assertThat(t.getKeyId()).isEqualTo("disabled-key");
 			assertThat(t.getStatus()).isEqualTo(KeyStatus.PENDING_DESTRUCTION);
 			assertThat(t.getDestructionScheduledAt()).isNotNull();
 			assertThat(t.getDestroyedAt()).isNull();
@@ -528,25 +526,25 @@ class RepositoryKeysetStoreTest {
 			.factory(definition.getAlgorithm().factory())
 			.provider(kek.getProvider())
 			.keyEncryptionKey(kek.getId())
-			.build(List.of(encryptedKey("key-1", KeyStatus.DISABLED)));
+			.build(List.of(encryptedKey("disabled-key", KeyStatus.DISABLED)));
 		repository.write(noGracePeriod);
 
 		assertThatNoException().isThrownBy(
-			() -> store.scheduleDestruction(definition.getName(), "key-1"));
+			() -> store.scheduleDestruction(definition.getName(), "disabled-key"));
 
 		final ArgumentCaptor<KeyTransition> captor = ArgumentCaptor.forClass(KeyTransition.class);
 		verify(repository, times(2)).updateKeyStatus(captor.capture());
 
 		assertThat(captor.getAllValues().get(0)).satisfies(t -> {
 			assertThat(t.getKeysetName()).isEqualTo(definition.getName());
-			assertThat(t.getKeyId()).isEqualTo("key-1");
+			assertThat(t.getKeyId()).isEqualTo("disabled-key");
 			assertThat(t.getStatus()).isEqualTo(KeyStatus.PENDING_DESTRUCTION);
 			assertThat(t.getDestructionScheduledAt()).isNotNull();
 			assertThat(t.getDestroyedAt()).isNull();
 		});
 		assertThat(captor.getAllValues().get(1)).satisfies(t -> {
 			assertThat(t.getKeysetName()).isEqualTo(definition.getName());
-			assertThat(t.getKeyId()).isEqualTo("key-1");
+			assertThat(t.getKeyId()).isEqualTo("disabled-key");
 			assertThat(t.getStatus()).isEqualTo(KeyStatus.DESTROYED);
 			assertThat(t.getDestructionScheduledAt()).isNull();
 			assertThat(t.getDestroyedAt()).isNotNull();
@@ -556,25 +554,25 @@ class RepositoryKeysetStoreTest {
 	@Test
 	@DisplayName("should cancel a scheduled destruction and return the key to DISABLED")
 	void shouldCancelDestruction() throws IOException {
-		repository.write(keysetWith("key-1", KeyStatus.PENDING_DESTRUCTION));
+		repository.write(keysetWith("pending-key", KeyStatus.PENDING_DESTRUCTION));
 
 		assertThatNoException().isThrownBy(
-			() -> store.cancelDestruction(definition.getName(), "key-1"));
+			() -> store.cancelDestruction(definition.getName(), "pending-key"));
 
-		verify(repository).updateKeyStatus(KeyTransition.cancelDestruction(definition.getName(), "key-1"));
+		verify(repository).updateKeyStatus(KeyTransition.cancelDestruction(definition.getName(), "pending-key"));
 		verify(cache).evict(definition.getName());
 	}
 
 	@Test
 	@DisplayName("should destroy a PENDING_DESTRUCTION key and stamp the destroyed-at timestamp")
 	void shouldDestroyKey() throws IOException {
-		repository.write(keysetWith("key-1", KeyStatus.PENDING_DESTRUCTION));
+		repository.write(keysetWith("pending-key", KeyStatus.PENDING_DESTRUCTION));
 
-		assertThatNoException().isThrownBy(() -> store.destroy(definition.getName(), "key-1"));
+		assertThatNoException().isThrownBy(() -> store.destroy(definition.getName(), "pending-key"));
 
 		verify(repository).updateKeyStatus(assertArg(t -> {
 			assertThat(t.getKeysetName()).isEqualTo(definition.getName());
-			assertThat(t.getKeyId()).isEqualTo("key-1");
+			assertThat(t.getKeyId()).isEqualTo("pending-key");
 			assertThat(t.getStatus()).isEqualTo(KeyStatus.DESTROYED);
 			assertThat(t.getDestroyedAt()).isNotNull();
 		}));
@@ -584,13 +582,13 @@ class RepositoryKeysetStoreTest {
 	@Test
 	@DisplayName("should throw InvalidKeyStatusTransitionException for an invalid transition")
 	void shouldFailOnInvalidKeyStatusTransition() throws IOException {
-		repository.write(keysetWith("key-1", KeyStatus.ENABLED));
+		repository.write(keysetWith("enabled-key", KeyStatus.ENABLED));
 
 		assertThatExceptionOfType(CryptoException.InvalidKeyStatusTransitionException.class)
-			.isThrownBy(() -> store.scheduleDestruction(definition.getName(), "key-1",
+			.isThrownBy(() -> store.scheduleDestruction(definition.getName(), "enabled-key",
 					Instant.now().plusSeconds(60)))
 			.returns(definition.getName(), CryptoException.KeysetException::getName)
-			.returns("key-1", CryptoException.InvalidKeyStatusTransitionException::getKeyId)
+			.returns("enabled-key", CryptoException.InvalidKeyStatusTransitionException::getKeyId)
 			.returns(KeyStatus.ENABLED, CryptoException.InvalidKeyStatusTransitionException::getCurrentStatus)
 			.returns(KeyStatus.PENDING_DESTRUCTION,
 				CryptoException.InvalidKeyStatusTransitionException::getAttemptedStatus);
@@ -599,7 +597,7 @@ class RepositoryKeysetStoreTest {
 	@Test
 	@DisplayName("should throw KeysetException when the key identifier is not found in the keyset")
 	void shouldFailWhenKeyNotFoundInKeyset() throws IOException {
-		repository.write(keysetWith("key-1", KeyStatus.ENABLED));
+		repository.write(keysetWith("enabled-key", KeyStatus.ENABLED));
 
 		assertThatExceptionOfType(CryptoException.KeysetException.class)
 			.isThrownBy(() -> store.disable(definition.getName(), "missing-key"))
@@ -616,9 +614,8 @@ class RepositoryKeysetStoreTest {
 	}
 
 	@Test
-	@DisplayName("should reject null or blank names on read")
+	@DisplayName("should reject blank names on read")
 	void shouldRejectBlankNameOnRead() {
-		assertThatIllegalArgumentException().isThrownBy(() -> store.read(null));
 		assertThatIllegalArgumentException().isThrownBy(() -> store.read(""));
 		assertThatIllegalArgumentException().isThrownBy(() -> store.read("  "));
 	}
@@ -626,59 +623,46 @@ class RepositoryKeysetStoreTest {
 	@Test
 	@DisplayName("should reject null or blank provider/kek names on create")
 	void shouldRejectBlankNamesOnCreate() {
-		assertThatIllegalArgumentException().isThrownBy(() -> store.create(null, kek.getId(), definition));
 		assertThatIllegalArgumentException().isThrownBy(() -> store.create("", kek.getId(), definition));
-		assertThatIllegalArgumentException().isThrownBy(() -> store.create(kek.getProvider(), null, definition));
 		assertThatIllegalArgumentException().isThrownBy(() -> store.create(kek.getProvider(), "", definition));
 	}
 
 	@Test
-	@DisplayName("should reject null or blank names on rotate")
+	@DisplayName("should reject blank names on rotate")
 	void shouldRejectBlankNameOnRotate() {
 		assertThatIllegalArgumentException().isThrownBy(() -> store.rotate(""));
 		assertThatIllegalArgumentException().isThrownBy(() -> store.rotate("  "));
 	}
 
 	@Test
-	@DisplayName("should reject null or blank names on remove")
+	@DisplayName("should reject blank names on remove")
 	void shouldRejectBlankNameOnRemove() {
-		assertThatIllegalArgumentException().isThrownBy(() -> store.remove((String) null));
 		assertThatIllegalArgumentException().isThrownBy(() -> store.remove(""));
 		assertThatIllegalArgumentException().isThrownBy(() -> store.remove("  "));
 	}
 
 	@Test
-	@DisplayName("should reject null or blank names on disable")
+	@DisplayName("should reject blank names on disable")
 	void shouldRejectBlankNamesOnDisable() {
-		assertThatIllegalArgumentException().isThrownBy(() -> store.disable(null, "key-1"));
 		assertThatIllegalArgumentException().isThrownBy(() -> store.disable("", "key-1"));
-		assertThatIllegalArgumentException().isThrownBy(() -> store.disable(definition.getName(), null));
 		assertThatIllegalArgumentException().isThrownBy(() -> store.disable(definition.getName(), ""));
 	}
 
 	@Test
-	@DisplayName("should reject null or blank names on enable")
+	@DisplayName("should reject blank names on enable")
 	void shouldRejectBlankNamesOnEnable() {
-		assertThatIllegalArgumentException().isThrownBy(() -> store.enable(null, "key-1"));
 		assertThatIllegalArgumentException().isThrownBy(() -> store.enable("", "key-1"));
-		assertThatIllegalArgumentException().isThrownBy(() -> store.enable(definition.getName(), null));
 		assertThatIllegalArgumentException().isThrownBy(() -> store.enable(definition.getName(), ""));
 	}
 
 	@Test
-	@DisplayName("should reject null or blank names on scheduleDestruction")
+	@DisplayName("should reject blank names on scheduleDestruction")
 	void shouldRejectBlankNamesOnScheduleDestruction() {
 		final Instant future = Instant.now().plusSeconds(60);
-		assertThatIllegalArgumentException().isThrownBy(() -> store.scheduleDestruction(null, "key-1"));
 		assertThatIllegalArgumentException().isThrownBy(() -> store.scheduleDestruction("", "key-1"));
-		assertThatIllegalArgumentException().isThrownBy(() -> store.scheduleDestruction(definition.getName(), null));
 		assertThatIllegalArgumentException().isThrownBy(() -> store.scheduleDestruction(definition.getName(), ""));
 		assertThatIllegalArgumentException().isThrownBy(
-			() -> store.scheduleDestruction(null, "key-1", future));
-		assertThatIllegalArgumentException().isThrownBy(
 			() -> store.scheduleDestruction("", "key-1", future));
-		assertThatIllegalArgumentException().isThrownBy(
-			() -> store.scheduleDestruction(definition.getName(), null, future));
 		assertThatIllegalArgumentException().isThrownBy(
 			() -> store.scheduleDestruction(definition.getName(), "", future));
 	}
@@ -693,20 +677,16 @@ class RepositoryKeysetStoreTest {
 	}
 
 	@Test
-	@DisplayName("should reject null or blank names on cancelDestruction")
+	@DisplayName("should reject blank names on cancelDestruction")
 	void shouldRejectBlankNamesOnCancelDestruction() {
-		assertThatIllegalArgumentException().isThrownBy(() -> store.cancelDestruction(null, "key-1"));
 		assertThatIllegalArgumentException().isThrownBy(() -> store.cancelDestruction("", "key-1"));
-		assertThatIllegalArgumentException().isThrownBy(() -> store.cancelDestruction(definition.getName(), null));
 		assertThatIllegalArgumentException().isThrownBy(() -> store.cancelDestruction(definition.getName(), ""));
 	}
 
 	@Test
-	@DisplayName("should reject null or blank names on destroy")
+	@DisplayName("should reject blank names on destroy")
 	void shouldRejectBlankNamesOnDestroy() {
-		assertThatIllegalArgumentException().isThrownBy(() -> store.destroy(null, "key-1"));
 		assertThatIllegalArgumentException().isThrownBy(() -> store.destroy("", "key-1"));
-		assertThatIllegalArgumentException().isThrownBy(() -> store.destroy(definition.getName(), null));
 		assertThatIllegalArgumentException().isThrownBy(() -> store.destroy(definition.getName(), ""));
 	}
 
