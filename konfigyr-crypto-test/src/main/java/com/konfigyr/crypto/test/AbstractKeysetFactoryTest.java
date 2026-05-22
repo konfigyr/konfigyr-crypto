@@ -349,9 +349,9 @@ public abstract class AbstractKeysetFactoryTest {
 				.as("verify must reject empty signature for algorithm '%s'", label)
 				.isThrownBy(() -> keyset.verify(ByteArray.empty(), data));
 
-			 assertThatIllegalArgumentException()
-				 .as("verify must reject empty data for algorithm '%s'", label)
-				 .isThrownBy(() -> keyset.verify(signature, ByteArray.empty()));
+			assertThatIllegalArgumentException()
+				.as("verify must reject empty data for algorithm '%s'", label)
+				.isThrownBy(() -> keyset.verify(signature, ByteArray.empty()));
 		} else {
 			final ByteArray context = ByteArray.fromString("konfigyr-crypto-test-context");
 			final ByteArray cipher = keyset.encrypt(data);
