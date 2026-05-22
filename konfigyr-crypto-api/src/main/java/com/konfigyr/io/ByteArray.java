@@ -1,6 +1,7 @@
 package com.konfigyr.io;
 
 import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 import org.springframework.core.io.InputStreamSource;
 import org.springframework.core.io.buffer.DataBuffer;
 
@@ -11,6 +12,7 @@ import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.Base64;
 
@@ -242,6 +244,39 @@ public final class ByteArray implements InputStreamSource, Serializable {
 		return array.length;
 	}
 
+	/**
+	 * Compares this {@link ByteArray} to another in constant time using {@link MessageDigest#isEqual(byte[], byte[])}.
+	 * <p>
+	 * Use this method, rather than {@link #equals(Object)}, whenever comparing ciphertext, signatures,
+	 * MAC values, or key material, to prevent timing side-channel attacks.
+	 *
+	 * @param other the byte array to compare against, may be {@literal null}
+	 * @return {@code true} if both arrays have identical contents, {@code false} otherwise
+	 */
+	public boolean constantTimeEquals(byte @Nullable [] other) {
+		return other != null && MessageDigest.isEqual(this.array, other);
+	}
+
+	/**
+	 * Compares this {@link ByteArray} to another in constant time using {@link MessageDigest#isEqual(byte[], byte[])}.
+	 * <p>
+	 * Use this method, rather than {@link #equals(Object)}, whenever comparing ciphertext, signatures,
+	 * MAC values, or key material, to prevent timing side-channel attacks.
+	 *
+	 * @param other the byte array to compare against, may be {@literal null}
+	 * @return {@code true} if both arrays have identical contents, {@code false} otherwise
+	 */
+	public boolean constantTimeEquals(@Nullable ByteArray other) {
+		return constantTimeEquals(other == null ? null : other.array);
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * <p>
+	 * <strong>Security note:</strong> this method uses {@link Arrays#equals(byte[], byte[])} which is
+	 * <em>not</em> constant-time. Never use it to compare ciphertext, signatures, MAC values, or key
+	 * material. Use {@link #constantTimeEquals(ByteArray)} instead.
+	 */
 	@Override
 	public boolean equals(Object o) {
 		if (this == o)

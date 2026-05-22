@@ -75,7 +75,7 @@ class JsonWebKeyset extends AbstractKeyset<JsonWebKey> implements JWKSource<Secu
 			final JWEObject object = JWEObject.parse(new String(cipher.array(), StandardCharsets.UTF_8));
 			final ByteArray aad = JoseUtils.resolveAdditionalAuthenticationData(object.getHeader());
 
-			if (!Objects.equals(context, aad)) {
+			if (!(context != null ? context.constantTimeEquals(aad) : aad == null)) {
 				throw new CryptoException.KeysetOperationException(name, KeysetOperation.DECRYPT,
 					"AAD does not match the expected value");
 			}
@@ -119,7 +119,7 @@ class JsonWebKeyset extends AbstractKeyset<JsonWebKey> implements JWKSource<Secu
 				return false;
 			}
 
-			return Arrays.equals(object.getPayload().toBytes(), data.array());
+			return data.constantTimeEquals(object.getPayload().toBytes());
 		} catch (ParseException e) {
 			return false;
 		} catch (JOSEException e) {
