@@ -23,7 +23,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-class RepostoryKeysetStoreTest {
+class RepositoryKeysetStoreTest {
 
 	private static final String FACTORY_NAME = "test-factory";
 
@@ -445,6 +445,39 @@ class RepostoryKeysetStoreTest {
 
 		verify(repository).updateKeyStatus(KeyTransition.enable(definition.getName(), "key-1"));
 		verify(cache).evict(definition.getName());
+	}
+
+	@Test
+	@DisplayName("should mark an ENABLED key as compromised and evict the cache")
+	void shouldCompromiseKey() throws IOException {
+		repository.write(keysetWith("key-1", KeyStatus.ENABLED));
+
+		assertThatNoException().isThrownBy(() -> store.compromise(definition.getName(), "compromised-key"));
+
+		verify(repository).updateKeyStatus(KeyTransition.compromise(definition.getName(), "compromised-1"));
+		verify(cache).evict(definition.getName());
+	}
+
+	@Test
+	@DisplayName("should throw InvalidKeyStatusTransitionException when compromising a non-ENABLED key")
+	void shouldFailToCompromiseNonEnabledKey() throws IOException {
+		repository.write(keysetWith("key-1", KeyStatus.DISABLED));
+
+		assertThatExceptionOfType(CryptoException.InvalidKeyStatusTransitionException.class)
+			.isThrownBy(() -> store.compromise(definition.getName(), "key-1"))
+			.returns(definition.getName(), CryptoException.KeysetException::getName)
+			.returns("key-1", CryptoException.InvalidKeyStatusTransitionException::getKeyId)
+			.returns(KeyStatus.DISABLED, CryptoException.InvalidKeyStatusTransitionException::getCurrentStatus)
+			.returns(KeyStatus.COMPROMISED, CryptoException.InvalidKeyStatusTransitionException::getAttemptedStatus);
+	}
+
+	@Test
+	@DisplayName("should reject null or blank names on compromise")
+	void shouldRejectBlankNamesOnCompromise() {
+		assertThatIllegalArgumentException().isThrownBy(() -> store.compromise(null, "key-1"));
+		assertThatIllegalArgumentException().isThrownBy(() -> store.compromise("", "key-1"));
+		assertThatIllegalArgumentException().isThrownBy(() -> store.compromise(definition.getName(), null));
+		assertThatIllegalArgumentException().isThrownBy(() -> store.compromise(definition.getName(), ""));
 	}
 
 	@Test

@@ -110,6 +110,7 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 				builder.name, "Keyset '" + builder.name + "' must have a primary key"));
 
 		switch (primary.getStatus()) {
+			case COMPROMISED -> throw new CryptoException.KeysetCompromisedException(builder.name);
 			case DISABLED -> throw new CryptoException.KeysetDisabledException(builder.name);
 			case PENDING_DESTRUCTION -> throw new CryptoException.KeysetPendingDestructionException(builder.name);
 			case DESTROYED -> throw new CryptoException.KeysetDestroyedException(builder.name);

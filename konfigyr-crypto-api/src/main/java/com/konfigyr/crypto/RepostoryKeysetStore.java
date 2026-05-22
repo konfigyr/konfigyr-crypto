@@ -173,6 +173,14 @@ public class RepostoryKeysetStore implements KeysetStore {
 	}
 
 	@Override
+	public void compromise(String keysetName, String keyId) {
+		Assert.hasText(keysetName, "Keyset name must not be blank");
+		Assert.hasText(keyId, "Key ID must not be blank");
+
+		performKeyTransition(KeyTransition.compromise(keysetName, keyId), KeyStatus.ENABLED);
+	}
+
+	@Override
 	public void scheduleDestruction(String keysetName, String keyId) {
 		Assert.hasText(keysetName, "Keyset name must not be blank");
 		Assert.hasText(keyId, "Key ID must not be blank");

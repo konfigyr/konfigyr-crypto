@@ -571,6 +571,35 @@ public abstract class CryptoException extends RuntimeException {
 	}
 
 	/**
+	 * Exception thrown when a {@link Keyset} is accessed but its primary {@link Key} is
+	 * in {@link KeyStatus#COMPROMISED} state.
+	 * <p>
+	 * A compromised key's material is suspected or confirmed to have been exposed. All
+	 * cryptographic operations are permanently hard-blocked regardless of any other key state.
+	 * This is a terminal condition, a compromised key cannot be re-enabled.
+	 * <p>
+	 * This exception is thrown by the keyset construction path (e.g. {@link AbstractKeyset})
+	 * before any key material is unwrapped, ensuring no sensitive data is touched for
+	 * compromised keysets.
+	 */
+	public static class KeysetCompromisedException extends KeysetException {
+
+		@Serial
+		private static final long serialVersionUID = SERIAL;
+
+		/**
+		 * Creates a new {@link KeysetCompromisedException} for the given keyset name.
+		 *
+		 * @param name the name of the compromised {@link Keyset}, can't be {@literal null}
+		 */
+		public KeysetCompromisedException(String name) {
+			super(name, "Keyset '" + name + "' is compromised and cannot perform cryptographic operations. "
+					+ "The primary key has been marked as compromised and must not be used.");
+		}
+
+	}
+
+	/**
 	 * Exception thrown when an attempt is made to transition a {@link Key} to an invalid
 	 * {@link KeyStatus} from its current state.
 	 * <p>
