@@ -242,7 +242,7 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 			.add("name='" + name + "'")
 			.add("factory=" + factory)
 			.add("purpose=" + purpose)
-			.add("kek=" + keyEncryptionKey)
+			.add("kek=" + KeyEncryptionKey.format(keyEncryptionKey))
 			.add("keys=" + keys)
 			.add("rotationInterval=" + rotationInterval)
 			.add("destructionGracePeriod=" + destructionGracePeriod)

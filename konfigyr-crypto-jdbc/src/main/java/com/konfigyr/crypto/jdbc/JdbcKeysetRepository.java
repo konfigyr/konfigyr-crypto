@@ -221,6 +221,10 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 	public void afterPropertiesSet() {
 		Assert.hasText(tableName, "Table name for encrypted keysets can not be blank");
 		Assert.hasText(keysTableName, "Table name for encrypted keys can not be blank");
+		Assert.isTrue(tableName.matches("[A-Za-z][A-Za-z0-9_]*"),
+				"Keyset table name must be a valid SQL identifier: " + tableName);
+		Assert.isTrue(keysTableName.matches("[A-Za-z][A-Za-z0-9_]*"),
+				"Keys table name must be a valid SQL identifier: " + keysTableName);
 
 		getKeysetQuery = sql(getKeysetQuery, GET_KEYSET_QUERY);
 		getKeysQuery = sql(getKeysQuery, GET_KEYS_QUERY);

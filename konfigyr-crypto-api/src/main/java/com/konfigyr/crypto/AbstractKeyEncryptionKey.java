@@ -55,7 +55,7 @@ public abstract class AbstractKeyEncryptionKey implements KeyEncryptionKey {
 
 	@Override
 	public String toString() {
-		return provider + "@" + id;
+		return KeyEncryptionKey.format(this);
 	}
 
 	@Override

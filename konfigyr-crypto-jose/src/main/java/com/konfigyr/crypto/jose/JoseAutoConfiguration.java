@@ -6,6 +6,7 @@ import com.konfigyr.crypto.CryptoAutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigureBefore;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 
 /**
@@ -24,6 +25,12 @@ public class JoseAutoConfiguration {
 	@Bean
 	AlgorithmRegistrar joseAlgorithmRegistrar() {
 		return registry -> JoseAlgorithm.DEFAULT_ALGORITHMS.forEach(registry::register);
+	}
+
+	@Bean
+	@ConditionalOnProperty(name = "konfigyr.crypto.jose.register-legacy-algorithms", havingValue = "true")
+	AlgorithmRegistrar legacyJoseAlgorithmRegistrar() {
+		return registry -> JoseAlgorithm.LEGACY_ALGORITHMS.forEach(registry::register);
 	}
 
 	@Bean

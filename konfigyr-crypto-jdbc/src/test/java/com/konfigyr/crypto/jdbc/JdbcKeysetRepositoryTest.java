@@ -12,6 +12,9 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.test.context.SpringBootTest;
 
+import org.springframework.jdbc.core.JdbcOperations;
+import org.springframework.transaction.support.TransactionOperations;
+
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
@@ -19,6 +22,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatNoException;
 
 @AutoConfigureTestDatabase
@@ -34,6 +38,12 @@ class JdbcKeysetRepositoryTest {
 
 	@Autowired
 	KeysetRepository repository;
+
+	@Autowired
+	JdbcOperations jdbcOperations;
+
+	@Autowired
+	TransactionOperations transactionOperations;
 
 	@Test
 	@DisplayName("should manage Keysets in a database")
@@ -290,6 +300,25 @@ class JdbcKeysetRepositoryTest {
 			.primary(primary)
 			.createdAt(createdAt)
 			.build(data);
+	}
+
+	@Test
+	@DisplayName("should reject table names that are not valid SQL identifiers")
+	void shouldRejectInvalidTableNames() {
+		final var repo = new JdbcKeysetRepository(jdbcOperations, transactionOperations);
+
+		repo.setTableName("KEYSETS; DROP TABLE KEYSETS;--");
+		assertThatIllegalArgumentException().isThrownBy(repo::afterPropertiesSet);
+
+		repo.setTableName("1INVALID");
+		assertThatIllegalArgumentException().isThrownBy(repo::afterPropertiesSet);
+
+		repo.setTableName("KEYSETS");
+		repo.setKeysTableName("KEYSET_KEYS; DROP TABLE KEYSET_KEYS;--");
+		assertThatIllegalArgumentException().isThrownBy(repo::afterPropertiesSet);
+
+		repo.setKeysTableName("2INVALID");
+		assertThatIllegalArgumentException().isThrownBy(repo::afterPropertiesSet);
 	}
 
 	@SpringBootApplication

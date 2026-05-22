@@ -1,0 +1,17 @@
+{
+  "groups": [
+    {
+      "name": "konfigyr.crypto.jose",
+      "sourceType": "com.konfigyr.crypto.jose.JoseAutoConfiguration"
+    }
+  ],
+  "properties": [
+    {
+      "name": "konfigyr.crypto.jose.register-legacy-algorithms",
+      "type": "java.lang.Boolean",
+      "description": "Whether to register RSA-PKCS1v1.5 signing algorithms (RS256, RS384, RS512) for JOSE interoperability with external relying parties that require PKCS1v1.5 signatures. These algorithms are conditionally acceptable per NIST SP 800-131A Rev 2 and must not be used in new designs. Prefer PS256, PS384, or PS512 instead. Defaults to false.",
+      "sourceType": "com.konfigyr.crypto.jose.JoseAutoConfiguration",
+      "defaultValue": false
+    }
+  ]
+}

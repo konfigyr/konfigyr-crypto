@@ -65,4 +65,15 @@ public interface KeyEncryptionKey {
 	 */
 	ByteArray unwrap(ByteArray data) throws IOException;
 
+	/**
+	 * Formats the given {@link KeyEncryptionKey} as a safe log-friendly reference string
+	 * containing only the provider name and key identifier — never key material.
+	 *
+	 * @param kek the key encryption key to format, can't be {@literal null}
+	 * @return a {@code provider@id} string, never {@literal null}
+	 */
+	static String format(KeyEncryptionKey kek) {
+		return kek.getProvider() + "@" + kek.getId();
+	}
+
 }

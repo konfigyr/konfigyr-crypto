@@ -1,5 +1,6 @@
 package com.konfigyr.crypto;
 
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -25,6 +26,7 @@ import org.springframework.context.annotation.Bean;
  * @author Vladimir Spasic
  * @since 1.0.0
  **/
+@Slf4j
 @AutoConfiguration
 @ConditionalOnBean(KeysetFactory.class)
 @ConditionalOnMissingBean(KeysetStore.class)
@@ -41,6 +43,9 @@ public class CryptoAutoConfiguration {
 	@Bean
 	@ConditionalOnMissingBean(KeysetRepository.class)
 	KeysetRepository inMemoryKeysetRepository() {
+		log.warn("InMemoryKeysetRepository is being used. All key material will be lost on restart. "
+				+ "Do not use in production. Add the 'konfigyr-crypto-jdbc' module for a persistent "
+				+ "repository, or implement KeysetRepository with your own storage backend.");
 		return new InMemoryKeysetRepository();
 	}
 
