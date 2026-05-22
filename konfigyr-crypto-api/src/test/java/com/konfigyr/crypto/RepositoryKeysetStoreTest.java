@@ -450,7 +450,7 @@ class RepositoryKeysetStoreTest {
 	@Test
 	@DisplayName("should mark an ENABLED key as compromised and evict the cache")
 	void shouldCompromiseKey() throws IOException {
-		repository.write(keysetWith("key-1", KeyStatus.ENABLED));
+		repository.write(keysetWith("compromised-key", KeyStatus.ENABLED));
 
 		assertThatNoException().isThrownBy(() -> store.compromise(definition.getName(), "compromised-key"));
 
