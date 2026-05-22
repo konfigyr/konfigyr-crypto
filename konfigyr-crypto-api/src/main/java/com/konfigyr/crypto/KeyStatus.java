@@ -12,8 +12,8 @@ package com.konfigyr.crypto;
  *       └──► INITIALIZATION_FAILED
  * </pre>
  *
- * @author : Vladimir Spasic
- * @since : 04.09.23, Mon
+ * @author Vladimir Spasic
+ * @since 1.0.0
  **/
 public enum KeyStatus {
 

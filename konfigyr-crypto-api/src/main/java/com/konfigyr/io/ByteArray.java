@@ -24,8 +24,8 @@ import java.util.Base64;
  * This class also provides a way to encode the byte array into a plain or Base64 encoded
  * string.
  *
- * @author : Vladimir Spasic
- * @since : 01.09.22, Thu
+ * @author Vladimir Spasic
+ * @since 1.0.0
  **/
 @NullMarked
 public final class ByteArray implements InputStreamSource, Serializable {

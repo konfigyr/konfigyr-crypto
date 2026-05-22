@@ -3,8 +3,8 @@ package com.konfigyr.crypto;
 /**
  * Enumeration that defines the type of the key material stored in the {@link Keyset}.
  *
- * @author : Vladimir Spasic
- * @since : 20.08.23, Mon
+ * @author Vladimir Spasic
+ * @since 1.0.0
  **/
 public enum KeyType {
 

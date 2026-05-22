@@ -8,8 +8,8 @@ import java.util.function.Supplier;
 /**
  * Interface that defines how encrypted cryptographic material is cached.
  *
- * @author : Vladimir Spasic
- * @since : 06.09.23, Wed
+ * @author Vladimir Spasic
+ * @since 1.0.0
  **/
 @NullMarked
 public interface KeysetCache {

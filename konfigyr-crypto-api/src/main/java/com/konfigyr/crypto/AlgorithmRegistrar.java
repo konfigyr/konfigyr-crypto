@@ -14,8 +14,8 @@ import org.jspecify.annotations.NullMarked;
  * sealed. Attempting to register an algorithm after the context has started will throw
  * an {@link IllegalStateException}.
  *
- * @author : Vladimir Spasic
- * @since : 15.05.26, Fri
+ * @author Vladimir Spasic
+ * @since 1.0.0
  * @see AlgorithmRegistry
  **/
 @NullMarked

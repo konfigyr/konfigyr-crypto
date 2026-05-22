@@ -14,8 +14,8 @@ import java.util.Set;
  * than one provider it is necessary that each provider name that is given to
  * {@link Keyset}s or {@link EncryptedKeyset}s can be uniquely identified and retrieved.
  *
- * @author : Vladimir Spasic
- * @since : 26.08.23, Sat
+ * @author Vladimir Spasic
+ * @since 1.0.0
  **/
 @NullMarked
 public interface KeyEncryptionKeyProvider {

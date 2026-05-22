@@ -38,8 +38,8 @@ import java.time.Instant;
  * KeyTransition.destroy(keysetName, keyId, Instant.now());
  * }</pre>
  *
- * @author : Vladimir Spasic
- * @since : 22.05.26, Fri
+ * @author Vladimir Spasic
+ * @since 1.0.0
  * @see KeysetRepository#updateKeyStatus(KeyTransition)
  * @see KeysetStore
  **/

@@ -15,8 +15,8 @@ import java.util.Set;
  * This means that keysets with the same purpose may use different underlying algorithms,
  * but they must support the same set of cryptographic operations.
  *
- * @author : Vladimir Spasic
- * @since : 15.05.26, Fri
+ * @author Vladimir Spasic
+ * @since 1.0.0
  * @see Algorithm#purpose()
  * @see Keyset
  **/

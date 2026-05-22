@@ -19,8 +19,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * the application is fully started, which would otherwise open an attack surface for
  * algorithm injection.
  *
- * @author : Vladimir Spasic
- * @since : 15.05.26, Fri
+ * @author Vladimir Spasic
+ * @since 1.0.0
  * @see AlgorithmRegistry
  * @see AlgorithmRegistrar
  **/

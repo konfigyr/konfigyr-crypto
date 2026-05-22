@@ -3,8 +3,8 @@ package com.konfigyr.crypto;
 /**
  * Enumeration that defines which operations one {@link Algorithm} can perform.
  *
- * @author : Vladimir Spasic
- * @since : 21.08.23, Mon
+ * @author Vladimir Spasic
+ * @since 1.0.0
  **/
 public enum KeysetOperation {
 

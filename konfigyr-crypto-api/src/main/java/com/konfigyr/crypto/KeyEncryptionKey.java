@@ -25,8 +25,8 @@ import java.io.IOException;
  * Keys} must be encrypted (without changing them) with the new {@link KeyEncryptionKey}
  * and saved in form of a {@link EncryptedKeyset}.
  *
- * @author : Vladimir Spasic
- * @since : 26.08.23, Sat
+ * @author Vladimir Spasic
+ * @since 1.0.0
  **/
 @NullMarked
 public interface KeyEncryptionKey {

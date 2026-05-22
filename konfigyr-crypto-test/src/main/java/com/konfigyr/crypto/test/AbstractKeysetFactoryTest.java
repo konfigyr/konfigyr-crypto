@@ -37,8 +37,8 @@ import static org.assertj.core.api.Assertions.*;
  *         end-to-end round-trips for every supported algorithm.</li>
  * </ul>
  *
- * @author : Vladimir Spasic
- * @since : 19.05.26, Tue
+ * @author Vladimir Spasic
+ * @since 1.0.0
  * @see KeysetFactory
  */
 @NullMarked

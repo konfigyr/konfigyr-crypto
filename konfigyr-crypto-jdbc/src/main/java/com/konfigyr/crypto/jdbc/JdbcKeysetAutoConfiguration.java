@@ -32,8 +32,8 @@ import javax.sql.DataSource;
  * To use this implementation, there needs to be at least one {@link DataSource}
  * and {@link PlatformTransactionManager} Spring Bean.
  *
- * @author : Vladimir Spasic
- * @since : 28.08.23, Mon
+ * @author Vladimir Spasic
+ * @since 1.0.0
  **/
 @RequiredArgsConstructor
 @AutoConfiguration

@@ -15,8 +15,8 @@ import java.util.Objects;
  * Implementations of this class could also include the crypto material when checking the
  * identity if such a check is needed.
  *
- * @author : Vladimir Spasic
- * @since : 26.08.23, Sat
+ * @author Vladimir Spasic
+ * @since 1.0.0
  **/
 public abstract class AbstractKeyEncryptionKey implements KeyEncryptionKey {
 

@@ -12,8 +12,8 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
 /**
- * @author : Vladimir Spasic
- * @since : 31.08.23, Thu
+ * @author Vladimir Spasic
+ * @since 1.0.0
  **/
 class KeyEncryptionKeyProviderTest {
 

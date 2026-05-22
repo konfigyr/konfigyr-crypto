@@ -40,8 +40,8 @@ import java.util.*;
  * </ul>
  *
  * @param <T> the type of {@link Key} managed by this keyset
- * @author : Vladimir Spasic
- * @since : 21.08.23, Mon
+ * @author Vladimir Spasic
+ * @since 1.0.0
  * @see Keyset
  * @see Key
  * @see KeysetFactory

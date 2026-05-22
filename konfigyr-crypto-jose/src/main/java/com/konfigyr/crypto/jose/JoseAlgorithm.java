@@ -37,8 +37,8 @@ import java.util.function.Supplier;
  * Custom JOSE algorithms can be created by constructing an instance directly and registering
  * it via an {@link com.konfigyr.crypto.AlgorithmRegistrar} bean.
  *
- * @author : Vladimir Spasic
- * @since : 24.11.25, Mon
+ * @author Vladimir Spasic
+ * @since 1.0.0
  * @see com.nimbusds.jose.JWSAlgorithm
  * @see com.nimbusds.jose.JWEAlgorithm
  */

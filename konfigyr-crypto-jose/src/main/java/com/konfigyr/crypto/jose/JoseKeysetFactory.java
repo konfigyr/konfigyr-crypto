@@ -27,8 +27,8 @@ import java.util.List;
  * token when encrypting data using a {@link KeysetPurpose#ENCRYPTION} algorithm, and a
  * {@link com.nimbusds.jose.JWSObject JWS} token when signing data.
  *
- * @author : Vladimir Spasic
- * @since : 24.11.25, Mon
+ * @author Vladimir Spasic
+ * @since 1.0.0
  * @see JoseAlgorithm
  * @see JsonWebKeyset
  **/

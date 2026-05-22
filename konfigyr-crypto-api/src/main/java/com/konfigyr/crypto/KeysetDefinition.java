@@ -35,8 +35,8 @@ import java.util.Optional;
  * 		</li>
  * </ul>
  *
- * @author : Vladimir Spasic
- * @since : 28.08.23, Mon
+ * @author Vladimir Spasic
+ * @since 1.0.0
  **/
 @NullMarked
 public interface KeysetDefinition {

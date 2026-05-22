@@ -7,8 +7,8 @@ import org.gradle.api.provider.ProviderFactory;
 import org.jspecify.annotations.NullMarked;
 
 /**
- * @author : Vladimir Spasic
- * @since : 04.09.23, Mon
+ * @author Vladimir Spasic
+ * @since 1.0.0
  **/
 @NullMarked
 public abstract class DeployExtension {

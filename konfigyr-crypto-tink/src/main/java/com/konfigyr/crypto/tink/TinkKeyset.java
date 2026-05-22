@@ -19,8 +19,8 @@ import static com.konfigyr.crypto.CryptoException.KeysetOperationException;
  * Implementation of the {@link Keyset} that uses the Tink {@link KeysetHandle} to perform
  * cryptographic operations.
  *
- * @author : Vladimir Spasic
- * @since : 21.08.23, Mon
+ * @author Vladimir Spasic
+ * @since 1.0.0
  **/
 @NullMarked
 class TinkKeyset extends AbstractKeyset<TinkKey> {

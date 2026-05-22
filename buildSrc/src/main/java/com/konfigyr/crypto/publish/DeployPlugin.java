@@ -19,8 +19,8 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 /**
- * @author : Vladimir Spasic
- * @since : 04.09.23, Mon
+ * @author Vladimir Spasic
+ * @since 1.0.0
  **/
 public class DeployPlugin implements Plugin<@NonNull Project> {
 
