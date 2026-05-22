@@ -102,6 +102,21 @@ public class KeyTransition {
 	}
 
 	/**
+	 * Creates a transition that moves a key from {@link KeyStatus#ENABLED} to
+	 * {@link KeyStatus#COMPROMISED}.
+	 * <p>
+	 * This is an irreversible emergency transition. Once compromised, the key cannot
+	 * be re-enabled or used for any cryptographic operation.
+	 *
+	 * @param keysetName the name of the keyset containing the key, can't be {@literal null}
+	 * @param keyId the identifier of the key to mark as compromised, can't be {@literal null}
+	 * @return the transition, never {@literal null}
+	 */
+	public static KeyTransition compromise(String keysetName, String keyId) {
+		return new KeyTransition(keysetName, keyId, KeyStatus.COMPROMISED, null, null);
+	}
+
+	/**
 	 * Creates a transition that moves a key from {@link KeyStatus#DISABLED} to
 	 * {@link KeyStatus#PENDING_DESTRUCTION}, recording the scheduled destruction time.
 	 *

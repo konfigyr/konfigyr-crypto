@@ -267,6 +267,28 @@ public interface KeysetStore {
 
 	/**
 	 * Transitions the specified {@link Key} within the named {@link Keyset} from
+	 * {@link KeyStatus#ENABLED} to {@link KeyStatus#COMPROMISED}.
+	 * <p>
+	 * A compromised key is suspected or confirmed to have had its material exposed. All
+	 * cryptographic operations on the key are permanently hard-blocked after this call.
+	 * This transition is irreversible, a compromised key cannot be re-enabled or moved
+	 * to any other lifecycle state via the normal state machine.
+	 * <p>
+	 * Callers should follow this with a {@link #rotate(String)} to generate a new primary
+	 * key for the keyset and arrange for re-encryption of data protected by the compromised key.
+	 *
+	 * @param keysetName the name of the keyset containing the key, can't be {@literal null}
+	 * @param keyId      the identifier of the key to mark as compromised, can't be {@literal null}
+	 * @throws CryptoException.KeysetNotFoundException when no keyset exists with the given name
+	 * @throws CryptoException.InvalidKeyStatusTransitionException when the key is not currently
+	 *         in {@link KeyStatus#ENABLED} state
+	 * @throws CryptoException.KeysetCompromisedException when a keyset whose primary key is
+	 *         {@link KeyStatus#COMPROMISED} is subsequently accessed for cryptographic operations
+	 */
+	void compromise(String keysetName, String keyId);
+
+	/**
+	 * Transitions the specified {@link Key} within the named {@link Keyset} from
 	 * {@link KeyStatus#DISABLED} to {@link KeyStatus#PENDING_DESTRUCTION}, using the keyset's
 	 * configured {@link Keyset#getDestructionGracePeriod() destruction grace period} to compute
 	 * the scheduled destruction time.
@@ -312,9 +334,9 @@ public interface KeysetStore {
 	 * Transitions the specified {@link Key} within the named {@link Keyset} from
 	 * {@link KeyStatus#PENDING_DESTRUCTION} back to {@link KeyStatus#DISABLED}.
 	 * <p>
-	 * Cancels a previously scheduled destruction. The key is returned to the disabled state
-	 * (never directly back to enabled), preserving the requirement that re-enabling requires
-	 * an explicit administrative decision.
+	 * Cancels previously scheduled destruction for the given {@link Key}. The key is returned
+	 * to the disabled state (never reverted to enabled), preserving the requirement that
+	 * re-enabling requires an explicit administrative decision.
 	 *
 	 * @param keysetName the name of the keyset containing the key, can't be {@literal null}
 	 * @param keyId      the identifier of the key whose destruction to cancel, can't be {@literal null}

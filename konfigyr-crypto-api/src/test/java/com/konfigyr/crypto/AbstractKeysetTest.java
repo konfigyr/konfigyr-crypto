@@ -222,6 +222,20 @@ class AbstractKeysetTest {
 	}
 
 	@Test
+	@DisplayName("should throw KeysetCompromisedException when the primary key is compromised")
+	void shouldThrowWhenPrimaryKeyIsCompromised() {
+		assertThatExceptionOfType(CryptoException.KeysetCompromisedException.class)
+			.isThrownBy(() -> ConcreteKeyset.builder()
+				.name("test-keyset")
+				.factory("test-factory")
+				.purpose(KeysetPurpose.ENCRYPTION)
+				.keyEncryptionKey(kek)
+				.key(createKey("primary-key", true, KeyStatus.COMPROMISED))
+				.build())
+			.returns("test-keyset", CryptoException.KeysetException::getName);
+	}
+
+	@Test
 	@DisplayName("should find a key by its identifier")
 	void shouldFindKeyById() {
 		final var primaryKey = createKey("primary-key", true);
