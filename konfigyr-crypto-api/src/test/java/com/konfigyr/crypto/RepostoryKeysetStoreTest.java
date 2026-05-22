@@ -6,16 +6,20 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.cache.concurrent.ConcurrentMapCache;
 
+import com.konfigyr.io.ByteArray;
 import java.io.IOException;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -419,6 +423,179 @@ class RepostoryKeysetStoreTest {
 			.returns(definition.getName(), CryptoException.KeysetException::getName);
 
 		verify(repository).remove(definition.getName());
+	}
+
+	@Test
+	@DisplayName("should disable an ENABLED key and evict the cache")
+	void shouldDisableKey() throws IOException {
+		repository.write(keysetWith("key-1", KeyStatus.ENABLED));
+
+		assertThatNoException().isThrownBy(() -> store.disable(definition.getName(), "key-1"));
+
+		verify(repository).updateKeyStatus(KeyTransition.disable(definition.getName(), "key-1"));
+		verify(cache).evict(definition.getName());
+	}
+
+	@Test
+	@DisplayName("should re-enable a DISABLED key and evict the cache")
+	void shouldEnableKey() throws IOException {
+		repository.write(keysetWith("key-1", KeyStatus.DISABLED));
+
+		assertThatNoException().isThrownBy(() -> store.enable(definition.getName(), "key-1"));
+
+		verify(repository).updateKeyStatus(KeyTransition.enable(definition.getName(), "key-1"));
+		verify(cache).evict(definition.getName());
+	}
+
+	@Test
+	@DisplayName("should schedule destruction for a DISABLED key at an explicit time")
+	void shouldScheduleDestructionAtExplicitTime() throws IOException {
+		repository.write(keysetWith("key-1", KeyStatus.DISABLED));
+
+		final Instant destructionTime = Instant.now().plus(Duration.ofDays(30));
+		assertThatNoException().isThrownBy(
+			() -> store.scheduleDestruction(definition.getName(), "key-1", destructionTime));
+
+		verify(repository).updateKeyStatus(
+			KeyTransition.scheduleDestruction(definition.getName(), "key-1", destructionTime));
+		verify(cache).evict(definition.getName());
+	}
+
+	@Test
+	@DisplayName("should schedule destruction using the keyset grace period")
+	void shouldScheduleDestructionUsingGracePeriod() throws IOException {
+		final Duration grace = Duration.ofDays(30);
+		final EncryptedKeyset keysetWithGrace = EncryptedKeyset.builder(definition)
+			.provider(kek.getProvider())
+			.keyEncryptionKey(kek.getId())
+			.destructionGracePeriod(grace)
+			.build(List.of(encryptedKey("key-1", KeyStatus.DISABLED)));
+
+		repository.write(keysetWithGrace);
+
+		assertThatNoException().isThrownBy(
+			() -> store.scheduleDestruction(definition.getName(), "key-1"));
+
+		verify(repository).updateKeyStatus(assertArg(t -> {
+			assertThat(t.getKeysetName()).isEqualTo(definition.getName());
+			assertThat(t.getKeyId()).isEqualTo("key-1");
+			assertThat(t.getStatus()).isEqualTo(KeyStatus.PENDING_DESTRUCTION);
+			assertThat(t.getDestructionScheduledAt()).isNotNull();
+			assertThat(t.getDestroyedAt()).isNull();
+		}));
+		verify(cache).evict(definition.getName());
+	}
+
+	@Test
+	@DisplayName("should immediately destroy the key when no grace period is configured")
+	void shouldImmediatelyDestroyKeyWhenNoGracePeriod() throws IOException {
+		final EncryptedKeyset noGracePeriod = EncryptedKeyset.builder()
+			.name(definition.getName())
+			.purpose(definition.getPurpose())
+			.factory(definition.getAlgorithm().factory())
+			.provider(kek.getProvider())
+			.keyEncryptionKey(kek.getId())
+			.build(List.of(encryptedKey("key-1", KeyStatus.DISABLED)));
+		repository.write(noGracePeriod);
+
+		assertThatNoException().isThrownBy(
+			() -> store.scheduleDestruction(definition.getName(), "key-1"));
+
+		final ArgumentCaptor<KeyTransition> captor = ArgumentCaptor.forClass(KeyTransition.class);
+		verify(repository, times(2)).updateKeyStatus(captor.capture());
+
+		assertThat(captor.getAllValues().get(0)).satisfies(t -> {
+			assertThat(t.getKeysetName()).isEqualTo(definition.getName());
+			assertThat(t.getKeyId()).isEqualTo("key-1");
+			assertThat(t.getStatus()).isEqualTo(KeyStatus.PENDING_DESTRUCTION);
+			assertThat(t.getDestructionScheduledAt()).isNotNull();
+			assertThat(t.getDestroyedAt()).isNull();
+		});
+		assertThat(captor.getAllValues().get(1)).satisfies(t -> {
+			assertThat(t.getKeysetName()).isEqualTo(definition.getName());
+			assertThat(t.getKeyId()).isEqualTo("key-1");
+			assertThat(t.getStatus()).isEqualTo(KeyStatus.DESTROYED);
+			assertThat(t.getDestructionScheduledAt()).isNull();
+			assertThat(t.getDestroyedAt()).isNotNull();
+		});
+	}
+
+	@Test
+	@DisplayName("should cancel a scheduled destruction and return the key to DISABLED")
+	void shouldCancelDestruction() throws IOException {
+		repository.write(keysetWith("key-1", KeyStatus.PENDING_DESTRUCTION));
+
+		assertThatNoException().isThrownBy(
+			() -> store.cancelDestruction(definition.getName(), "key-1"));
+
+		verify(repository).updateKeyStatus(KeyTransition.cancelDestruction(definition.getName(), "key-1"));
+		verify(cache).evict(definition.getName());
+	}
+
+	@Test
+	@DisplayName("should destroy a PENDING_DESTRUCTION key and stamp the destroyed-at timestamp")
+	void shouldDestroyKey() throws IOException {
+		repository.write(keysetWith("key-1", KeyStatus.PENDING_DESTRUCTION));
+
+		assertThatNoException().isThrownBy(() -> store.destroy(definition.getName(), "key-1"));
+
+		verify(repository).updateKeyStatus(assertArg(t -> {
+			assertThat(t.getKeysetName()).isEqualTo(definition.getName());
+			assertThat(t.getKeyId()).isEqualTo("key-1");
+			assertThat(t.getStatus()).isEqualTo(KeyStatus.DESTROYED);
+			assertThat(t.getDestroyedAt()).isNotNull();
+		}));
+		verify(cache).evict(definition.getName());
+	}
+
+	@Test
+	@DisplayName("should throw InvalidKeyStatusTransitionException for an invalid transition")
+	void shouldFailOnInvalidKeyStatusTransition() throws IOException {
+		repository.write(keysetWith("key-1", KeyStatus.ENABLED));
+
+		assertThatExceptionOfType(CryptoException.InvalidKeyStatusTransitionException.class)
+			.isThrownBy(() -> store.scheduleDestruction(definition.getName(), "key-1", Instant.now()))
+			.returns(definition.getName(), CryptoException.KeysetException::getName)
+			.returns("key-1", CryptoException.InvalidKeyStatusTransitionException::getKeyId)
+			.returns(KeyStatus.ENABLED, CryptoException.InvalidKeyStatusTransitionException::getCurrentStatus)
+			.returns(KeyStatus.PENDING_DESTRUCTION,
+				CryptoException.InvalidKeyStatusTransitionException::getAttemptedStatus);
+	}
+
+	@Test
+	@DisplayName("should throw KeysetException when the key identifier is not found in the keyset")
+	void shouldFailWhenKeyNotFoundInKeyset() throws IOException {
+		repository.write(keysetWith("key-1", KeyStatus.ENABLED));
+
+		assertThatExceptionOfType(CryptoException.KeysetException.class)
+			.isThrownBy(() -> store.disable(definition.getName(), "missing-key"))
+			.withMessageContaining("missing-key")
+			.returns(definition.getName(), CryptoException.KeysetException::getName);
+	}
+
+	@Test
+	@DisplayName("should throw KeysetNotFoundException when disabling a key in a missing keyset")
+	void shouldFailToDisableKeyInMissingKeyset() {
+		assertThatExceptionOfType(CryptoException.KeysetNotFoundException.class)
+			.isThrownBy(() -> store.disable("missing-keyset", "key-1"))
+			.returns("missing-keyset", CryptoException.KeysetException::getName);
+	}
+
+	private EncryptedKeyset keysetWith(String keyId, KeyStatus status) {
+		return EncryptedKeyset.builder(definition)
+			.provider(kek.getProvider())
+			.keyEncryptionKey(kek.getId())
+			.build(List.of(encryptedKey(keyId, status)));
+	}
+
+	private static EncryptedKey encryptedKey(String id, KeyStatus status) {
+		return EncryptedKey.builder()
+			.id(id)
+			.algorithm(TestAlgorithm.INSTANCE)
+			.status(status)
+			.primary(true)
+			.createdAt(Instant.now())
+			.build(ByteArray.fromString("key-material"));
 	}
 
 }

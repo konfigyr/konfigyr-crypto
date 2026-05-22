@@ -11,9 +11,7 @@ import org.springframework.util.Assert;
 import java.io.Serial;
 import java.io.Serializable;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 
 /**
  * Record that represents the {@link Keyset} at rest whose private key material is
@@ -87,6 +85,18 @@ public class EncryptedKeyset implements Iterable<EncryptedKey>, Serializable {
 	Duration destructionGracePeriod;
 
 	/**
+	 * Attempts to find the {@link EncryptedKey} with the given identifier.
+	 *
+	 * @param id the key identifier, can't be {@literal null}
+	 * @return the matching {@link EncryptedKey} or empty if not found
+	 */
+	public Optional<EncryptedKey> getKey(String id) {
+		return keys.stream()
+			.filter(key -> Objects.equals(key.getId(), id))
+			.findFirst();
+	}
+
+	/**
 	 * Returns the number of {@link EncryptedKey keys} in this keyset.
 	 *
 	 * @return keyset size.
@@ -122,6 +132,28 @@ public class EncryptedKeyset implements Iterable<EncryptedKey>, Serializable {
 			.factory(definition.getAlgorithm().factory())
 			.rotationInterval(definition.getRotationInterval().orElse(null))
 			.destructionGracePeriod(definition.getDestructionGracePeriod().orElse(null));
+	}
+
+	/**
+	 * Creates a new instance of the {@link EncryptedKeyset.Builder} pre-populated from an existing
+	 * {@link EncryptedKeyset}. All metadata fields are copied; the key list is left empty and must
+	 * be provided via {@link Builder#build(List)} or {@link Builder#build(EncryptedKey...)}.
+	 * <p>
+	 * Useful when reconstructing an {@link EncryptedKeyset} with a modified key list (e.g. after
+	 * a key status update) without having to re-specify all metadata fields.
+	 *
+	 * @param existing the source {@link EncryptedKeyset} to copy metadata from, can't be {@literal null}
+	 * @return a pre-populated builder, never {@literal null}
+	 */
+	public static Builder builder(EncryptedKeyset existing) {
+		return builder()
+			.name(existing.getName())
+			.purpose(KeysetPurpose.valueOf(existing.getPurpose()))
+			.factory(existing.getFactory())
+			.provider(existing.getProvider())
+			.keyEncryptionKey(existing.getKeyEncryptionKey())
+			.rotationInterval(existing.getRotationInterval())
+			.destructionGracePeriod(existing.getDestructionGracePeriod());
 	}
 
 	/**

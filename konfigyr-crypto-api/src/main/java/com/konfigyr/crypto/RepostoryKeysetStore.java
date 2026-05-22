@@ -5,6 +5,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -140,6 +142,79 @@ public class RepostoryKeysetStore implements KeysetStore {
 	@Override
 	public void remove(Keyset keyset) {
 		remove(keyset.getName());
+	}
+
+	@Override
+	public void disable(String keysetName, String keyId) {
+		performKeyTransition(KeyTransition.disable(keysetName, keyId), KeyStatus.ENABLED);
+	}
+
+	@Override
+	public void enable(String keysetName, String keyId) {
+		performKeyTransition(KeyTransition.enable(keysetName, keyId), KeyStatus.DISABLED);
+	}
+
+	@Override
+	public void scheduleDestruction(String keysetName, String keyId) {
+		final EncryptedKeyset encryptedKeyset = lookupKeyset(keysetName);
+		final Duration gracePeriod = encryptedKeyset.getDestructionGracePeriod();
+		if (gracePeriod == null) {
+			scheduleDestruction(keysetName, keyId, Instant.now());
+			destroy(keysetName, keyId);
+		} else {
+			scheduleDestruction(keysetName, keyId, Instant.now().plus(gracePeriod));
+		}
+	}
+
+	@Override
+	public void scheduleDestruction(String keysetName, String keyId, Instant destructionTime) {
+		performKeyTransition(KeyTransition.scheduleDestruction(keysetName, keyId, destructionTime),
+				KeyStatus.DISABLED);
+	}
+
+	@Override
+	public void cancelDestruction(String keysetName, String keyId) {
+		performKeyTransition(KeyTransition.cancelDestruction(keysetName, keyId),
+				KeyStatus.PENDING_DESTRUCTION);
+	}
+
+	@Override
+	public void destroy(String keysetName, String keyId) {
+		performKeyTransition(KeyTransition.destroy(keysetName, keyId, Instant.now()),
+				KeyStatus.PENDING_DESTRUCTION);
+	}
+
+	/**
+	 * Looks up the key within the keyset, validates the status transition, delegates to the
+	 * repository, and evicts the cache entry.
+	 */
+	private void performKeyTransition(KeyTransition transition, KeyStatus expected) {
+		final String keysetName = transition.getKeysetName();
+		final String keyId = transition.getKeyId();
+
+		final EncryptedKeyset encryptedKeyset = lookupKeyset(keysetName);
+		final EncryptedKey key = encryptedKeyset.getKey(keyId).orElseThrow(
+			() -> new KeysetException(keysetName, "Key '" + keyId + "' was not found in keyset '" + keysetName + "'.")
+		);
+
+		if (key.getStatus() != expected) {
+			throw new InvalidKeyStatusTransitionException(keysetName, keyId, key.getStatus(),
+					transition.getStatus());
+		}
+
+		if (logger.isDebugEnabled()) {
+			logger.debug("Transitioning key '{}' in keyset '{}' from {} to {}", keyId, keysetName,
+					expected, transition.getStatus());
+		}
+
+		try {
+			repository.updateKeyStatus(transition);
+		} catch (IOException e) {
+			throw new KeysetException(keysetName,
+				"Could not update status of key '" + keyId + "' in keyset '" + keysetName + "'.", e);
+		}
+
+		cache.evict(keysetName);
 	}
 
 	/**

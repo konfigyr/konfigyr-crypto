@@ -48,6 +48,26 @@ class EncryptedKeyTest {
 	}
 
 	@Test
+	@DisplayName("should copy all fields using the builder copy constructor")
+	void shouldCopyAllFieldsUsingBuilderCopyConstructor() {
+		final var original = EncryptedKey.builder()
+			.id("key-id")
+			.algorithm(algorithm)
+			.status(KeyStatus.ENABLED)
+			.primary(true)
+			.createdAt(now)
+			.initializedAt(now)
+			.expiresAt(now.plusSeconds(3600))
+			.destructionScheduledAt(now.plusSeconds(7200))
+			.destroyedAt(null)
+			.build(data);
+
+		final var copy = EncryptedKey.builder(original).build(original.getData());
+
+		assertThat(copy).isEqualTo(original);
+	}
+
+	@Test
 	@DisplayName("should build an encrypted key with null data for a destroyed key")
 	void shouldBuildEncryptedKeyWithNullData() {
 		final var key = EncryptedKey.builder()

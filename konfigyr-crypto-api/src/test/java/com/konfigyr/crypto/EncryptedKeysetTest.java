@@ -57,6 +57,24 @@ class EncryptedKeysetTest {
 	}
 
 	@Test
+	@DisplayName("should copy all metadata fields using the builder copy constructor")
+	void shouldCopyAllFieldsUsingBuilderCopyConstructor() {
+		final var original = EncryptedKeyset.builder()
+			.name("test-keyset")
+			.purpose(KeysetPurpose.ENCRYPTION)
+			.factory("test-factory")
+			.provider("test-provider")
+			.keyEncryptionKey("test-kek")
+			.rotationInterval(Duration.ofDays(90))
+			.destructionGracePeriod(Duration.ofDays(30))
+			.build(List.of(key));
+
+		final var copy = EncryptedKeyset.builder(original).build(original.getKeys());
+
+		assertThat(copy).isEqualTo(original);
+	}
+
+	@Test
 	@DisplayName("should build an encrypted keyset with rotation and grace period disabled")
 	void shouldBuildEncryptedKeysetWithDisabledOptionals() {
 		final var keyset = EncryptedKeyset.builder()

@@ -5,6 +5,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.cache.support.NoOpCache;
 import org.springframework.util.Assert;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -212,6 +213,12 @@ public interface KeysetStore {
 
 	/**
 	 * Deletes the {@link Keyset} by the matching key name from the store.
+	 * <p>
+	 * This is an emergency or administrative hard-delete that bypasses the normal lifecycle
+	 * state machine. It removes the keyset row and all associated key rows regardless of the
+	 * current {@link KeyStatus} of any key. For a lifecycle-compliant removal, disable a key
+	 * first, then schedule it for destruction, let the grace period elapse, and call
+	 * {@link #destroy(String, String)}.
 	 *
 	 * @param name keyset name to be removed, can't be {@literal null}
 	 */
@@ -219,10 +226,121 @@ public interface KeysetStore {
 
 	/**
 	 * Deletes the {@link Keyset} from the store.
+	 * <p>
+	 * This is an emergency or administrative hard-delete that bypasses the normal lifecycle
+	 * state machine. See {@link #remove(String)} for details.
 	 *
 	 * @param keyset keyset to be removed, can't be {@literal null}
 	 */
 	void remove(Keyset keyset);
+
+	/**
+	 * Transitions the specified {@link Key} within the named {@link Keyset} from
+	 * {@link KeyStatus#ENABLED} to {@link KeyStatus#DISABLED}.
+	 * <p>
+	 * A disabled key cannot perform any cryptographic operations. It may subsequently be
+	 * re-enabled via {@link #enable(String, String)} or scheduled for destruction via
+	 * {@link #scheduleDestruction(String, String)}.
+	 *
+	 * @param keysetName the name of the keyset containing the key, can't be {@literal null}
+	 * @param keyId      the identifier of the key to disable, can't be {@literal null}
+	 * @throws CryptoException.KeysetNotFoundException when no keyset exists with the given name
+	 * @throws CryptoException.InvalidKeyStatusTransitionException when the key is not currently
+	 *         in {@link KeyStatus#ENABLED} state
+	 */
+	void disable(String keysetName, String keyId);
+
+	/**
+	 * Transitions the specified {@link Key} within the named {@link Keyset} from
+	 * {@link KeyStatus#DISABLED} back to {@link KeyStatus#ENABLED}.
+	 * <p>
+	 * Re-enabling a key makes it eligible to be promoted to primary for active cryptographic
+	 * operations on the next rotation.
+	 *
+	 * @param keysetName the name of the keyset containing the key, can't be {@literal null}
+	 * @param keyId      the identifier of the key to enable, can't be {@literal null}
+	 * @throws CryptoException.KeysetNotFoundException when no keyset exists with the given name
+	 * @throws CryptoException.InvalidKeyStatusTransitionException when the key is not currently
+	 *         in {@link KeyStatus#DISABLED} state
+	 */
+	void enable(String keysetName, String keyId);
+
+	/**
+	 * Transitions the specified {@link Key} within the named {@link Keyset} from
+	 * {@link KeyStatus#DISABLED} to {@link KeyStatus#PENDING_DESTRUCTION}, using the keyset's
+	 * configured {@link Keyset#getDestructionGracePeriod() destruction grace period} to compute
+	 * the scheduled destruction time.
+	 * <p>
+	 * Requires the key to be in {@link KeyStatus#DISABLED} state first (two-step deactivation
+	 * before destruction, per NIST SP 800-57 §8.3.1).
+	 * <p>
+	 * When the keyset has no destruction grace period configured ({@literal null}), the key
+	 * material is destroyed immediately: the key is transitioned through
+	 * {@link KeyStatus#PENDING_DESTRUCTION} and then straight to {@link KeyStatus#DESTROYED}
+	 * within the same call, erasing its encrypted material. This is NIST-compliant — the
+	 * standard does not mandate a minimum grace-period duration; it only requires deactivation
+	 * before destruction.
+	 * <p>
+	 * To supply an explicit target time, use {@link #scheduleDestruction(String, String, Instant)}.
+	 *
+	 * @param keysetName the name of the keyset containing the key, can't be {@literal null}
+	 * @param keyId      the identifier of the key to schedule for destruction, can't be {@literal null}
+	 * @throws CryptoException.KeysetNotFoundException when no keyset exists with the given name
+	 * @throws CryptoException.InvalidKeyStatusTransitionException when the key is not currently
+	 *         in {@link KeyStatus#DISABLED} state
+	 */
+	void scheduleDestruction(String keysetName, String keyId);
+
+	/**
+	 * Transitions the specified {@link Key} within the named {@link Keyset} from
+	 * {@link KeyStatus#DISABLED} to {@link KeyStatus#PENDING_DESTRUCTION}, with an explicit
+	 * scheduled destruction time.
+	 * <p>
+	 * Requires the key to be in {@link KeyStatus#DISABLED} state first (two-step deactivation
+	 * before destruction, per NIST SP 800-57 §8.3.1).
+	 *
+	 * @param keysetName      the name of the keyset containing the key, can't be {@literal null}
+	 * @param keyId           the identifier of the key to schedule for destruction, can't be {@literal null}
+	 * @param destructionTime the time at which destruction should occur, can't be {@literal null}
+	 * @throws CryptoException.KeysetNotFoundException when no keyset exists with the given name
+	 * @throws CryptoException.InvalidKeyStatusTransitionException when the key is not currently
+	 *         in {@link KeyStatus#DISABLED} state
+	 */
+	void scheduleDestruction(String keysetName, String keyId, Instant destructionTime);
+
+	/**
+	 * Transitions the specified {@link Key} within the named {@link Keyset} from
+	 * {@link KeyStatus#PENDING_DESTRUCTION} back to {@link KeyStatus#DISABLED}.
+	 * <p>
+	 * Cancels a previously scheduled destruction. The key is returned to the disabled state
+	 * (never directly back to enabled), preserving the requirement that re-enabling requires
+	 * an explicit administrative decision.
+	 *
+	 * @param keysetName the name of the keyset containing the key, can't be {@literal null}
+	 * @param keyId      the identifier of the key whose destruction to cancel, can't be {@literal null}
+	 * @throws CryptoException.KeysetNotFoundException when no keyset exists with the given name
+	 * @throws CryptoException.InvalidKeyStatusTransitionException when the key is not currently
+	 *         in {@link KeyStatus#PENDING_DESTRUCTION} state
+	 */
+	void cancelDestruction(String keysetName, String keyId);
+
+	/**
+	 * Permanently destroys the specified {@link Key} within the named {@link Keyset} by erasing
+	 * its encrypted key material and transitioning it to {@link KeyStatus#DESTROYED}.
+	 * <p>
+	 * The key row is retained for audit purposes but its {@link EncryptedKey#getData() data} is
+	 * set to {@literal null} and can never be recovered. This is a soft-delete of the key material.
+	 * <p>
+	 * Requires the key to be in {@link KeyStatus#PENDING_DESTRUCTION} state. To destroy without
+	 * going through the lifecycle, use the emergency {@link #remove(String)} instead.
+	 *
+	 * @param keysetName the name of the keyset containing the key, can't be {@literal null}
+	 * @param keyId      the identifier of the key to destroy, can't be {@literal null}
+	 * @throws CryptoException.KeysetNotFoundException when no keyset exists with the given name
+	 * @throws CryptoException.InvalidKeyStatusTransitionException when the key is not currently
+	 *         in {@link KeyStatus#PENDING_DESTRUCTION} state
+	 */
+	void destroy(String keysetName, String keyId);
 
 	/**
 	 * Builder class used to create {@link KeysetStore} instances. This builder would return an instance of
