@@ -102,11 +102,12 @@ public class KeyTransition {
 	}
 
 	/**
-	 * Creates a transition that moves a key from {@link KeyStatus#ENABLED} to
-	 * {@link KeyStatus#COMPROMISED}.
+	 * Creates a transition that moves a key from {@link KeyStatus#ENABLED} or
+	 * {@link KeyStatus#DISABLED} to {@link KeyStatus#COMPROMISED}.
 	 * <p>
-	 * This is an irreversible emergency transition. Once compromised, the key cannot
-	 * be re-enabled or used for any cryptographic operation.
+	 * This is an emergency transition. Once compromised, the key cannot be re-enabled or
+	 * used for any cryptographic operation. Key material should subsequently be scheduled
+	 * for destruction via {@link KeysetStore#scheduleDestruction(String, String)}.
 	 *
 	 * @param keysetName the name of the keyset containing the key, can't be {@literal null}
 	 * @param keyId the identifier of the key to mark as compromised, can't be {@literal null}

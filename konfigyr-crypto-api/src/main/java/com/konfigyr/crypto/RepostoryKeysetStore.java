@@ -161,7 +161,7 @@ public class RepostoryKeysetStore implements KeysetStore {
 		Assert.hasText(keysetName, "Keyset name must not be blank");
 		Assert.hasText(keyId, "Key ID must not be blank");
 
-		performKeyTransition(KeyTransition.disable(keysetName, keyId), KeyStatus.ENABLED);
+		performKeyTransition(KeyTransition.disable(keysetName, keyId));
 	}
 
 	@Override
@@ -169,7 +169,7 @@ public class RepostoryKeysetStore implements KeysetStore {
 		Assert.hasText(keysetName, "Keyset name must not be blank");
 		Assert.hasText(keyId, "Key ID must not be blank");
 
-		performKeyTransition(KeyTransition.enable(keysetName, keyId), KeyStatus.DISABLED);
+		performKeyTransition(KeyTransition.enable(keysetName, keyId));
 	}
 
 	@Override
@@ -177,7 +177,7 @@ public class RepostoryKeysetStore implements KeysetStore {
 		Assert.hasText(keysetName, "Keyset name must not be blank");
 		Assert.hasText(keyId, "Key ID must not be blank");
 
-		performKeyTransition(KeyTransition.compromise(keysetName, keyId), KeyStatus.ENABLED);
+		performKeyTransition(KeyTransition.compromise(keysetName, keyId));
 	}
 
 	@Override
@@ -191,8 +191,7 @@ public class RepostoryKeysetStore implements KeysetStore {
 				? Instant.now().plus(gracePeriod)
 				: Instant.now();
 
-		performKeyTransition(KeyTransition.scheduleDestruction(keysetName, keyId, destructionTime),
-				KeyStatus.DISABLED);
+		performKeyTransition(KeyTransition.scheduleDestruction(keysetName, keyId, destructionTime));
 
 		if (gracePeriod == null) {
 			destroy(keysetName, keyId);
@@ -205,8 +204,7 @@ public class RepostoryKeysetStore implements KeysetStore {
 		Assert.hasText(keyId, "Key ID must not be blank");
 		Assert.isTrue(destructionTime.isAfter(Instant.now()), "Destruction time must be in the future");
 
-		performKeyTransition(KeyTransition.scheduleDestruction(keysetName, keyId, destructionTime),
-				KeyStatus.DISABLED);
+		performKeyTransition(KeyTransition.scheduleDestruction(keysetName, keyId, destructionTime));
 	}
 
 	@Override
@@ -214,8 +212,7 @@ public class RepostoryKeysetStore implements KeysetStore {
 		Assert.hasText(keysetName, "Keyset name must not be blank");
 		Assert.hasText(keyId, "Key ID must not be blank");
 
-		performKeyTransition(KeyTransition.cancelDestruction(keysetName, keyId),
-				KeyStatus.PENDING_DESTRUCTION);
+		performKeyTransition(KeyTransition.cancelDestruction(keysetName, keyId));
 	}
 
 	@Override
@@ -223,15 +220,15 @@ public class RepostoryKeysetStore implements KeysetStore {
 		Assert.hasText(keysetName, "Keyset name must not be blank");
 		Assert.hasText(keyId, "Key ID must not be blank");
 
-		performKeyTransition(KeyTransition.destroy(keysetName, keyId, Instant.now()),
-				KeyStatus.PENDING_DESTRUCTION);
+		performKeyTransition(KeyTransition.destroy(keysetName, keyId, Instant.now()));
 	}
 
 	/**
-	 * Looks up the key within the keyset, validates the status transition, delegates to the
-	 * repository, and evicts the cache entry.
+	 * Looks up the key within the keyset, validates the status transition using
+	 * {@link KeyStatus#canTransitionTo(KeyStatus)}, delegates to the repository, and evicts
+	 * the cache entry.
 	 */
-	private void performKeyTransition(KeyTransition transition, KeyStatus expected) {
+	private void performKeyTransition(KeyTransition transition) {
 		final String keysetName = transition.getKeysetName();
 		final String keyId = transition.getKeyId();
 
@@ -240,14 +237,14 @@ public class RepostoryKeysetStore implements KeysetStore {
 			() -> new KeysetException(keysetName, "Key '" + keyId + "' was not found in keyset '" + keysetName + "'.")
 		);
 
-		if (key.getStatus() != expected) {
+		if (!key.getStatus().canTransitionTo(transition.getStatus())) {
 			throw new InvalidKeyStatusTransitionException(keysetName, keyId, key.getStatus(),
 					transition.getStatus());
 		}
 
 		if (logger.isDebugEnabled()) {
 			logger.debug("Transitioning key '{}' in keyset '{}' from {} to {}", keyId, keysetName,
-					expected, transition.getStatus());
+					key.getStatus(), transition.getStatus());
 		}
 
 		try {
