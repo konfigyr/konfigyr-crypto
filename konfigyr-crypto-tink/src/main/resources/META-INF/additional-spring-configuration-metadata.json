@@ -1,0 +1,17 @@
+{
+  "groups": [
+    {
+      "name": "konfigyr.crypto.tink",
+      "sourceType": "com.konfigyr.crypto.tink.TinkAutoConfiguration"
+    }
+  ],
+  "properties": [
+    {
+      "name": "konfigyr.crypto.tink.register-legacy-algorithms",
+      "type": "java.lang.Boolean",
+      "description": "Whether to register RSA-PKCS1v1.5 signing algorithms (RSA_SSA_PKCS1_3072_SHA256_F4, RSA_SSA_PKCS1_4096_SHA512_F4) for interoperability with systems that require PKCS1v1.5 signatures. These algorithms are conditionally acceptable per NIST SP 800-131A Rev 2 and must not be used in new designs. Prefer RSA_SSA_PSS_3072_SHA256_F4 or RSA_SSA_PSS_4096_SHA512_F4 instead. Defaults to false.",
+      "sourceType": "com.konfigyr.crypto.tink.TinkAutoConfiguration",
+      "defaultValue": false
+    }
+  ]
+}

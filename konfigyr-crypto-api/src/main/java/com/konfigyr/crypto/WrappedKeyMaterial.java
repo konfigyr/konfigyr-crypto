@@ -90,7 +90,7 @@ public final class WrappedKeyMaterial implements InputStreamSource {
 	public boolean equals(@Nullable Object obj) {
 		if (this == obj) return true;
 		if (!(obj instanceof WrappedKeyMaterial other)) return false;
-		return bytes.equals(other.bytes);
+		return bytes.constantTimeEquals(other.bytes);
 	}
 
 	@Override
