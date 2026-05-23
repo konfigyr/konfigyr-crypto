@@ -459,15 +459,26 @@ class RepositoryKeysetStoreTest {
 	}
 
 	@Test
-	@DisplayName("should throw InvalidKeyStatusTransitionException when compromising a non-ENABLED key")
-	void shouldFailToCompromiseNonEnabledKey() throws IOException {
+	@DisplayName("should mark a DISABLED key as compromised and evict the cache")
+	void shouldCompromiseDisabledKey() throws IOException {
 		repository.write(keysetWith("disabled-key", KeyStatus.DISABLED));
 
+		assertThatNoException().isThrownBy(() -> store.compromise(definition.getName(), "disabled-key"));
+
+		verify(repository).updateKeyStatus(KeyTransition.compromise(definition.getName(), "disabled-key"));
+		verify(cache).evict(definition.getName());
+	}
+
+	@Test
+	@DisplayName("should throw InvalidKeyStatusTransitionException when compromising a key in an invalid state")
+	void shouldFailToCompromiseKeyInInvalidState() throws IOException {
+		repository.write(keysetWith("pending-key", KeyStatus.PENDING_DESTRUCTION));
+
 		assertThatExceptionOfType(CryptoException.InvalidKeyStatusTransitionException.class)
-			.isThrownBy(() -> store.compromise(definition.getName(), "disabled-key"))
+			.isThrownBy(() -> store.compromise(definition.getName(), "pending-key"))
 			.returns(definition.getName(), CryptoException.KeysetException::getName)
-			.returns("disabled-key", CryptoException.InvalidKeyStatusTransitionException::getKeyId)
-			.returns(KeyStatus.DISABLED, CryptoException.InvalidKeyStatusTransitionException::getCurrentStatus)
+			.returns("pending-key", CryptoException.InvalidKeyStatusTransitionException::getKeyId)
+			.returns(KeyStatus.PENDING_DESTRUCTION, CryptoException.InvalidKeyStatusTransitionException::getCurrentStatus)
 			.returns(KeyStatus.COMPROMISED, CryptoException.InvalidKeyStatusTransitionException::getAttemptedStatus);
 	}
 
@@ -476,6 +487,20 @@ class RepositoryKeysetStoreTest {
 	void shouldRejectBlankNamesOnCompromise() {
 		assertThatIllegalArgumentException().isThrownBy(() -> store.compromise("", "enabled-key"));
 		assertThatIllegalArgumentException().isThrownBy(() -> store.compromise(definition.getName(), ""));
+	}
+
+	@Test
+	@DisplayName("should schedule destruction for a COMPROMISED key at an explicit time")
+	void shouldScheduleDestructionForCompromisedKey() throws IOException {
+		repository.write(keysetWith("compromised-key", KeyStatus.COMPROMISED));
+
+		final Instant destructionTime = Instant.now().plus(Duration.ofDays(30));
+		assertThatNoException().isThrownBy(
+			() -> store.scheduleDestruction(definition.getName(), "compromised-key", destructionTime));
+
+		verify(repository).updateKeyStatus(
+			KeyTransition.scheduleDestruction(definition.getName(), "compromised-key", destructionTime));
+		verify(cache).evict(definition.getName());
 	}
 
 	@Test
@@ -582,14 +607,14 @@ class RepositoryKeysetStoreTest {
 	@Test
 	@DisplayName("should throw InvalidKeyStatusTransitionException for an invalid transition")
 	void shouldFailOnInvalidKeyStatusTransition() throws IOException {
-		repository.write(keysetWith("enabled-key", KeyStatus.ENABLED));
+		repository.write(keysetWith("pending-key", KeyStatus.PENDING_DESTRUCTION));
 
 		assertThatExceptionOfType(CryptoException.InvalidKeyStatusTransitionException.class)
-			.isThrownBy(() -> store.scheduleDestruction(definition.getName(), "enabled-key",
+			.isThrownBy(() -> store.scheduleDestruction(definition.getName(), "pending-key",
 					Instant.now().plusSeconds(60)))
 			.returns(definition.getName(), CryptoException.KeysetException::getName)
-			.returns("enabled-key", CryptoException.InvalidKeyStatusTransitionException::getKeyId)
-			.returns(KeyStatus.ENABLED, CryptoException.InvalidKeyStatusTransitionException::getCurrentStatus)
+			.returns("pending-key", CryptoException.InvalidKeyStatusTransitionException::getKeyId)
+			.returns(KeyStatus.PENDING_DESTRUCTION, CryptoException.InvalidKeyStatusTransitionException::getCurrentStatus)
 			.returns(KeyStatus.PENDING_DESTRUCTION,
 				CryptoException.InvalidKeyStatusTransitionException::getAttemptedStatus);
 	}

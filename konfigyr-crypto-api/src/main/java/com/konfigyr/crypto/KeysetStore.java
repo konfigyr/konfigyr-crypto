@@ -266,35 +266,37 @@ public interface KeysetStore {
 	void enable(String keysetName, String keyId);
 
 	/**
-	 * Transitions the specified {@link Key} within the named {@link Keyset} from
-	 * {@link KeyStatus#ENABLED} to {@link KeyStatus#COMPROMISED}.
+	 * Transitions the specified {@link Key} within the named {@link Keyset} to
+	 * {@link KeyStatus#COMPROMISED}.
 	 * <p>
 	 * A compromised key is suspected or confirmed to have had its material exposed. All
 	 * cryptographic operations on the key are permanently hard-blocked after this call.
-	 * This transition is irreversible, a compromised key cannot be re-enabled or moved
-	 * to any other lifecycle state via the normal state machine.
+	 * The key must be in {@link KeyStatus#ENABLED} or {@link KeyStatus#DISABLED} state,
+	 * re-enabling a disabled key solely to mark it compromised is never required.
 	 * <p>
 	 * Callers should follow this with a {@link #rotate(String)} to generate a new primary
 	 * key for the keyset and arrange for re-encryption of data protected by the compromised key.
+	 * To erase the key material, call {@link #scheduleDestruction(String, String)} after this.
 	 *
 	 * @param keysetName the name of the keyset containing the key, can't be {@literal null}
 	 * @param keyId      the identifier of the key to mark as compromised, can't be {@literal null}
 	 * @throws CryptoException.KeysetNotFoundException when no keyset exists with the given name
 	 * @throws CryptoException.InvalidKeyStatusTransitionException when the key is not currently
-	 *         in {@link KeyStatus#ENABLED} state
+	 *         in {@link KeyStatus#ENABLED} or {@link KeyStatus#DISABLED} state
 	 * @throws CryptoException.KeysetCompromisedException when a keyset whose primary key is
 	 *         {@link KeyStatus#COMPROMISED} is subsequently accessed for cryptographic operations
 	 */
 	void compromise(String keysetName, String keyId);
 
 	/**
-	 * Transitions the specified {@link Key} within the named {@link Keyset} from
-	 * {@link KeyStatus#DISABLED} to {@link KeyStatus#PENDING_DESTRUCTION}, using the keyset's
-	 * configured {@link Keyset#getDestructionGracePeriod() destruction grace period} to compute
-	 * the scheduled destruction time.
+	 * Transitions the specified {@link Key} within the named {@link Keyset} to
+	 * {@link KeyStatus#PENDING_DESTRUCTION}, using the keyset's configured
+	 * {@link Keyset#getDestructionGracePeriod() destruction grace period} to compute the
+	 * scheduled destruction time.
 	 * <p>
-	 * Requires the key to be in {@link KeyStatus#DISABLED} state first (two-step deactivation
-	 * before destruction, per NIST SP 800-57 §8.3.1).
+	 * The key must be in {@link KeyStatus#DISABLED} or {@link KeyStatus#COMPROMISED} state.
+	 * Accepting {@link KeyStatus#COMPROMISED} directly satisfies NIST SP 800-57 §8.2.9 —
+	 * compromised key material must be destroyable without requiring re-activation.
 	 * <p>
 	 * When the keyset has no destruction grace period configured ({@literal null}), the key
 	 * material is destroyed immediately: the key is transitioned through
@@ -309,24 +311,24 @@ public interface KeysetStore {
 	 * @param keyId      the identifier of the key to schedule for destruction, can't be {@literal null}
 	 * @throws CryptoException.KeysetNotFoundException when no keyset exists with the given name
 	 * @throws CryptoException.InvalidKeyStatusTransitionException when the key is not currently
-	 *         in {@link KeyStatus#DISABLED} state
+	 *         in {@link KeyStatus#DISABLED} or {@link KeyStatus#COMPROMISED} state
 	 */
 	void scheduleDestruction(String keysetName, String keyId);
 
 	/**
-	 * Transitions the specified {@link Key} within the named {@link Keyset} from
-	 * {@link KeyStatus#DISABLED} to {@link KeyStatus#PENDING_DESTRUCTION}, with an explicit
-	 * scheduled destruction time.
+	 * Transitions the specified {@link Key} within the named {@link Keyset} to
+	 * {@link KeyStatus#PENDING_DESTRUCTION}, with an explicit scheduled destruction time.
 	 * <p>
-	 * Requires the key to be in {@link KeyStatus#DISABLED} state first (two-step deactivation
-	 * before destruction, per NIST SP 800-57 §8.3.1).
+	 * The key must be in {@link KeyStatus#DISABLED} or {@link KeyStatus#COMPROMISED} state.
+	 * Accepting {@link KeyStatus#COMPROMISED} directly satisfies NIST SP 800-57 §8.2.9 —
+	 * compromised key material must be destroyable without requiring re-activation.
 	 *
 	 * @param keysetName      the name of the keyset containing the key, can't be {@literal null}
 	 * @param keyId           the identifier of the key to schedule for destruction, can't be {@literal null}
 	 * @param destructionTime the time at which destruction should occur, can't be {@literal null}
 	 * @throws CryptoException.KeysetNotFoundException when no keyset exists with the given name
 	 * @throws CryptoException.InvalidKeyStatusTransitionException when the key is not currently
-	 *         in {@link KeyStatus#DISABLED} state
+	 *         in {@link KeyStatus#DISABLED} or {@link KeyStatus#COMPROMISED} state
 	 */
 	void scheduleDestruction(String keysetName, String keyId, Instant destructionTime);
 
