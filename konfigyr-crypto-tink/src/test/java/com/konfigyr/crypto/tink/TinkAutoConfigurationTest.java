@@ -38,15 +38,37 @@ class TinkAutoConfigurationTest {
 	}
 
 	@Test
-	@DisplayName("should register the Tink keyset factory")
+	@DisplayName("should register the Tink keyset factory with default algorithms only")
 	void shouldApplyConfiguration() {
 		runner.run(ctx -> assertThat(ctx).hasNotFailed()
 			.hasSingleBean(TinkAutoConfiguration.class)
 			.hasSingleBean(TinkKeysetFactory.class)
 			.hasSingleBean(AlgorithmRegistry.class)
 			.getBean(AlgorithmRegistry.class)
-			.satisfies(registry -> assertThat(registry.algorithms())
-				.containsExactlyInAnyOrderElementsOf(TinkAlgorithm.DEFAULT_ALGORITHMS)));
+			.satisfies(registry -> {
+				assertThat(registry.algorithms())
+					.containsExactlyInAnyOrderElementsOf(TinkAlgorithm.DEFAULT_ALGORITHMS);
+				assertThat(registry.algorithms())
+					.doesNotContainAnyElementsOf(TinkAlgorithm.LEGACY_ALGORITHMS);
+			}));
+	}
+
+	@Test
+	@DisplayName("should not register legacy algorithms by default")
+	void shouldNotRegisterLegacyAlgorithmsByDefault() {
+		runner.run(ctx -> assertThat(ctx).hasNotFailed()
+			.doesNotHaveBean("legacyTinkAlgorithmRegistrar"));
+	}
+
+	@Test
+	@DisplayName("should register legacy algorithms when the opt-in property is set")
+	void shouldRegisterLegacyAlgorithmsWhenEnabled() {
+		runner.withPropertyValues("konfigyr.crypto.tink.register-legacy-algorithms=true")
+			.run(ctx -> assertThat(ctx).hasNotFailed()
+				.hasSingleBean(AlgorithmRegistry.class)
+				.getBean(AlgorithmRegistry.class)
+				.satisfies(registry -> assertThat(registry.algorithms())
+					.containsAll(TinkAlgorithm.LEGACY_ALGORITHMS)));
 	}
 
 }

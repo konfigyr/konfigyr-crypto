@@ -69,7 +69,7 @@ public enum KeyStatus {
 	 */
 	DESTRUCTION_FAILED;
 
-	static final EnumMap<KeyStatus, Set<KeyStatus>> SUPPORTED_TRANSITIONS = new EnumMap<>(KeyStatus.class);
+	private static final EnumMap<KeyStatus, Set<KeyStatus>> SUPPORTED_TRANSITIONS = new EnumMap<>(KeyStatus.class);
 
 	static {
 		SUPPORTED_TRANSITIONS.put(INITIALIZING, Set.of(ENABLED, INITIALIZATION_FAILED));
@@ -79,6 +79,24 @@ public enum KeyStatus {
 		SUPPORTED_TRANSITIONS.put(PENDING_DESTRUCTION, Set.of(DISABLED, DESTROYED, DESTRUCTION_FAILED));
 	}
 
+	/**
+	 * Returns {@code true} if this status may transition to the given {@code target} status
+	 * according to the key lifecycle state machine.
+	 * <p>
+	 * The allowed transitions are:
+	 * <ul>
+	 *   <li>{@link #INITIALIZING} → {@link #ENABLED}, {@link #INITIALIZATION_FAILED}</li>
+	 *   <li>{@link #ENABLED} → {@link #DISABLED}, {@link #COMPROMISED}, {@link #PENDING_DESTRUCTION}, {@link #DESTROYED}</li>
+	 *   <li>{@link #COMPROMISED} → {@link #DISABLED}, {@link #PENDING_DESTRUCTION}, {@link #DESTROYED}</li>
+	 *   <li>{@link #DISABLED} → {@link #ENABLED}, {@link #COMPROMISED}, {@link #PENDING_DESTRUCTION}, {@link #DESTROYED}</li>
+	 *   <li>{@link #PENDING_DESTRUCTION} → {@link #DISABLED}, {@link #DESTROYED}, {@link #DESTRUCTION_FAILED}</li>
+	 * </ul>
+	 * {@link #DESTROYED}, {@link #INITIALIZATION_FAILED}, and {@link #DESTRUCTION_FAILED} are
+	 * terminal statuses, they have no outgoing transitions and always return {@code false}.
+	 *
+	 * @param target the target status to transition to, can't be {@literal null}
+	 * @return {@code true} if the transition is allowed, {@code false} otherwise
+	 */
 	public boolean canTransitionTo(KeyStatus target) {
 		final Set<KeyStatus> allowedTransitions = SUPPORTED_TRANSITIONS.get(this);
 		return allowedTransitions != null && allowedTransitions.contains(target);

@@ -142,7 +142,11 @@ public final class TinkAlgorithm implements Algorithm {
 	);
 
 	/**
-	 * RSA-PKCS1 with 3072-bit key, SHA-256 hash, and public exponent F4. FIPS 186-5, SP 800-131A Rev 2.
+	 * RSA-PKCS1v1.5 with 3072-bit key, SHA-256 hash, and public exponent F4.
+	 * <p>
+	 * <strong>Legacy algorithm</strong>, conditionally acceptable for interoperability only
+	 * (NIST SP 800-131A Rev 2). Not registered by default. Prefer {@link #RSA_SSA_PSS_3072_SHA256_F4}
+	 * for new designs. Opt in explicitly via {@link #LEGACY_ALGORITHMS}.
 	 */
 	public static final TinkAlgorithm RSA_SSA_PKCS1_3072_SHA256_F4 = new TinkAlgorithm(
 		"tink:RSA_SSA_PKCS1_3072_SHA256_F4", KeysetPurpose.SIGNING, KeyType.RSA,
@@ -150,7 +154,11 @@ public final class TinkAlgorithm implements Algorithm {
 	);
 
 	/**
-	 * RSA-PKCS1 with 4096-bit key, SHA-512 hash, and public exponent F4. FIPS 186-5, SP 800-131A Rev 2.
+	 * RSA-PKCS1v1.5 with 4096-bit key, SHA-512 hash, and public exponent F4.
+	 * <p>
+	 * <strong>Legacy algorithm</strong>, conditionally acceptable for interoperability only
+	 * (NIST SP 800-131A Rev 2). Not registered by default. Prefer {@link #RSA_SSA_PSS_4096_SHA512_F4}
+	 * for new designs. Opt in explicitly via {@link #LEGACY_ALGORITHMS}.
 	 */
 	public static final TinkAlgorithm RSA_SSA_PKCS1_4096_SHA512_F4 = new TinkAlgorithm(
 		"tink:RSA_SSA_PKCS1_4096_SHA512_F4", KeysetPurpose.SIGNING, KeyType.RSA,
@@ -158,13 +166,31 @@ public final class TinkAlgorithm implements Algorithm {
 	);
 
 	/**
-	 * List of default, built-in Tink algorithms.
+	 * List of all built-in Tink algorithm constants that are registered automatically.
+	 * <p>
+	 * RSA-PKCS1v1.5 signing algorithms ({@link #RSA_SSA_PKCS1_3072_SHA256_F4},
+	 * {@link #RSA_SSA_PKCS1_4096_SHA512_F4}) are intentionally excluded. They are conditionally
+	 * acceptable for interoperability only (NIST SP 800-131A Rev 2) and must be opted in
+	 * explicitly via {@link #LEGACY_ALGORITHMS}.
 	 */
 	public static final List<TinkAlgorithm> DEFAULT_ALGORITHMS = List.of(
 		AES128_GCM, AES256_GCM, AES128_CTR_HMAC_SHA256, AES256_CTR_HMAC_SHA256,
 		ECIES_P256_HKDF_HMAC_SHA256_AES128_GCM, ECIES_P256_HKDF_HMAC_SHA256_AES128_CTR_HMAC_SHA256,
 		ECDSA_P256, ECDSA_P384, ECDSA_P521, ED25519,
-		RSA_SSA_PSS_3072_SHA256_F4, RSA_SSA_PSS_4096_SHA512_F4,
+		RSA_SSA_PSS_3072_SHA256_F4, RSA_SSA_PSS_4096_SHA512_F4
+	);
+
+	/**
+	 * RSA-PKCS1v1.5 signing algorithms retained exclusively for interoperability with external
+	 * systems that require PKCS1v1.5 signatures.
+	 * <p>
+	 * These algorithms are <strong>not</strong> registered automatically. They must be explicitly
+	 * enabled by setting {@code konfigyr.crypto.tink.register-legacy-algorithms=true}.
+	 * <p>
+	 * Do not use these algorithms in new designs. Prefer {@link #RSA_SSA_PSS_3072_SHA256_F4}
+	 * or {@link #RSA_SSA_PSS_4096_SHA512_F4} instead (NIST SP 800-131A Rev 2).
+	 */
+	public static final List<TinkAlgorithm> LEGACY_ALGORITHMS = List.of(
 		RSA_SSA_PKCS1_3072_SHA256_F4, RSA_SSA_PKCS1_4096_SHA512_F4
 	);
 
