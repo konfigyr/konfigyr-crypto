@@ -1,5 +1,6 @@
 package com.konfigyr.crypto;
 
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 import org.springframework.cache.support.NoOpCache;
@@ -370,6 +371,7 @@ public interface KeysetStore {
 	 * Builder class used to create {@link KeysetStore} instances. This builder would return an instance of
 	 * {@link RepostoryKeysetStore} by default.
 	 */
+	@Slf4j
 	final class Builder {
 		private @Nullable KeysetCache cache;
 		private @Nullable KeysetRepository repository;
@@ -460,6 +462,8 @@ public interface KeysetStore {
 			Assert.notEmpty(providers, "You need to specify at least one key encryption key provider");
 
 			if (repository == null) {
+				log.warn("No KeysetRepository configured, falling back to InMemoryKeysetRepository. "
+					+ "All key material will be lost on application restart. Do not use in production.");
 				repository = new InMemoryKeysetRepository();
 			}
 
