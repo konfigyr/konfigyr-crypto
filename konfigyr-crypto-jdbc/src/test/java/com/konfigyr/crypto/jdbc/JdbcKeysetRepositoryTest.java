@@ -24,6 +24,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatNoException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @AutoConfigureTestDatabase
 @SpringBootTest(classes = JdbcKeysetRepositoryTest.Config.class)
@@ -56,7 +57,7 @@ class JdbcKeysetRepositoryTest {
 		final EncryptedKey primaryKey = encryptedKey("key-1", true, t0, ByteArray.fromString("encrypted key material"));
 		final EncryptedKeyset keyset = encryptedKeyset(primaryKey);
 
-		assertThatNoException().isThrownBy(() -> repository.write(keyset));
+		EncryptedKeyset written = repository.write(keyset);
 		assertThat(repository.read(definition.getName())).isNotEmpty().hasValue(keyset);
 
 		// --- update: rotate primary, keep key-1 unchanged, add key-2 ---
@@ -64,37 +65,34 @@ class JdbcKeysetRepositoryTest {
 		final EncryptedKey demotedKey = encryptedKey("key-1", false, t0, ByteArray.fromString("encrypted key material"));
 		final EncryptedKey newPrimary = encryptedKey("key-2", true, t1, ByteArray.fromString("rotated key material"));
 
-		final EncryptedKeyset rotated = EncryptedKeyset.builder(definition)
-			.provider("test-provider")
+		final EncryptedKeyset rotated = EncryptedKeyset.builder(written)
 			.keyEncryptionKey("test-kek")
 			.rotationInterval(Duration.ofDays(90))
 			.build(demotedKey, newPrimary);
 
-		assertThatNoException().isThrownBy(() -> repository.write(rotated));
+		written = repository.write(rotated);
 		assertThat(repository.read(definition.getName())).isNotEmpty().hasValue(rotated);
 
 		// --- second update: drop demoted key-1, leaving only key-2 — exercises single-key DELETE ---
-		final EncryptedKeyset pruned = EncryptedKeyset.builder(definition)
-			.provider("test-provider")
+		final EncryptedKeyset pruned = EncryptedKeyset.builder(written)
 			.keyEncryptionKey("test-kek")
 			.rotationInterval(Duration.ofDays(90))
 			.build(newPrimary);
 
-		assertThatNoException().isThrownBy(() -> repository.write(pruned));
+		written = repository.write(pruned);
 		assertThat(repository.read(definition.getName())).isNotEmpty().hasValue(pruned);
 
 		// --- third update: only metadata changes, key-2 identical — no key rows touched ---
-		final EncryptedKeyset metadataOnly = EncryptedKeyset.builder(definition)
-			.provider("test-provider")
+		final EncryptedKeyset metadataOnly = EncryptedKeyset.builder(written)
 			.keyEncryptionKey("updated-kek")
 			.rotationInterval(Duration.ofDays(90))
 			.build(newPrimary);
 
-		assertThatNoException().isThrownBy(() -> repository.write(metadataOnly));
+		repository.write(metadataOnly);
 		assertThat(repository.read(definition.getName())).isNotEmpty().hasValue(metadataOnly);
 
 		// --- remove ---
-		assertThatNoException().isThrownBy(() -> repository.remove(metadataOnly.getName()));
+		repository.remove(metadataOnly.getName());
 		assertThat(repository.read(definition.getName())).isEmpty();
 	}
 
@@ -103,10 +101,10 @@ class JdbcKeysetRepositoryTest {
 	void shouldUpdateKeyStatus() throws IOException {
 		final Instant t0 = Instant.now().truncatedTo(ChronoUnit.MILLIS);
 		final EncryptedKey key = encryptedKey("key-1", true, t0, ByteArray.fromString("secret"));
-		repository.write(encryptedKeyset("lifecycle-status", key));
+		final EncryptedKeyset stored = repository.write(encryptedKeyset("lifecycle-status", key));
 
 		assertThatNoException().isThrownBy(() ->
-			repository.updateKeyStatus(KeyTransition.disable("lifecycle-status", "key-1")));
+			repository.updateKeyStatus(KeyTransition.disable(stored, "key-1")));
 
 		assertThat(repository.read("lifecycle-status"))
 			.isPresent()
@@ -135,11 +133,11 @@ class JdbcKeysetRepositoryTest {
 			.createdAt(t0)
 			.destructionScheduledAt(scheduled)
 			.build(ByteArray.fromString("secret"));
-		repository.write(encryptedKeyset("lifecycle-destroy", key));
+		final EncryptedKeyset stored = repository.write(encryptedKeyset("lifecycle-destroy", key));
 
 		final Instant destroyedAt = t0.plusSeconds(1);
 		assertThatNoException().isThrownBy(() ->
-			repository.updateKeyStatus(KeyTransition.destroy("lifecycle-destroy", "key-1", destroyedAt)));
+			repository.updateKeyStatus(KeyTransition.destroy(stored, "key-1", destroyedAt)));
 
 		assertThat(repository.read("lifecycle-destroy"))
 			.isPresent()
@@ -310,12 +308,14 @@ class JdbcKeysetRepositoryTest {
 
 		final EncryptedKey primaryKey = encryptedKey("primary-key", true, instant, ByteArray.fromString("primary material"));
 		final EncryptedKey oldKey = encryptedKey("old-key", false, instant, ByteArray.fromString("old material"));
-		repository.write(encryptedKeyset("keyset", primaryKey, oldKey));
+		final EncryptedKeyset written = repository.write(encryptedKeyset("keyset", primaryKey, oldKey));
 
-		repository.updateKeyStatus(KeyTransition.destroy("keyset", "old-key", destroyedAt));
+		repository.updateKeyStatus(KeyTransition.destroy(written, "old-key", destroyedAt));
 
-		// Simulate the factory skipping the DESTROYED key: write a keyset containing only the primary key.
-		repository.write(encryptedKeyset("keyset", primaryKey));
+		// Simulate the factory skipping the DESTROYED key: read the current state (version bumped
+		// by updateKeyStatus), then write a keyset containing only the primary key.
+		final EncryptedKeyset current = repository.read("keyset").orElseThrow();
+		repository.write(EncryptedKeyset.builder(current).build(primaryKey));
 
 		final var stored = repository.read("keyset").orElseThrow();
 
@@ -332,6 +332,41 @@ class JdbcKeysetRepositoryTest {
 			.hasValueSatisfying(key -> assertThat(key.getData()).isNotNull());
 
 		repository.remove("keyset");
+	}
+
+	@Test
+	@DisplayName("should throw when a concurrent modification is detected on write")
+	void shouldDetectConcurrentModificationOnWrite() throws IOException {
+		final Instant t0 = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+		final EncryptedKey key = encryptedKey("key-1", true, t0, ByteArray.fromString("key-material"));
+		final EncryptedKeyset keyset = encryptedKeyset("version-conflict", key);
+
+		repository.write(keyset); // INSERT: version stays at 0
+
+		jdbcOperations.update("UPDATE KEYSETS SET KEYSET_VERSION = 1 WHERE KEYSET_NAME = ?",
+				"version-conflict");
+
+		assertThatThrownBy(() -> repository.write(keyset)) // keyset carries v0; DB has v1
+				.isInstanceOf(CryptoException.KeysetConcurrentModificationException.class);
+
+		repository.remove("version-conflict");
+	}
+
+	@Test
+	@DisplayName("should throw when a concurrent modification is detected on updateKeyStatus")
+	void shouldDetectConcurrentModificationOnUpdateKeyStatus() throws IOException {
+		final Instant t0 = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+		final EncryptedKey key = encryptedKey("key-1", true, t0, ByteArray.fromString("key-material"));
+		final EncryptedKeyset written = repository.write(encryptedKeyset("status-conflict", key)); // INSERT: version stays at 0
+
+		jdbcOperations.update("UPDATE KEYSETS SET KEYSET_VERSION = 1 WHERE KEYSET_NAME = ?",
+				"status-conflict");
+
+		// written carries keysetVersion=0; DB version is now 1 → bump fails
+		assertThatThrownBy(() -> repository.updateKeyStatus(KeyTransition.disable(written, "key-1")))
+				.isInstanceOf(CryptoException.KeysetConcurrentModificationException.class);
+
+		repository.remove("status-conflict");
 	}
 
 	@Test

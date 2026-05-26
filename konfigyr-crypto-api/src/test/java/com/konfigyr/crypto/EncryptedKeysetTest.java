@@ -299,6 +299,31 @@ class EncryptedKeysetTest {
 	}
 
 	@Test
+	@DisplayName("should exclude version from equality and hash code checks")
+	void shouldExcludeVersionFromEqualityAndHashCode() {
+		final var a = EncryptedKeyset.builder()
+			.name("test-keyset")
+			.purpose(KeysetPurpose.ENCRYPTION)
+			.factory("test-factory")
+			.provider("test-provider")
+			.keyEncryptionKey("test-kek")
+			.version(1L)
+			.build(List.of(key));
+
+		final var b = EncryptedKeyset.builder()
+			.name("test-keyset")
+			.purpose(KeysetPurpose.ENCRYPTION)
+			.factory("test-factory")
+			.provider("test-provider")
+			.keyEncryptionKey("test-kek")
+			.version(5L)
+			.build(List.of(key));
+
+		assertThat(a).isEqualTo(b);
+		assertThat(a.hashCode()).isEqualTo(b.hashCode());
+	}
+
+	@Test
 	@DisplayName("should not be Java-serializable")
 	void shouldNotBeSerializable() {
 		assertThatExceptionOfType(NotSerializableException.class).isThrownBy(() -> {

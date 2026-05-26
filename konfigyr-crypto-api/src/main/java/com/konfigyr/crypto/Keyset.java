@@ -57,6 +57,14 @@ public interface Keyset extends Iterable<Key> {
 	String getName();
 
 	/**
+	 * The optimistic-locking version of this keyset as it was last read from the
+	 * {@link KeysetRepository}. Zero for keysets that have not yet been persisted.
+	 *
+	 * @return non-negative version counter
+	 */
+	long getVersion();
+
+	/**
 	 * The name of the {@link KeysetFactory} that is responsible for creating the {@link Keyset} and it's
 	 * underlying {@link Key keys}.
 	 *

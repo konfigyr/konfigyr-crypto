@@ -151,6 +151,20 @@ class KeysetTasksTest {
 			verifyNoInteractions(store);
 		}
 
+		@Test
+		@DisplayName("should swallow KeysetConcurrentModificationException and continue with remaining keysets")
+		void shouldSwallowConcurrentModificationException() throws IOException {
+			when(repository.findPendingRotation()).thenReturn(List.of(
+					metadataKeyset("ks-a"), metadataKeyset("ks-b")));
+			doThrow(new CryptoException.KeysetConcurrentModificationException("ks-a"))
+					.when(store).rotate("ks-a");
+
+			assertThatNoException().isThrownBy(() -> new KeysetRotationTask(store, repository).run());
+
+			verify(store).rotate("ks-a");
+			verify(store).rotate("ks-b");
+		}
+
 	}
 
 	@Nested

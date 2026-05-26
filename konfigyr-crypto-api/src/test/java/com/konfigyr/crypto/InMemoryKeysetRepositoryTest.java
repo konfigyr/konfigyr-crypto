@@ -12,6 +12,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNoException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class InMemoryKeysetRepositoryTest {
 
@@ -39,10 +40,10 @@ class InMemoryKeysetRepositoryTest {
 	void shouldUpdateKeyStatus() throws IOException {
 		final EncryptedKey key = encryptedKey("key-1", KeyStatus.ENABLED, true,
 			ByteArray.fromString("key-material"), null);
-		repository.write(encryptedKeyset("test-keyset", key));
+		final EncryptedKeyset stored = repository.write(encryptedKeyset("test-keyset", key));
 
 		assertThatNoException().isThrownBy(() ->
-			repository.updateKeyStatus(KeyTransition.disable("test-keyset", "key-1")));
+			repository.updateKeyStatus(KeyTransition.disable(stored, "key-1")));
 
 		assertThat(repository.read("test-keyset"))
 			.isPresent()
@@ -62,11 +63,11 @@ class InMemoryKeysetRepositoryTest {
 		final Instant scheduledAt = NOW.minus(Duration.ofDays(1));
 		final EncryptedKey key = encryptedKey("key-1", KeyStatus.PENDING_DESTRUCTION, true,
 			ByteArray.fromString("key-material"), scheduledAt);
-		repository.write(encryptedKeyset("test-keyset", key));
+		final EncryptedKeyset stored = repository.write(encryptedKeyset("test-keyset", key));
 
 		final Instant destroyedAt = NOW;
 		assertThatNoException().isThrownBy(() ->
-			repository.updateKeyStatus(KeyTransition.destroy("test-keyset", "key-1", destroyedAt)));
+			repository.updateKeyStatus(KeyTransition.destroy(stored, "key-1", destroyedAt)));
 
 		assertThat(repository.read("test-keyset"))
 			.isPresent()
@@ -86,11 +87,11 @@ class InMemoryKeysetRepositoryTest {
 	void shouldSetDestructionScheduledAtOnPendingDestruction() throws IOException {
 		final EncryptedKey key = encryptedKey("key-1", KeyStatus.DISABLED, true,
 			ByteArray.fromString("key-material"), null);
-		repository.write(encryptedKeyset("test-keyset", key));
+		final EncryptedKeyset stored = repository.write(encryptedKeyset("test-keyset", key));
 
 		final Instant scheduledAt = NOW.plus(Duration.ofDays(30));
 		assertThatNoException().isThrownBy(() ->
-			repository.updateKeyStatus(KeyTransition.scheduleDestruction("test-keyset", "key-1", scheduledAt)));
+			repository.updateKeyStatus(KeyTransition.scheduleDestruction(stored, "key-1", scheduledAt)));
 
 		assertThat(repository.read("test-keyset"))
 			.isPresent()
@@ -144,8 +145,9 @@ class InMemoryKeysetRepositoryTest {
 	@Test
 	@DisplayName("should silently skip updateKeyStatus when the keyset does not exist")
 	void shouldSkipUpdateForMissingKeyset() {
+		final EncryptedKeyset missing = encryptedKeyset("missing-keyset");
 		assertThatNoException().isThrownBy(() ->
-			repository.updateKeyStatus(KeyTransition.disable("missing-keyset", "key-1")));
+			repository.updateKeyStatus(KeyTransition.disable(missing, "key-1")));
 	}
 
 	@Test
@@ -213,6 +215,20 @@ class InMemoryKeysetRepositoryTest {
 		assertThat(repository.findPendingRotation())
 			.extracting(EncryptedKeyset::getName)
 			.doesNotContain("no-expiry");
+	}
+
+	@Test
+	@DisplayName("should throw when a concurrent modification is detected on write")
+	void shouldDetectConcurrentModificationOnWrite() throws IOException {
+		final EncryptedKey key = encryptedKey("key-1", KeyStatus.ENABLED, true,
+			ByteArray.fromString("key-material"), null);
+		final EncryptedKeyset keyset = encryptedKeyset("concurrent-test", key);
+
+		repository.write(keyset); // INSERT: stored version = 0
+		repository.write(keyset); // UPDATE: 0 == 0, stored bumped to version 1
+
+		assertThatThrownBy(() -> repository.write(keyset)) // keyset is still v0, stored is v1
+			.isInstanceOf(CryptoException.KeysetConcurrentModificationException.class);
 	}
 
 	private static EncryptedKeyset encryptedKeyset(String name, EncryptedKey... keys) {
