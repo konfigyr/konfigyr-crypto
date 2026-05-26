@@ -1,6 +1,7 @@
 package com.konfigyr.crypto;
 
 import lombok.AccessLevel;
+import lombok.EqualsAndHashCode;
 import lombok.RequiredArgsConstructor;
 import lombok.Value;
 import org.jspecify.annotations.NullMarked;
@@ -23,19 +24,19 @@ import java.time.Instant;
  *
  * <pre>{@code
  * // ENABLED → DISABLED
- * KeyTransition.disable(keysetName, keyId);
+ * KeyTransition.disable(encryptedKeyset, keyId);
  *
  * // DISABLED → ENABLED
- * KeyTransition.enable(keysetName, keyId);
+ * KeyTransition.enable(encryptedKeyset, keyId);
  *
  * // DISABLED → PENDING_DESTRUCTION
- * KeyTransition.scheduleDestruction(keysetName, keyId, destructionTime);
+ * KeyTransition.scheduleDestruction(encryptedKeyset, keyId, destructionTime);
  *
  * // PENDING_DESTRUCTION → DISABLED
- * KeyTransition.cancelDestruction(keysetName, keyId);
+ * KeyTransition.cancelDestruction(encryptedKeyset, keyId);
  *
  * // PENDING_DESTRUCTION → DESTROYED (key material erased)
- * KeyTransition.destroy(keysetName, keyId, Instant.now());
+ * KeyTransition.destroy(encryptedKeyset, keyId, Instant.now());
  * }</pre>
  *
  * @author Vladimir Spasic
@@ -78,27 +79,37 @@ public class KeyTransition {
 	Instant destroyedAt;
 
 	/**
+	 * The expected {@link EncryptedKeyset#getVersion() keyset version} against which the
+	 * repository should guard when applying this transition. Implementations that apply
+	 * transitions via a targeted SQL UPDATE should reject the update when the stored version
+	 * no longer matches this value and throw
+	 * {@link CryptoException.KeysetConcurrentModificationException}.
+	 */
+	@EqualsAndHashCode.Exclude
+	long keysetVersion;
+
+	/**
 	 * Creates a transition that moves a key from {@link KeyStatus#ENABLED} to
 	 * {@link KeyStatus#DISABLED}.
 	 *
-	 * @param keysetName the name of the keyset containing the key, can't be {@literal null}
+	 * @param keyset the keyset containing the key, can't be {@literal null}
 	 * @param keyId the identifier of the key to disable, can't be {@literal null}
 	 * @return the transition, never {@literal null}
 	 */
-	public static KeyTransition disable(String keysetName, String keyId) {
-		return new KeyTransition(keysetName, keyId, KeyStatus.DISABLED, null, null);
+	public static KeyTransition disable(EncryptedKeyset keyset, String keyId) {
+		return new KeyTransition(keyset.getName(), keyId, KeyStatus.DISABLED, null, null, keyset.getVersion());
 	}
 
 	/**
 	 * Creates a transition that moves a key from {@link KeyStatus#DISABLED} to
 	 * {@link KeyStatus#ENABLED}.
 	 *
-	 * @param keysetName the name of the keyset containing the key, can't be {@literal null}
+	 * @param keyset the keyset containing the key, can't be {@literal null}
 	 * @param keyId the identifier of the key to re-enable, can't be {@literal null}
 	 * @return the transition, never {@literal null}
 	 */
-	public static KeyTransition enable(String keysetName, String keyId) {
-		return new KeyTransition(keysetName, keyId, KeyStatus.ENABLED, null, null);
+	public static KeyTransition enable(EncryptedKeyset keyset, String keyId) {
+		return new KeyTransition(keyset.getName(), keyId, KeyStatus.ENABLED, null, null, keyset.getVersion());
 	}
 
 	/**
@@ -109,41 +120,41 @@ public class KeyTransition {
 	 * used for any cryptographic operation. Key material should subsequently be scheduled
 	 * for destruction via {@link KeysetStore#scheduleDestruction(String, String)}.
 	 *
-	 * @param keysetName the name of the keyset containing the key, can't be {@literal null}
+	 * @param keyset the keyset containing the key, can't be {@literal null}
 	 * @param keyId the identifier of the key to mark as compromised, can't be {@literal null}
 	 * @return the transition, never {@literal null}
 	 */
-	public static KeyTransition compromise(String keysetName, String keyId) {
-		return new KeyTransition(keysetName, keyId, KeyStatus.COMPROMISED, null, null);
+	public static KeyTransition compromise(EncryptedKeyset keyset, String keyId) {
+		return new KeyTransition(keyset.getName(), keyId, KeyStatus.COMPROMISED, null, null, keyset.getVersion());
 	}
 
 	/**
 	 * Creates a transition that moves a key from {@link KeyStatus#DISABLED} to
 	 * {@link KeyStatus#PENDING_DESTRUCTION}, recording the scheduled destruction time.
 	 *
-	 * @param keysetName the name of the keyset containing the key, can't be {@literal null}
+	 * @param keyset the keyset containing the key, can't be {@literal null}
 	 * @param keyId the identifier of the key to schedule for destruction, can't be {@literal null}
 	 * @param destructionScheduledAt the time at which the key should be destroyed,
 	 *                               can't be {@literal null}
 	 * @return the transition, never {@literal null}
 	 */
 	public static KeyTransition scheduleDestruction(
-			String keysetName, String keyId, Instant destructionScheduledAt) {
-		return new KeyTransition(keysetName, keyId, KeyStatus.PENDING_DESTRUCTION,
-				destructionScheduledAt, null);
+			EncryptedKeyset keyset, String keyId, Instant destructionScheduledAt) {
+		return new KeyTransition(keyset.getName(), keyId, KeyStatus.PENDING_DESTRUCTION,
+				destructionScheduledAt, null, keyset.getVersion());
 	}
 
 	/**
 	 * Creates a transition that moves a key from {@link KeyStatus#PENDING_DESTRUCTION} back to
 	 * {@link KeyStatus#DISABLED}, clearing the previously scheduled destruction time.
 	 *
-	 * @param keysetName the name of the keyset containing the key, can't be {@literal null}
+	 * @param keyset the keyset containing the key, can't be {@literal null}
 	 * @param keyId the identifier of the key whose destruction should be cancelled,
 	 *              can't be {@literal null}
 	 * @return the transition, never {@literal null}
 	 */
-	public static KeyTransition cancelDestruction(String keysetName, String keyId) {
-		return new KeyTransition(keysetName, keyId, KeyStatus.DISABLED, null, null);
+	public static KeyTransition cancelDestruction(EncryptedKeyset keyset, String keyId) {
+		return new KeyTransition(keyset.getName(), keyId, KeyStatus.DISABLED, null, null, keyset.getVersion());
 	}
 
 	/**
@@ -153,14 +164,14 @@ public class KeyTransition {
 	 * The key material ({@link EncryptedKey#getData()}) is erased — set to {@code null} — by
 	 * the repository when this transition is applied. The row itself is kept for audit purposes.
 	 *
-	 * @param keysetName the name of the keyset containing the key, can't be {@literal null}
+	 * @param keyset the keyset containing the key, can't be {@literal null}
 	 * @param keyId the identifier of the key to destroy, can't be {@literal null}
 	 * @param destroyedAt the instant at which the key material was erased, can't be
 	 *                    {@literal null}
 	 * @return the transition, never {@literal null}
 	 */
-	public static KeyTransition destroy(String keysetName, String keyId, Instant destroyedAt) {
-		return new KeyTransition(keysetName, keyId, KeyStatus.DESTROYED, null, destroyedAt);
+	public static KeyTransition destroy(EncryptedKeyset keyset, String keyId, Instant destroyedAt) {
+		return new KeyTransition(keyset.getName(), keyId, KeyStatus.DESTROYED, null, destroyedAt, keyset.getVersion());
 	}
 
 }

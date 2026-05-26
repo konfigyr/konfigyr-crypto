@@ -91,6 +91,12 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 	protected final @Nullable Duration destructionGracePeriod;
 
 	/**
+	 * The optimistic-locking version of this keyset as it was last read from the
+	 * {@link KeysetRepository}. Zero for keysets that have not yet been persisted.
+	 */
+	protected final long version;
+
+	/**
 	 * Constructs a new {@link AbstractKeyset} with the specified configuration.
 	 *
 	 * @param builder the builder containing all keyset configuration parameters, can't be {@literal null}
@@ -124,6 +130,7 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 		this.keys = Collections.unmodifiableList(builder.keys);
 		this.rotationInterval = builder.rotationInterval;
 		this.destructionGracePeriod = builder.destructionGracePeriod;
+		this.version = builder.version;
 	}
 
 	@Override
@@ -281,6 +288,7 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 		private @Nullable KeyEncryptionKey kek;
 		private @Nullable Duration rotationInterval;
 		private @Nullable Duration destructionGracePeriod;
+		private long version = 0L;
 		private final List<T> keys;
 
 		protected Builder() {
@@ -303,6 +311,7 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 			kek = keyset.getKeyEncryptionKey();
 			rotationInterval = keyset.getRotationInterval().orElse(null);
 			destructionGracePeriod = keyset.getDestructionGracePeriod().orElse(null);
+			version = keyset.getVersion();
 			keys = new ArrayList<>(keyset.size());
 		}
 
@@ -312,6 +321,7 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 			purpose = KeysetPurpose.valueOf(keyset.getPurpose());
 			rotationInterval = keyset.getRotationInterval();
 			destructionGracePeriod = keyset.getDestructionGracePeriod();
+			version = keyset.getVersion();
 			keys = new ArrayList<>(keyset.size());
 		}
 
@@ -417,6 +427,17 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 		 */
 		public B destructionGracePeriod(@Nullable Duration destructionGracePeriod) {
 			this.destructionGracePeriod = destructionGracePeriod;
+			return self();
+		}
+
+		/**
+		 * Sets the optimistic-locking version for this keyset.
+		 *
+		 * @param version non-negative version counter
+		 * @return this builder instance for method chaining
+		 */
+		public B version(long version) {
+			this.version = version;
 			return self();
 		}
 

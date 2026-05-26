@@ -12,6 +12,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Function;
 
 import static com.konfigyr.crypto.CryptoException.*;
 
@@ -161,7 +162,7 @@ public class RepostoryKeysetStore implements KeysetStore {
 		Assert.hasText(keysetName, "Keyset name must not be blank");
 		Assert.hasText(keyId, "Key ID must not be blank");
 
-		performKeyTransition(KeyTransition.disable(keysetName, keyId));
+		performKeyTransition(keysetName, keyset -> KeyTransition.disable(keyset, keyId));
 	}
 
 	@Override
@@ -169,7 +170,7 @@ public class RepostoryKeysetStore implements KeysetStore {
 		Assert.hasText(keysetName, "Keyset name must not be blank");
 		Assert.hasText(keyId, "Key ID must not be blank");
 
-		performKeyTransition(KeyTransition.enable(keysetName, keyId));
+		performKeyTransition(keysetName, keyset -> KeyTransition.enable(keyset, keyId));
 	}
 
 	@Override
@@ -177,7 +178,7 @@ public class RepostoryKeysetStore implements KeysetStore {
 		Assert.hasText(keysetName, "Keyset name must not be blank");
 		Assert.hasText(keyId, "Key ID must not be blank");
 
-		performKeyTransition(KeyTransition.compromise(keysetName, keyId));
+		performKeyTransition(keysetName, keyset -> KeyTransition.compromise(keyset, keyId));
 	}
 
 	@Override
@@ -185,17 +186,15 @@ public class RepostoryKeysetStore implements KeysetStore {
 		Assert.hasText(keysetName, "Keyset name must not be blank");
 		Assert.hasText(keyId, "Key ID must not be blank");
 
-		final EncryptedKeyset encryptedKeyset = lookupKeyset(keysetName);
-		final Duration gracePeriod = encryptedKeyset.getDestructionGracePeriod();
-		final Instant destructionTime = gracePeriod != null
-				? Instant.now().plus(gracePeriod)
-				: Instant.now();
+		performKeyTransition(keysetName, keyset -> {
+			final Duration gracePeriod = keyset.getDestructionGracePeriod();
 
-		performKeyTransition(KeyTransition.scheduleDestruction(keysetName, keyId, destructionTime));
+			if (gracePeriod != null) {
+				return KeyTransition.scheduleDestruction(keyset, keyId, Instant.now().plus(gracePeriod));
+			}
 
-		if (gracePeriod == null) {
-			destroy(keysetName, keyId);
-		}
+			return KeyTransition.destroy(keyset, keyId, Instant.now());
+		});
 	}
 
 	@Override
@@ -204,7 +203,7 @@ public class RepostoryKeysetStore implements KeysetStore {
 		Assert.hasText(keyId, "Key ID must not be blank");
 		Assert.isTrue(destructionTime.isAfter(Instant.now()), "Destruction time must be in the future");
 
-		performKeyTransition(KeyTransition.scheduleDestruction(keysetName, keyId, destructionTime));
+		performKeyTransition(keysetName, keyset -> KeyTransition.scheduleDestruction(keyset, keyId, destructionTime));
 	}
 
 	@Override
@@ -212,7 +211,7 @@ public class RepostoryKeysetStore implements KeysetStore {
 		Assert.hasText(keysetName, "Keyset name must not be blank");
 		Assert.hasText(keyId, "Key ID must not be blank");
 
-		performKeyTransition(KeyTransition.cancelDestruction(keysetName, keyId));
+		performKeyTransition(keysetName, keyset -> KeyTransition.cancelDestruction(keyset, keyId));
 	}
 
 	@Override
@@ -220,7 +219,7 @@ public class RepostoryKeysetStore implements KeysetStore {
 		Assert.hasText(keysetName, "Keyset name must not be blank");
 		Assert.hasText(keyId, "Key ID must not be blank");
 
-		performKeyTransition(KeyTransition.destroy(keysetName, keyId, Instant.now()));
+		performKeyTransition(keysetName, keyset -> KeyTransition.destroy(keyset, keyId, Instant.now()));
 	}
 
 	/**
@@ -228,23 +227,23 @@ public class RepostoryKeysetStore implements KeysetStore {
 	 * {@link KeyStatus#canTransitionTo(KeyStatus)}, delegates to the repository, and evicts
 	 * the cache entry.
 	 */
-	private void performKeyTransition(KeyTransition transition) {
-		final String keysetName = transition.getKeysetName();
+	private void performKeyTransition(String keysetName, Function<EncryptedKeyset, KeyTransition> transitionFactory) {
+		final EncryptedKeyset encryptedKeyset = lookupKeyset(keysetName);
+		final KeyTransition transition = transitionFactory.apply(encryptedKeyset);
 		final String keyId = transition.getKeyId();
 
-		final EncryptedKeyset encryptedKeyset = lookupKeyset(keysetName);
 		final EncryptedKey key = encryptedKeyset.getKey(keyId).orElseThrow(
 			() -> new KeysetException(keysetName, "Key '" + keyId + "' was not found in keyset '" + keysetName + "'.")
 		);
 
 		if (!key.getStatus().canTransitionTo(transition.getStatus())) {
 			throw new InvalidKeyStatusTransitionException(keysetName, keyId, key.getStatus(),
-					transition.getStatus());
+				transition.getStatus());
 		}
 
 		if (logger.isDebugEnabled()) {
 			logger.debug("Transitioning key '{}' in keyset '{}' from {} to {}", keyId, keysetName,
-					key.getStatus(), transition.getStatus());
+				key.getStatus(), transition.getStatus());
 		}
 
 		try {
@@ -401,15 +400,17 @@ public class RepostoryKeysetStore implements KeysetStore {
 			logger.debug("Writing encrypted keyset data for: {}", keyset.getName());
 		}
 
+		final EncryptedKeyset written;
+
 		try {
-			repository.write(encryptedKeyset);
+			written = repository.write(encryptedKeyset);
 		}
 		catch (IOException e) {
 			throw new KeysetException(keyset.getName(),
 					"Could not write encrypted keyset with name: " + keyset.getName(), e);
 		}
 
-		cache.put(encryptedKeyset.getName(), encryptedKeyset);
+		cache.put(written.getName(), written);
 	}
 
 	/**

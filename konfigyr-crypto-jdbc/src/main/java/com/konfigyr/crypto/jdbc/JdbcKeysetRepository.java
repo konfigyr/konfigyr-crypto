@@ -43,6 +43,7 @@ import java.util.Optional;
  *     KEYSET_NAME VARCHAR(120) NOT NULL,
  *     KEYSET_PURPOSE VARCHAR(50) NOT NULL,
  *     KEYSET_FACTORY VARCHAR(255) NOT NULL,
+ *     KEYSET_VERSION BIGINT DEFAULT 0 NOT NULL,
  *     KEYSET_PROVIDER VARCHAR(120) NOT NULL,
  *     KEYSET_KEK VARCHAR(255) NOT NULL,
  *     ROTATION_INTERVAL BIGINT,
@@ -86,7 +87,7 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 	public static final String DEFAULT_KEYS_TABLE_NAME = "KEYSET_KEYS";
 
 	private static final String GET_KEYSET_QUERY = """
-			SELECT K.KEYSET_NAME, K.KEYSET_PURPOSE, K.KEYSET_FACTORY, K.KEYSET_PROVIDER, K.KEYSET_KEK, K.ROTATION_INTERVAL, K.DESTRUCTION_GRACE_PERIOD
+			SELECT K.KEYSET_NAME, K.KEYSET_PURPOSE, K.KEYSET_FACTORY, K.KEYSET_PROVIDER, K.KEYSET_KEK, K.ROTATION_INTERVAL, K.DESTRUCTION_GRACE_PERIOD, K.KEYSET_VERSION
 			FROM %TABLE_NAME% K
 			WHERE K.KEYSET_NAME = ?
 			""";
@@ -106,14 +107,21 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 			""";
 
 	private static final String CREATE_KEYSET_QUERY = """
-			INSERT INTO %TABLE_NAME% (KEYSET_NAME, KEYSET_PURPOSE, KEYSET_FACTORY, KEYSET_PROVIDER, KEYSET_KEK, ROTATION_INTERVAL, DESTRUCTION_GRACE_PERIOD)
-			VALUES (?, ?, ?, ?, ?, ?, ?)
+			INSERT INTO %TABLE_NAME% (KEYSET_NAME, KEYSET_PURPOSE, KEYSET_FACTORY, KEYSET_PROVIDER, KEYSET_KEK, ROTATION_INTERVAL, DESTRUCTION_GRACE_PERIOD, KEYSET_VERSION)
+			VALUES (?, ?, ?, ?, ?, ?, ?, 0)
 			""";
 
 	private static final String UPDATE_KEYSET_QUERY = """
 			UPDATE %TABLE_NAME%
-			SET KEYSET_PURPOSE = ?, KEYSET_FACTORY = ?, KEYSET_PROVIDER = ?, KEYSET_KEK = ?, ROTATION_INTERVAL = ?, DESTRUCTION_GRACE_PERIOD = ?
-			WHERE KEYSET_NAME = ?
+			SET KEYSET_PURPOSE = ?, KEYSET_FACTORY = ?, KEYSET_PROVIDER = ?, KEYSET_KEK = ?, ROTATION_INTERVAL = ?, DESTRUCTION_GRACE_PERIOD = ?,
+				KEYSET_VERSION = KEYSET_VERSION + 1
+			WHERE KEYSET_NAME = ? AND KEYSET_VERSION = ?
+			""";
+
+	private static final String BUMP_KEYSET_VERSION_QUERY = """
+			UPDATE %TABLE_NAME%
+			SET KEYSET_VERSION = KEYSET_VERSION + 1
+			WHERE KEYSET_NAME = ? AND KEYSET_VERSION = ?
 			""";
 
 	private static final String CREATE_KEY_QUERY = """
@@ -157,7 +165,7 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 
 	private static final String FIND_PENDING_DESTRUCTION_QUERY = """
 			SELECT K.KEYSET_NAME, K.KEYSET_PURPOSE, K.KEYSET_FACTORY, K.KEYSET_PROVIDER, K.KEYSET_KEK,
-				K.ROTATION_INTERVAL, K.DESTRUCTION_GRACE_PERIOD,
+				K.ROTATION_INTERVAL, K.DESTRUCTION_GRACE_PERIOD, K.KEYSET_VERSION,
 				E.KEY_ID, E.KEY_ALGORITHM, E.KEY_TYPE, E.KEY_STATUS, E.KEY_PRIMARY, E.KEY_DATA,
 				E.CREATED_AT, E.INITIALIZED_AT, E.EXPIRES_AT, E.DESTRUCTION_SCHEDULED_AT, E.DESTROYED_AT
 			FROM %TABLE_NAME% K
@@ -170,7 +178,7 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 
 	private static final String FIND_PENDING_ROTATION_QUERY = """
 			SELECT K.KEYSET_NAME, K.KEYSET_PURPOSE, K.KEYSET_FACTORY, K.KEYSET_PROVIDER, K.KEYSET_KEK,
-				K.ROTATION_INTERVAL, K.DESTRUCTION_GRACE_PERIOD
+				K.ROTATION_INTERVAL, K.DESTRUCTION_GRACE_PERIOD, K.KEYSET_VERSION
 			FROM %TABLE_NAME% K
 			INNER JOIN %KEYS_TABLE_NAME% E ON E.KEYSET_NAME = K.KEYSET_NAME
 			WHERE E.KEY_PRIMARY = TRUE
@@ -214,6 +222,8 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 
 	private String findPendingRotationQuery;
 
+	private String bumpKeysetVersionQuery;
+
 	private final JdbcOperations jdbcOperations;
 
 	private final TransactionOperations transactionOperations;
@@ -241,6 +251,7 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 		destroyKeyQuery = sql(destroyKeyQuery, DESTROY_KEY_QUERY);
 		findPendingDestructionQuery = sql(findPendingDestructionQuery, FIND_PENDING_DESTRUCTION_QUERY);
 		findPendingRotationQuery = sql(findPendingRotationQuery, FIND_PENDING_ROTATION_QUERY);
+		bumpKeysetVersionQuery = sql(bumpKeysetVersionQuery, BUMP_KEYSET_VERSION_QUERY);
 	}
 
 	@NonNull
@@ -265,15 +276,16 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 		});
 	}
 
+	@NonNull
 	@Override
-	public void write(@NonNull EncryptedKeyset keyset) {
-		transactionOperations.executeWithoutResult(status -> {
+	public EncryptedKeyset write(@NonNull EncryptedKeyset keyset) {
+		return transactionOperations.execute(status -> {
 			if (exists(keyset.getName())) {
-				update(keyset);
+				return update(keyset);
 			}
-			else {
-				create(keyset);
-			}
+
+			create(keyset);
+			return keyset;
 		});
 	}
 
@@ -302,10 +314,10 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 		insertKeys(keyset.getName(), keyset.getKeys());
 	}
 
-	private void update(EncryptedKeyset keyset) {
+	private EncryptedKeyset update(EncryptedKeyset keyset) {
 		log.debug("Updating keyset '{}'", keyset.getName());
 
-		jdbcOperations.update(updateKeysetQuery, ps -> {
+		final int updated = jdbcOperations.update(updateKeysetQuery, ps -> {
 			ps.setString(1, keyset.getPurpose());
 			ps.setString(2, keyset.getFactory());
 			ps.setString(3, keyset.getProvider());
@@ -313,8 +325,15 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 			setDuration(ps, 5, keyset.getRotationInterval());
 			setDuration(ps, 6, keyset.getDestructionGracePeriod());
 			ps.setString(7, keyset.getName());
+			ps.setLong(8, keyset.getVersion());
 		});
+
+		if (updated == 0) {
+			throw new CryptoException.KeysetConcurrentModificationException(keyset.getName());
+		}
+
 		updateKeys(keyset.getName(), keyset.getKeys());
+		return EncryptedKeyset.builder(keyset).version(keyset.getVersion() + 1).build(keyset.getKeys());
 	}
 
 	private void updateKeys(String keysetName, List<EncryptedKey> newKeys) {
@@ -401,22 +420,31 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 		log.debug("Updating key '{}' in keyset '{}' to status {}",
 				transition.getKeyId(), transition.getKeysetName(), transition.getStatus());
 
-		if (transition.getStatus() == KeyStatus.DESTROYED) {
-			jdbcOperations.update(destroyKeyQuery, ps -> {
-				setInstant(ps, 1, transition.getDestroyedAt());
-				ps.setString(2, transition.getKeysetName());
-				ps.setString(3, transition.getKeyId());
+		transactionOperations.executeWithoutResult(status -> {
+			if (transition.getStatus() == KeyStatus.DESTROYED) {
+				jdbcOperations.update(destroyKeyQuery, ps -> {
+					setInstant(ps, 1, transition.getDestroyedAt());
+					ps.setString(2, transition.getKeysetName());
+					ps.setString(3, transition.getKeyId());
+				});
+			}
+			else {
+				jdbcOperations.update(updateKeyStatusQuery, ps -> {
+					ps.setString(1, transition.getStatus().name());
+					setInstant(ps, 2, transition.getDestructionScheduledAt());
+					setInstant(ps, 3, transition.getDestroyedAt());
+					ps.setString(4, transition.getKeysetName());
+					ps.setString(5, transition.getKeyId());
+				});
+			}
+			final int bumped = jdbcOperations.update(bumpKeysetVersionQuery, pss -> {
+				pss.setString(1, transition.getKeysetName());
+				pss.setLong(2, transition.getKeysetVersion());
 			});
-		}
-		else {
-			jdbcOperations.update(updateKeyStatusQuery, ps -> {
-				ps.setString(1, transition.getStatus().name());
-				setInstant(ps, 2, transition.getDestructionScheduledAt());
-				setInstant(ps, 3, transition.getDestroyedAt());
-				ps.setString(4, transition.getKeysetName());
-				ps.setString(5, transition.getKeyId());
-			});
-		}
+			if (bumped == 0) {
+				throw new CryptoException.KeysetConcurrentModificationException(transition.getKeysetName());
+			}
+		});
 	}
 
 	@NonNull
@@ -479,7 +507,8 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 			.purpose(KeysetPurpose.valueOf(rs.getString("KEYSET_PURPOSE")))
 			.factory(rs.getString("KEYSET_FACTORY"))
 			.provider(rs.getString("KEYSET_PROVIDER"))
-			.keyEncryptionKey(rs.getString("KEYSET_KEK"));
+			.keyEncryptionKey(rs.getString("KEYSET_KEK"))
+			.version(rs.getLong("KEYSET_VERSION"));
 
 		final long rotationInterval = rs.getLong("ROTATION_INTERVAL");
 		if (!rs.wasNull()) {
@@ -510,25 +539,7 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 		if (!rs.next()) {
 			return null;
 		}
-
-		final EncryptedKeyset.Builder builder = EncryptedKeyset.builder()
-			.name(rs.getString("KEYSET_NAME"))
-			.purpose(KeysetPurpose.valueOf(rs.getString("KEYSET_PURPOSE")))
-			.factory(rs.getString("KEYSET_FACTORY"))
-			.provider(rs.getString("KEYSET_PROVIDER"))
-			.keyEncryptionKey(rs.getString("KEYSET_KEK"));
-
-		final long rotationInterval = rs.getLong("ROTATION_INTERVAL");
-		if (!rs.wasNull()) {
-			builder.rotationInterval(rotationInterval);
-		}
-
-		final long destructionGracePeriod = rs.getLong("DESTRUCTION_GRACE_PERIOD");
-		if (!rs.wasNull()) {
-			builder.destructionGracePeriod(destructionGracePeriod);
-		}
-
-		return builder;
+		return extractKeysetRow(rs);
 	}
 
 	private List<EncryptedKey> extractKeys(@NonNull ResultSet rs) throws SQLException, DataAccessException {

@@ -675,6 +675,28 @@ public abstract class CryptoException extends RuntimeException {
 	}
 
 	/**
+	 * Exception thrown when a {@link KeysetRepository#write(EncryptedKeyset)} call detects that
+	 * the keyset was modified by a concurrent operation between the time it was read and the time
+	 * the write was attempted. Callers should retry the operation from a fresh read.
+	 */
+	public static class KeysetConcurrentModificationException extends KeysetException {
+
+		@Serial
+		private static final long serialVersionUID = SERIAL;
+
+		/**
+		 * Creates a new {@link KeysetConcurrentModificationException} for the given keyset.
+		 *
+		 * @param keysetName the name of the keyset that was concurrently modified, can't be {@literal null}
+		 */
+		public KeysetConcurrentModificationException(String keysetName) {
+			super(keysetName, "Keyset '" + keysetName
+					+ "' was modified by a concurrent operation; retry the operation.");
+		}
+
+	}
+
+	/**
 	 * Exception thrown when the {@link Keyset} is being encrypted, or wrapped, by the
 	 * responsible {@link KeyEncryptionKey}.
 	 * <p>

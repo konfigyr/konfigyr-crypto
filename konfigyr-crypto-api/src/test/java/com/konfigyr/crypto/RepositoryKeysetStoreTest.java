@@ -6,7 +6,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -186,6 +185,7 @@ class RepositoryKeysetStoreTest {
 		doReturn(keyset).when(factory).create(kek, encryptedKeyset);
 		doReturn(rotatedEncryptedKeyset).when(factory).create(rotated);
 		doReturn(definition.getName()).when(rotatedEncryptedKeyset).getName();
+		doReturn(rotatedEncryptedKeyset).when(repository).write(rotatedEncryptedKeyset);
 
 		repository.write(encryptedKeyset);
 
@@ -432,7 +432,7 @@ class RepositoryKeysetStoreTest {
 
 		assertThatNoException().isThrownBy(() -> store.disable(definition.getName(), "enabled-key"));
 
-		verify(repository).updateKeyStatus(KeyTransition.disable(definition.getName(), "enabled-key"));
+		verify(repository).updateKeyStatus(KeyTransition.disable(keysetWith("enabled-key", KeyStatus.ENABLED), "enabled-key"));
 		verify(cache).evict(definition.getName());
 	}
 
@@ -443,7 +443,7 @@ class RepositoryKeysetStoreTest {
 
 		assertThatNoException().isThrownBy(() -> store.enable(definition.getName(), "disabled-key"));
 
-		verify(repository).updateKeyStatus(KeyTransition.enable(definition.getName(), "disabled-key"));
+		verify(repository).updateKeyStatus(KeyTransition.enable(keysetWith("disabled-key", KeyStatus.DISABLED), "disabled-key"));
 		verify(cache).evict(definition.getName());
 	}
 
@@ -454,7 +454,7 @@ class RepositoryKeysetStoreTest {
 
 		assertThatNoException().isThrownBy(() -> store.compromise(definition.getName(), "enabled-key"));
 
-		verify(repository).updateKeyStatus(KeyTransition.compromise(definition.getName(), "enabled-key"));
+		verify(repository).updateKeyStatus(KeyTransition.compromise(keysetWith("enabled-key", KeyStatus.ENABLED), "enabled-key"));
 		verify(cache).evict(definition.getName());
 	}
 
@@ -465,7 +465,7 @@ class RepositoryKeysetStoreTest {
 
 		assertThatNoException().isThrownBy(() -> store.compromise(definition.getName(), "disabled-key"));
 
-		verify(repository).updateKeyStatus(KeyTransition.compromise(definition.getName(), "disabled-key"));
+		verify(repository).updateKeyStatus(KeyTransition.compromise(keysetWith("disabled-key", KeyStatus.DISABLED), "disabled-key"));
 		verify(cache).evict(definition.getName());
 	}
 
@@ -499,7 +499,7 @@ class RepositoryKeysetStoreTest {
 			() -> store.scheduleDestruction(definition.getName(), "compromised-key", destructionTime));
 
 		verify(repository).updateKeyStatus(
-			KeyTransition.scheduleDestruction(definition.getName(), "compromised-key", destructionTime));
+			KeyTransition.scheduleDestruction(keysetWith("compromised-key", KeyStatus.COMPROMISED), "compromised-key", destructionTime));
 		verify(cache).evict(definition.getName());
 	}
 
@@ -513,7 +513,7 @@ class RepositoryKeysetStoreTest {
 			() -> store.scheduleDestruction(definition.getName(), "disabled-key", destructionTime));
 
 		verify(repository).updateKeyStatus(
-			KeyTransition.scheduleDestruction(definition.getName(), "disabled-key", destructionTime));
+			KeyTransition.scheduleDestruction(keysetWith("disabled-key", KeyStatus.DISABLED), "disabled-key", destructionTime));
 		verify(cache).evict(definition.getName());
 	}
 
@@ -557,23 +557,13 @@ class RepositoryKeysetStoreTest {
 		assertThatNoException().isThrownBy(
 			() -> store.scheduleDestruction(definition.getName(), "disabled-key"));
 
-		final ArgumentCaptor<KeyTransition> captor = ArgumentCaptor.forClass(KeyTransition.class);
-		verify(repository, times(2)).updateKeyStatus(captor.capture());
-
-		assertThat(captor.getAllValues().get(0)).satisfies(t -> {
-			assertThat(t.getKeysetName()).isEqualTo(definition.getName());
-			assertThat(t.getKeyId()).isEqualTo("disabled-key");
-			assertThat(t.getStatus()).isEqualTo(KeyStatus.PENDING_DESTRUCTION);
-			assertThat(t.getDestructionScheduledAt()).isNotNull();
-			assertThat(t.getDestroyedAt()).isNull();
-		});
-		assertThat(captor.getAllValues().get(1)).satisfies(t -> {
+		verify(repository).updateKeyStatus(assertArg(t -> {
 			assertThat(t.getKeysetName()).isEqualTo(definition.getName());
 			assertThat(t.getKeyId()).isEqualTo("disabled-key");
 			assertThat(t.getStatus()).isEqualTo(KeyStatus.DESTROYED);
 			assertThat(t.getDestructionScheduledAt()).isNull();
 			assertThat(t.getDestroyedAt()).isNotNull();
-		});
+		}));
 	}
 
 	@Test
@@ -584,7 +574,7 @@ class RepositoryKeysetStoreTest {
 		assertThatNoException().isThrownBy(
 			() -> store.cancelDestruction(definition.getName(), "pending-key"));
 
-		verify(repository).updateKeyStatus(KeyTransition.cancelDestruction(definition.getName(), "pending-key"));
+		verify(repository).updateKeyStatus(KeyTransition.cancelDestruction(keysetWith("pending-key", KeyStatus.PENDING_DESTRUCTION), "pending-key"));
 		verify(cache).evict(definition.getName());
 	}
 

@@ -29,12 +29,24 @@ public interface KeysetRepository {
 	Optional<EncryptedKeyset> read(String name) throws IOException;
 
 	/**
-	 * Writes the data of the {@link EncryptedKeyset} to the repository.
+	 * Writes the data of the {@link EncryptedKeyset} to the repository and returns the
+	 * persisted form with a version that reflects the committed state.
+	 * <p>
+	 * Implementations should use the {@link EncryptedKeyset#getVersion() keyset version} for
+	 * optimistic locking: persist only when the stored version matches the version on the
+	 * incoming keyset, and return the keyset with the version advanced to the newly committed
+	 * value. If a concurrent modification is detected, throw
+	 * {@link CryptoException.KeysetConcurrentModificationException} rather than silently
+	 * overwriting. Callers should cache the returned keyset (not the input) so that the
+	 * next write carries the correct version.
 	 *
 	 * @param keyset encrypted keyset to be written, can't be {@literal null}
+	 * @return the persisted keyset with a version reflecting the committed state, never {@literal null}
+	 * @throws CryptoException.KeysetConcurrentModificationException if a concurrent modification
+	 *         is detected via the optimistic-locking version counter
 	 * @throws IOException if there is an issue while writing the encrypted keyset
 	 */
-	void write(EncryptedKeyset keyset) throws IOException;
+	EncryptedKeyset write(EncryptedKeyset keyset) throws IOException;
 
 	/**
 	 * Deletes the {@link EncryptedKeyset} by the matching key name from the repository.
@@ -54,14 +66,21 @@ public interface KeysetRepository {
 	 * ({@link EncryptedKey#getData()} becomes {@literal null}).
 	 * The row itself is kept for audit purposes.
 	 * <p>
+	 * Implementations that apply the transition via a targeted SQL {@code UPDATE} (rather than
+	 * a full read-modify-write cycle) should use {@link KeyTransition#getKeysetVersion()} as an
+	 * optimistic-locking guard: bump {@code KEYSET_VERSION} only when the stored version matches
+	 * the transition's version, and throw
+	 * {@link CryptoException.KeysetConcurrentModificationException} when no rows are affected.
+	 * <p>
 	 * The default implementation uses a read-modify-write cycle via {@link #read(String)} and
-	 * {@link #write(EncryptedKeyset)}. Implementations that have direct database access should
-	 * override this with a targeted SQL {@code UPDATE} for better efficiency.
+	 * {@link #write(EncryptedKeyset)}, which inherits version checking from {@link #write}.
 	 * <p>
 	 * If no keyset exists under {@link KeyTransition#getKeysetName()}, this method returns
 	 * silently without error.
 	 *
 	 * @param transition the lifecycle transition to apply, can't be {@literal null}
+	 * @throws CryptoException.KeysetConcurrentModificationException if a concurrent modification
+	 *         is detected via the optimistic-locking version counter
 	 * @throws IOException if there is an issue while updating the key status
 	 */
 	default void updateKeyStatus(KeyTransition transition) throws IOException {

@@ -1,6 +1,7 @@
 package com.konfigyr.crypto;
 
 import lombok.AccessLevel;
+import lombok.EqualsAndHashCode;
 import lombok.RequiredArgsConstructor;
 import lombok.Value;
 import org.jspecify.annotations.NullMarked;
@@ -80,6 +81,16 @@ public class EncryptedKeyset implements Iterable<EncryptedKey> {
 	Duration destructionGracePeriod;
 
 	/**
+	 * Optimistic-locking version counter. Zero for keysets not yet persisted; incremented
+	 * by the {@link KeysetRepository} on every successful write operation.
+	 * <p>
+	 * Excluded from equality checks: two {@link EncryptedKeyset}s with identical cryptographic
+	 * content but different persistence versions are considered equal.
+	 */
+	@EqualsAndHashCode.Exclude
+	long version;
+
+	/**
 	 * Attempts to find the {@link EncryptedKey} with the given identifier.
 	 *
 	 * @param id the key identifier, can't be {@literal null}
@@ -148,7 +159,8 @@ public class EncryptedKeyset implements Iterable<EncryptedKey> {
 			.provider(existing.getProvider())
 			.keyEncryptionKey(existing.getKeyEncryptionKey())
 			.rotationInterval(existing.getRotationInterval())
-			.destructionGracePeriod(existing.getDestructionGracePeriod());
+			.destructionGracePeriod(existing.getDestructionGracePeriod())
+			.version(existing.getVersion());
 	}
 
 	/**
@@ -164,7 +176,8 @@ public class EncryptedKeyset implements Iterable<EncryptedKey> {
 			.name(keyset.getName())
 			.purpose(keyset.getPurpose())
 			.factory(keyset.getFactory())
-			.keyEncryptionKey(keyset.getKeyEncryptionKey());
+			.keyEncryptionKey(keyset.getKeyEncryptionKey())
+			.version(keyset.getVersion());
 
 		keyset.getRotationInterval().ifPresent(builder::rotationInterval);
 		keyset.getDestructionGracePeriod().ifPresent(builder::destructionGracePeriod);
@@ -186,6 +199,7 @@ public class EncryptedKeyset implements Iterable<EncryptedKey> {
 		private String kek;
 		private Duration rotationInterval;
 		private Duration destructionGracePeriod;
+		private long version = 0L;
 
 		/**
 		 * Specify the name of the {@link EncryptedKeyset}.
@@ -297,6 +311,17 @@ public class EncryptedKeyset implements Iterable<EncryptedKey> {
 		}
 
 		/**
+		 * Specify the optimistic-locking version for this {@link EncryptedKeyset}.
+		 *
+		 * @param version non-negative version counter
+		 * @return builder
+		 */
+		public Builder version(long version) {
+			this.version = version;
+			return this;
+		}
+
+		/**
 		 * Convenience overload that builds with a varargs array of {@link EncryptedKey keys}.
 		 *
 		 * @param keys per-key encrypted material
@@ -322,7 +347,7 @@ public class EncryptedKeyset implements Iterable<EncryptedKey> {
 			Assert.notNull(keys, "Encrypted keys can not be null");
 
 			return new EncryptedKeyset(name, purpose, factory, provider, kek,
-				List.copyOf(keys), rotationInterval, destructionGracePeriod);
+				List.copyOf(keys), rotationInterval, destructionGracePeriod, version);
 		}
 
 	}

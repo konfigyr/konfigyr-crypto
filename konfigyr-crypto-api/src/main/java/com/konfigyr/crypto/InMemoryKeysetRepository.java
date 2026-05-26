@@ -27,8 +27,16 @@ public class InMemoryKeysetRepository implements KeysetRepository {
 	}
 
 	@Override
-	public void write(EncryptedKeyset keyset) {
-		store.put(keyset.getName(), keyset);
+	public EncryptedKeyset write(EncryptedKeyset keyset) {
+		return store.compute(keyset.getName(), (name, existing) -> {
+			if (existing != null && existing.getVersion() != keyset.getVersion()) {
+				throw new CryptoException.KeysetConcurrentModificationException(name);
+			}
+
+			return EncryptedKeyset.builder(keyset)
+				.version(existing == null ? 0L : keyset.getVersion() + 1)
+				.build(keyset.getKeys());
+		});
 	}
 
 	@Override
