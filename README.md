@@ -166,16 +166,13 @@ The reversed process is applied when you wish to generate or update the `Keyset`
 Here is an example how a new Tink keyset is created, rotated or removed:
 
 ```java
-import java.time.Duration;
-
 class TinkExample {
     private final KeysetStore store;
 
     public Keyset create() {
         return store.create("my-kek-provider", "my-kek", KeysetDefinition.of(
                 "my-dek", // give a name to your DEK
-                TinkAlgorithm.AES256_GCM, // define the Tink algorithm to the DEK
-                Duration.ofDays(90) // define the rotation frequency for your DEK
+                TinkAlgorithm.AES256_GCM // define the Tink algorithm to the DEK
         ));
     }
 
@@ -184,8 +181,7 @@ class TinkExample {
 
         return store.create(kek, KeysetDefinition.of(
                 "my-dek", // give a name to your DEK
-                TinkAlgorithm.AES256_GCM, // define the Tink algorithm to the DEK
-                Duration.ofDays(90) // define the rotation frequency for your DEK
+                TinkAlgorithm.AES256_GCM // define the Tink algorithm to the DEK
         ));
     }
 
@@ -199,12 +195,91 @@ class TinkExample {
 }
 ```
 
+### Key lifecycle management
+
+Each `EncryptedKey` within a keyset carries a `KeyStatus` that describes its position in the lifecycle state machine:
+
+| Status | Description |
+|---|---|
+| `ENABLED` | Active; participates in cryptographic operations |
+| `DISABLED` | Administratively deactivated; no cryptographic operations permitted |
+| `COMPROMISED` | Key material suspected or confirmed exposed; permanently blocked |
+| `PENDING_DESTRUCTION` | Scheduled for erasure; currently in its grace period |
+| `DESTROYED` | Key material permanently erased; row retained for audit |
+
+`KeysetStore` exposes methods to drive each transition:
+
+- `disable(keysetName, keyId)` — `ENABLED` → `DISABLED`
+- `enable(keysetName, keyId)` — `DISABLED` → `ENABLED`
+- `compromise(keysetName, keyId)` — emergency transition; permanently blocks the key for all cryptographic operations
+- `scheduleDestruction(keysetName, keyId)` — `DISABLED` or `COMPROMISED` → `PENDING_DESTRUCTION`, using the keyset's configured grace period (destroys immediately when no grace period is set)
+- `scheduleDestruction(keysetName, keyId, Instant)` — same, with an explicit destruction time
+- `cancelDestruction(keysetName, keyId)` — `PENDING_DESTRUCTION` → `DISABLED`
+- `destroy(keysetName, keyId)` — `PENDING_DESTRUCTION` → `DESTROYED`; erases key material but retains the row for audit
+
+```java
+// disable the old primary key after rotating to a new one
+store.disable("my-dek", oldKey.getId());
+
+// schedule it for destruction using the keyset's configured grace period
+store.scheduleDestruction("my-dek", oldKey.getId());
+```
+
 ### Keyset repository
 
 Keyset repository is a simple interface which goal is to implement how should an `EncryptedKeyset` be stored, retrieved or removed.
 
+Every `EncryptedKeyset` carries a version counter managed by the repository. Both `write()` and `updateKeyStatus()` check this counter and throw `CryptoException.KeysetConcurrentModificationException` when a concurrent modification is detected. Always cache and use the `EncryptedKeyset` returned by `write()` — not the input — so that the correct version is carried into the next write.
+
 Konfigyr Crypto comes with the following implementations of the `KeysetRepository` which you can use:
 * [JDBC](konfigyr-crypto-jdbc)
+
+### Scheduled maintenance: rotation and destruction
+
+`KeysetRepository` exposes two query methods designed for use in scheduled maintenance tasks.
+
+`findPendingRotation()` returns partial keysets (metadata only, empty key list) whose primary key's expiry time has elapsed. Call `store.rotate(name)` for each result:
+
+```java
+for (EncryptedKeyset keyset : repository.findPendingRotation()) {
+    store.rotate(keyset.getName());
+}
+```
+
+`findPendingDestruction()` returns partial keysets (metadata and only the eligible pending-destruction keys) where `destructionScheduledAt` is in the past. Call `store.destroy(name, keyId)` for each key:
+
+```java
+for (EncryptedKeyset keyset : repository.findPendingDestruction()) {
+    for (EncryptedKey key : keyset) {
+        store.destroy(keyset.getName(), key.getId());
+    }
+}
+```
+
+Both methods return an empty list by default; repositories that can issue an efficient query — such as `JdbcKeysetRepository` — override them.
+
+When both a `KeysetStore` and a `KeysetRepository` bean are present in the application context, `KeysetTaskAutoConfiguration` registers both tasks automatically and enables Spring scheduling. Each task runs on a fixed-rate trigger every **1 hour** by default.
+
+Tasks are configured under the `konfigyr.crypto.tasks` prefix. Each task name is a key in the map (`keyset-rotation` or `keyset-destruction`) and supports three properties:
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | `boolean` | `true` | Set to `false` to disable the task entirely |
+| `interval` | `Duration` | `PT1H` | Fixed-rate period between executions |
+| `cron` | `String` | — | Cron expression; when set, takes precedence over `interval` |
+
+When both `cron` and `interval` are configured for the same task, `cron` takes precedence and a warning is logged at startup.
+
+```properties
+# run rotation every night at 02:00
+konfigyr.crypto.tasks.keyset-rotation.cron=0 0 2 * * *
+
+# run destruction every 30 minutes
+konfigyr.crypto.tasks.keyset-destruction.interval=PT30M
+
+# disable rotation scheduling entirely (e.g. handled externally)
+konfigyr.crypto.tasks.keyset-rotation.enabled=false
+```
 
 ## Implementing a custom crypto provider
 
@@ -248,6 +323,8 @@ The `name` is persisted in the `EncryptedKeyset` row and used to look up the alg
 ```java
 public class MyKeysetFactory implements KeysetFactory {
 
+    public static final String NAME = "my-lib";
+
     private final AlgorithmRegistry registry;
 
     public MyKeysetFactory(AlgorithmRegistry registry) {
@@ -262,10 +339,8 @@ public class MyKeysetFactory implements KeysetFactory {
 
     @Override
     public boolean supports(EncryptedKeyset encryptedKeyset) {
-        // the encrypted form only carries the algorithm name string — resolve via registry
-        return registry.find(encryptedKeyset.getAlgorithm())
-            .filter(a -> a instanceof MyAlgorithm)
-            .isPresent();
+        // match by the factory name stored in the encrypted keyset
+        return NAME.equals(encryptedKeyset.getFactory());
     }
 
     @Override
@@ -276,21 +351,27 @@ public class MyKeysetFactory implements KeysetFactory {
 
     @Override
     public EncryptedKeyset create(Keyset keyset) throws IOException {
-        ByteArray serialized = // serialize your Keyset to bytes
-        ByteArray encrypted  = keyset.getKeyEncryptionKey().wrap(serialized);
-        return EncryptedKeyset.from(keyset, encrypted);
+        final List<EncryptedKey> encryptedKeys = new ArrayList<>();
+        for (Key key : keyset) {
+            final ByteArray serialized = // serialize this key to bytes using your library
+            final ByteArray wrapped = keyset.getKeyEncryptionKey().wrap(serialized);
+            encryptedKeys.add(EncryptedKey.from(key, WrappedKeyMaterial.of(wrapped)));
+        }
+        return EncryptedKeyset.from(keyset, encryptedKeys);
     }
 
     @Override
     public Keyset create(KeyEncryptionKey kek, EncryptedKeyset encryptedKeyset) throws IOException {
-        ByteArray decrypted  = kek.unwrap(encryptedKeyset.getData());
-        MyAlgorithm algorithm = (MyAlgorithm) registry.resolve(encryptedKeyset.getAlgorithm());
-        // deserialize decrypted bytes and return a Keyset implementation
+        for (EncryptedKey key : encryptedKeyset) {
+            final MyAlgorithm algorithm = (MyAlgorithm) registry.resolve(key.getAlgorithm());
+            // unwrap key.getData() using kek, then deserialize into your Keyset
+        }
+        // return a Keyset implementation
     }
 }
 ```
 
-`supports(EncryptedKeyset)` uses `registry.find()` to resolve the stored algorithm name back to a concrete instance. `supports(KeysetDefinition)` can use `instanceof` because the definition already holds the `Algorithm` object directly.
+`supports(EncryptedKeyset)` identifies ownership by the factory name stored on the keyset. `supports(KeysetDefinition)` can use `instanceof` because the definition already holds the `Algorithm` object directly.
 
 ### Step 3: Register and wire as Spring beans
 
@@ -316,7 +397,7 @@ The `KeysetStore` auto-configuration picks up all `KeysetFactory` beans automati
 Konfigyr Crypto uses a Gradle-based build system. In the instructions below, `./gradlew` is invoked from the root of the source tree and serves as a cross-platform, self-contained bootstrap mechanism for the build.
 
 ### Prerequisites
-Git and the JDK 17 build.
+Git and JDK 21.
 
 ### Check out sources
 ```shell
