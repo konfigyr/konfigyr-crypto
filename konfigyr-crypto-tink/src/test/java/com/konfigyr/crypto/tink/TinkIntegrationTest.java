@@ -142,6 +142,34 @@ public class TinkIntegrationTest {
 
 	@Test
 	@Order(6)
+	@DisplayName("should rotate keyset successfully after a key has been destroyed")
+	void shouldRotateAfterKeyDestruction() {
+		final var keyset = store.read(definition.getName());
+
+		KeysetAssert.assertThat(keyset).hasSize(2);
+
+		final var oldKey = keyset.stream()
+			.filter(key -> !key.isPrimary())
+			.findFirst()
+			.orElseThrow();
+
+		assertThatNoException()
+			.isThrownBy(() -> store.destroy(definition.getName(), oldKey.getId()));
+
+		assertThatNoException()
+			.isThrownBy(() -> store.rotate(definition.getName()));
+
+		KeysetAssert.assertThat(store.read(definition.getName()))
+			.isInstanceOf(TinkKeyset.class)
+			.hasSize(2)
+			.assertThatKeys()
+			.filteredOn(Key::isPrimary)
+			.map(Key::getId)
+			.isNotEqualTo(keyset.getPrimary().getId());
+	}
+
+	@Test
+	@Order(7)
 	@DisplayName("should remove keyset from the repository")
 	void shouldRemoveKeyset() {
 		assertThatNoException().isThrownBy(() -> store.remove(definition.getName()));

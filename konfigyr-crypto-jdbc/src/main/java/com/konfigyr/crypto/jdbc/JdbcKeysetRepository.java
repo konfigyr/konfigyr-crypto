@@ -339,7 +339,10 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 			}
 		}
 
-		final List<String> toDelete = new ArrayList<>(storedById.keySet());
+		final List<String> toDelete = storedById.values().stream()
+			.filter(key -> key.getData() != null)
+			.map(EncryptedKey::getId)
+			.toList();
 
 		if (log.isDebugEnabled()) {
 			log.debug("Keyset '{}' key diff: {} inserted, {} updated, {} deleted, {} unchanged",
