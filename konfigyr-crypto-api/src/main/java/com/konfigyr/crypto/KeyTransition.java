@@ -1,7 +1,6 @@
 package com.konfigyr.crypto;
 
 import lombok.AccessLevel;
-import lombok.EqualsAndHashCode;
 import lombok.RequiredArgsConstructor;
 import lombok.Value;
 import org.jspecify.annotations.NullMarked;
@@ -80,12 +79,12 @@ public class KeyTransition {
 
 	/**
 	 * The expected {@link EncryptedKeyset#getVersion() keyset version} against which the
-	 * repository should guard when applying this transition. Implementations that apply
-	 * transitions via a targeted SQL UPDATE should reject the update when the stored version
-	 * no longer matches this value and throw
+	 * repository should guard when applying this transition.
+	 * <p>
+	 * Implementations of {@link KeysetRepository} that apply transitions should reject
+	 * the update when the stored version no longer matches this value and throw
 	 * {@link CryptoException.KeysetConcurrentModificationException}.
 	 */
-	@EqualsAndHashCode.Exclude
 	long keysetVersion;
 
 	/**
