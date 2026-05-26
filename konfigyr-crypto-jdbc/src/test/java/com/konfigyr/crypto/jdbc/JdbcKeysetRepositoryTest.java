@@ -303,6 +303,38 @@ class JdbcKeysetRepositoryTest {
 	}
 
 	@Test
+	@DisplayName("should preserve key rows with null data when writing a keyset that no longer includes them")
+	void shouldPreserveNullDataKeyRowsOnWrite() throws IOException {
+		final Instant instant = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+		final Instant destroyedAt = instant.plusSeconds(1);
+
+		final EncryptedKey primaryKey = encryptedKey("primary-key", true, instant, ByteArray.fromString("primary material"));
+		final EncryptedKey oldKey = encryptedKey("old-key", false, instant, ByteArray.fromString("old material"));
+		repository.write(encryptedKeyset("keyset", primaryKey, oldKey));
+
+		repository.updateKeyStatus(KeyTransition.destroy("keyset", "old-key", destroyedAt));
+
+		// Simulate the factory skipping the DESTROYED key: write a keyset containing only the primary key.
+		repository.write(encryptedKeyset("keyset", primaryKey));
+
+		final var stored = repository.read("keyset").orElseThrow();
+
+		assertThat(stored.getKey("old-key"))
+			.isPresent()
+			.hasValueSatisfying(key -> {
+				assertThat(key.getStatus()).isEqualTo(KeyStatus.DESTROYED);
+				assertThat(key.getData()).isNull();
+				assertThat(key.getDestroyedAt()).isEqualTo(destroyedAt);
+			});
+
+		assertThat(stored.getKey("primary-key"))
+			.isPresent()
+			.hasValueSatisfying(key -> assertThat(key.getData()).isNotNull());
+
+		repository.remove("keyset");
+	}
+
+	@Test
 	@DisplayName("should reject table names that are not valid SQL identifiers")
 	void shouldRejectInvalidTableNames() {
 		final var repo = new JdbcKeysetRepository(jdbcOperations, transactionOperations);

@@ -86,6 +86,10 @@ public class JoseKeysetFactory implements KeysetFactory {
 			.keyEncryptionKey(kek);
 
 		for (EncryptedKey encrypted : encryptedKeyset) {
+			if (encrypted.getData() == null) {
+				continue;
+			}
+
 			final JWK key;
 
 			try {

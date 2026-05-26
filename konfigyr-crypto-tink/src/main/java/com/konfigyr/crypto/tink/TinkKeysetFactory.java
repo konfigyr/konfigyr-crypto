@@ -99,6 +99,10 @@ public class TinkKeysetFactory implements KeysetFactory {
 			.keyEncryptionKey(kek);
 
 		for (EncryptedKey encrypted : encryptedKeyset) {
+			if (encrypted.getData() == null) {
+				continue;
+			}
+
 			final ByteArray unwrapped = kek.unwrap(encrypted.getData());
 			final KeyData data;
 

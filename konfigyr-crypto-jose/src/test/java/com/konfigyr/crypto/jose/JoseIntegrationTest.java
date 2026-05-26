@@ -165,6 +165,34 @@ public class JoseIntegrationTest {
 
 	@Test
 	@Order(6)
+	@DisplayName("should rotate keyset successfully after a key has been destroyed")
+	void shouldRotateAfterKeyDestruction() {
+		final var keyset = store.read(jwsDefinition.getName());
+
+		assertThatObject(keyset).returns(2, Keyset::size);
+
+		final var oldKey = keyset.stream()
+			.filter(key -> !key.isPrimary())
+			.findFirst()
+			.orElseThrow();
+
+		assertThatNoException()
+			.isThrownBy(() -> store.destroy(jwsDefinition.getName(), oldKey.getId()));
+
+		assertThatNoException()
+			.isThrownBy(() -> store.rotate(jwsDefinition.getName()));
+
+		KeysetAssert.assertThat(store.read(jwsDefinition.getName()))
+			.isInstanceOf(JsonWebKeyset.class)
+			.hasSize(2)
+			.assertThatKeys()
+			.filteredOn(Key::isPrimary)
+			.map(Key::getId)
+			.isNotEqualTo(keyset.getPrimary().getId());
+	}
+
+	@Test
+	@Order(7)
 	@DisplayName("should remove keyset from the repository")
 	void shouldRemoveKeyset() {
 		assertThatNoException().isThrownBy(() -> store.remove(jwsDefinition.getName()));
