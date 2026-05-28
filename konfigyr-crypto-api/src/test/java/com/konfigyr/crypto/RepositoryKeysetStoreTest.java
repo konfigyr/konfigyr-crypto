@@ -610,14 +610,15 @@ class RepositoryKeysetStoreTest {
 	}
 
 	@Test
-	@DisplayName("should throw KeysetException when the key identifier is not found in the keyset")
+	@DisplayName("should throw KeyNotFoundException when the key identifier is not found in the keyset")
 	void shouldFailWhenKeyNotFoundInKeyset() throws IOException {
 		repository.write(keysetWith("enabled-key", KeyStatus.ENABLED));
 
-		assertThatExceptionOfType(CryptoException.KeysetException.class)
+		assertThatExceptionOfType(CryptoException.KeyNotFoundException.class)
 			.isThrownBy(() -> store.disable(definition.getName(), "missing-key"))
 			.withMessageContaining("missing-key")
-			.returns(definition.getName(), CryptoException.KeysetException::getName);
+			.returns(definition.getName(), CryptoException.KeyNotFoundException::getName)
+			.returns("missing-key", CryptoException.KeyNotFoundException::getKeyId);
 	}
 
 	@Test
