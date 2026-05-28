@@ -65,7 +65,8 @@ class TinkUtils {
 	}
 
 	static String generateKeyId() {
-		return String.valueOf(Util.randKeyId());
+		final long id = Util.randKeyId();
+		return String.valueOf(Math.abs(id));
 	}
 
 }
