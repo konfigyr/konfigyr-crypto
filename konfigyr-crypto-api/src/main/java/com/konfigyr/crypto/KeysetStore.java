@@ -246,6 +246,7 @@ public interface KeysetStore {
 	 * @param keysetName the name of the keyset containing the key, can't be {@literal null}
 	 * @param keyId      the identifier of the key to disable, can't be {@literal null}
 	 * @throws CryptoException.KeysetNotFoundException when no keyset exists with the given name
+	 * @throws CryptoException.KeyNotFoundException when no key with the given identifier exists in the keyset
 	 * @throws CryptoException.InvalidKeyStatusTransitionException when the key is not currently
 	 *         in {@link KeyStatus#ENABLED} state
 	 */
@@ -261,6 +262,7 @@ public interface KeysetStore {
 	 * @param keysetName the name of the keyset containing the key, can't be {@literal null}
 	 * @param keyId      the identifier of the key to enable, can't be {@literal null}
 	 * @throws CryptoException.KeysetNotFoundException when no keyset exists with the given name
+	 * @throws CryptoException.KeyNotFoundException when no key with the given identifier exists in the keyset
 	 * @throws CryptoException.InvalidKeyStatusTransitionException when the key is not currently
 	 *         in {@link KeyStatus#DISABLED} state
 	 */
@@ -282,6 +284,7 @@ public interface KeysetStore {
 	 * @param keysetName the name of the keyset containing the key, can't be {@literal null}
 	 * @param keyId      the identifier of the key to mark as compromised, can't be {@literal null}
 	 * @throws CryptoException.KeysetNotFoundException when no keyset exists with the given name
+	 * @throws CryptoException.KeyNotFoundException when no key with the given identifier exists in the keyset
 	 * @throws CryptoException.InvalidKeyStatusTransitionException when the key is not currently
 	 *         in {@link KeyStatus#ENABLED} or {@link KeyStatus#DISABLED} state
 	 * @throws CryptoException.KeysetCompromisedException when a keyset whose primary key is
@@ -311,6 +314,7 @@ public interface KeysetStore {
 	 * @param keysetName the name of the keyset containing the key, can't be {@literal null}
 	 * @param keyId      the identifier of the key to schedule for destruction, can't be {@literal null}
 	 * @throws CryptoException.KeysetNotFoundException when no keyset exists with the given name
+	 * @throws CryptoException.KeyNotFoundException when no key with the given identifier exists in the keyset
 	 * @throws CryptoException.InvalidKeyStatusTransitionException when the key is not currently
 	 *         in {@link KeyStatus#DISABLED} or {@link KeyStatus#COMPROMISED} state
 	 */
@@ -328,6 +332,7 @@ public interface KeysetStore {
 	 * @param keyId           the identifier of the key to schedule for destruction, can't be {@literal null}
 	 * @param destructionTime the time at which destruction should occur, can't be {@literal null}
 	 * @throws CryptoException.KeysetNotFoundException when no keyset exists with the given name
+	 * @throws CryptoException.KeyNotFoundException when no key with the given identifier exists in the keyset
 	 * @throws CryptoException.InvalidKeyStatusTransitionException when the key is not currently
 	 *         in {@link KeyStatus#DISABLED} or {@link KeyStatus#COMPROMISED} state
 	 */
@@ -344,6 +349,7 @@ public interface KeysetStore {
 	 * @param keysetName the name of the keyset containing the key, can't be {@literal null}
 	 * @param keyId      the identifier of the key whose destruction to cancel, can't be {@literal null}
 	 * @throws CryptoException.KeysetNotFoundException when no keyset exists with the given name
+	 * @throws CryptoException.KeyNotFoundException when no key with the given identifier exists in the keyset
 	 * @throws CryptoException.InvalidKeyStatusTransitionException when the key is not currently
 	 *         in {@link KeyStatus#PENDING_DESTRUCTION} state
 	 */
@@ -362,6 +368,7 @@ public interface KeysetStore {
 	 * @param keysetName the name of the keyset containing the key, can't be {@literal null}
 	 * @param keyId      the identifier of the key to destroy, can't be {@literal null}
 	 * @throws CryptoException.KeysetNotFoundException when no keyset exists with the given name
+	 * @throws CryptoException.KeyNotFoundException when no key with the given identifier exists in the keyset
 	 * @throws CryptoException.InvalidKeyStatusTransitionException when the key is not currently
 	 *         in {@link KeyStatus#PENDING_DESTRUCTION} state
 	 */

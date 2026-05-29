@@ -490,6 +490,46 @@ public abstract class CryptoException extends RuntimeException {
 	}
 
 	/**
+	 * Exception thrown when a specific {@link Key} cannot be found within a {@link Keyset}.
+	 * <p>
+	 * This exception is thrown by key lifecycle operations (disable, enable, compromise,
+	 * scheduleDestruction, cancelDestruction, destroy) when the supplied key identifier does
+	 * not match any key stored in the named keyset.
+	 * <p>
+	 * This exception contains both the keyset name and the key identifier which can be used
+	 * for debugging or auditing purposes.
+	 */
+	public static class KeyNotFoundException extends KeysetException {
+
+		@Serial
+		private static final long serialVersionUID = SERIAL;
+
+		/**
+		 * The identifier of the {@link Key} that was not found.
+		 */
+		private final String keyId;
+
+		/**
+		 * Creates a new {@link KeyNotFoundException} for the given keyset name and key identifier.
+		 *
+		 * @param keysetName the name of the keyset in which the key was looked up, can't be {@literal null}
+		 * @param keyId the identifier of the key that was not found, can't be {@literal null}
+		 */
+		public KeyNotFoundException(String keysetName, String keyId) {
+			super(keysetName, "Key with identifier '" + keyId + "' was not found in keyset '" + keysetName + "'.");
+			this.keyId = keyId;
+		}
+
+		/**
+		 * @return the identifier of the {@link Key} that was not found, never {@literal null}
+		 */
+		public @NonNull String getKeyId() {
+			return keyId;
+		}
+
+	}
+
+	/**
 	 * Exception thrown when a {@link Keyset} is accessed but its primary {@link Key} is
 	 * in {@link KeyStatus#DISABLED} state and cannot perform any cryptographic operations.
 	 * <p>

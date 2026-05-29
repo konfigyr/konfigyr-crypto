@@ -233,7 +233,7 @@ public class RepostoryKeysetStore implements KeysetStore {
 		final String keyId = transition.getKeyId();
 
 		final EncryptedKey key = encryptedKeyset.getKey(keyId).orElseThrow(
-			() -> new KeysetException(keysetName, "Key '" + keyId + "' was not found in keyset '" + keysetName + "'.")
+			() -> new KeyNotFoundException(keysetName, keyId)
 		);
 
 		if (!key.getStatus().canTransitionTo(transition.getStatus())) {
