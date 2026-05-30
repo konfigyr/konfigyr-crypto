@@ -328,7 +328,7 @@ public class RepostoryKeysetStore implements KeysetStore {
 	 * Attempts to generate a new {@link Keyset keyset material} using the given
 	 * {@link KeysetFactory} and {@link KeysetDefinition}.
 	 * @param factory factory used to create the keyset, can't be {@literal null}
-	 * @param kek key encryption key for this DEK,, can't be {@literal null}
+	 * @param kek key encryption key for this DEK, can't be {@literal null}
 	 * @param definition definition to be used when creating a new keyset, can't be
 	 * {@literal null}.
 	 * @return generated keyset
@@ -452,7 +452,7 @@ public class RepostoryKeysetStore implements KeysetStore {
 		write(factory, rotated);
 
 		if (logger.isDebugEnabled()) {
-			logger.debug("Keyset '{}' has been successfully rotated.", rotated.getName());
+			logger.debug("Keyset '{}' has been successfully rotated with: {}", rotated.getName(), definition);
 		}
 	}
 

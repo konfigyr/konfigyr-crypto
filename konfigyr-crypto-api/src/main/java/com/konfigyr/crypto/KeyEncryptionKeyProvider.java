@@ -69,7 +69,7 @@ public interface KeyEncryptionKeyProvider {
 	 * the Data Encryption Keys by the provider name.
 	 *
 	 * @param id the identifier of the {@link KeyEncryptionKey}, can't be {@literal null}
-	 * @return matching key encryption key, never {@literal null}
+	 * @return matching a key encryption key, never {@literal null}
 	 * @throws com.konfigyr.crypto.CryptoException.KeyEncryptionKeyNotFoundException when the provider could not
 	 * resolve the {@link KeyEncryptionKey} with the given identifier.
 	 */
