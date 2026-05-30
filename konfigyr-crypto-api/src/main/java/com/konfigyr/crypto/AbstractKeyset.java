@@ -109,20 +109,6 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 		Assert.notNull(builder.keys, "Keyset keys can't be null");
 		Assert.isTrue(!builder.keys.isEmpty(), "Keyset must have at least one key");
 
-		final T primary = builder.keys.stream()
-			.filter(Key::isPrimary)
-			.findFirst()
-			.orElseThrow(() -> new CryptoException.KeysetException(
-				builder.name, "Keyset '" + builder.name + "' must have a primary key"));
-
-		switch (primary.getStatus()) {
-			case COMPROMISED -> throw new CryptoException.KeysetCompromisedException(builder.name);
-			case DISABLED -> throw new CryptoException.KeysetDisabledException(builder.name);
-			case PENDING_DESTRUCTION -> throw new CryptoException.KeysetPendingDestructionException(builder.name);
-			case DESTROYED -> throw new CryptoException.KeysetDestroyedException(builder.name);
-			default -> { }
-		}
-
 		this.name = builder.name;
 		this.factory = builder.factory;
 		this.purpose = builder.purpose;
@@ -134,8 +120,43 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 	}
 
 	@Override
-	public T getPrimary() {
-		return keys.stream().filter(Key::isPrimary).findFirst().orElseThrow();
+	public Key getPrimary() {
+		return keys.stream()
+			.filter(Key::isPrimary)
+			.findFirst()
+			.orElseThrow(() -> new CryptoException.KeysetException(
+				name, "Keyset '" + name + "' has no primary key."
+			));
+	}
+
+	/**
+	 * Returns the primary {@link Key} of this keyset, asserting that it is in an operational
+	 * state (i.e., its {@link KeyStatus} is {@link KeyStatus#ENABLED}).
+	 * <p>
+	 * This method is intended for use by cryptographic write operations ({@code encrypt},
+	 * {@code sign}) that must use the primary key. It follows the same principle as major
+	 * KMS providers (AWS, GCP, HashiCorp Vault): key metadata is always readable, but
+	 * cryptographic operations are gated by key state.
+	 * <p>
+	 * For key inspection or rotation logic, use {@link #getPrimary()} instead.
+	 *
+	 * @return the primary key, never {@literal null}
+	 * @throws CryptoException.KeysetCompromisedException      if the primary key status is {@link KeyStatus#COMPROMISED}
+	 * @throws CryptoException.KeysetDisabledException         if the primary key status is {@link KeyStatus#DISABLED}
+	 * @throws CryptoException.KeysetPendingDestructionException if the primary key status is {@link KeyStatus#PENDING_DESTRUCTION}
+	 * @throws CryptoException.KeysetDestroyedException        if the primary key status is {@link KeyStatus#DESTROYED}
+	 */
+	@SuppressWarnings("unchecked")
+	protected final T requireActivePrimary() {
+		final T primary = (T) getPrimary();
+
+		return switch (primary.getStatus()) {
+			case COMPROMISED -> throw new CryptoException.KeysetCompromisedException(name);
+			case DISABLED -> throw new CryptoException.KeysetDisabledException(name);
+			case PENDING_DESTRUCTION -> throw new CryptoException.KeysetPendingDestructionException(name);
+			case DESTROYED -> throw new CryptoException.KeysetDestroyedException(name);
+			default -> primary;
+		};
 	}
 
 	@Override

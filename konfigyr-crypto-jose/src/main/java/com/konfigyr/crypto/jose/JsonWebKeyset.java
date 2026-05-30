@@ -55,7 +55,7 @@ class JsonWebKeyset extends AbstractKeyset<JsonWebKey> implements JWKSource<Secu
 		Assert.isTrue(!data.isEmpty(), "Cannot encrypt an empty byte array");
 		assertKeysetOperation(KeysetOperation.ENCRYPT);
 
-		final JsonWebKey key = getPrimary();
+		final JsonWebKey key = requireActivePrimary();
 
 		try {
 			final JWEHeader header = JoseUtils.createEncryptionHeader(key, context);
@@ -95,7 +95,7 @@ class JsonWebKeyset extends AbstractKeyset<JsonWebKey> implements JWKSource<Secu
 		Assert.isTrue(!data.isEmpty(), "Cannot sign an empty byte array");
 		assertKeysetOperation(KeysetOperation.SIGN);
 
-		final JsonWebKey key = getPrimary();
+		final JsonWebKey key = requireActivePrimary();
 
 		try {
 			final JWSHeader header = new JWSHeader.Builder((JWSAlgorithm) key.getAlgorithm().algorithm())
