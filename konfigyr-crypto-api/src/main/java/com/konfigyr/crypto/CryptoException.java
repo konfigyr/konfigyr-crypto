@@ -84,12 +84,18 @@ public abstract class CryptoException extends RuntimeException {
 		private static final long serialVersionUID = SERIAL;
 
 		/**
+		 * The algorithm that is not supported.
+		 */
+		private final Algorithm algorithm;
+
+		/**
 		 * Creates a new {@link UnsupportedAlgorithmException} for the given algorithm.
 		 *
 		 * @param algorithm unsupported algorithm, can't be {@literal null}
 		 */
 		public UnsupportedAlgorithmException(Algorithm algorithm) {
 			super("Unsupported algorithm: " + algorithm.name());
+			this.algorithm = algorithm;
 		}
 
 		/**
@@ -100,8 +106,18 @@ public abstract class CryptoException extends RuntimeException {
 		 */
 		public UnsupportedAlgorithmException(Algorithm algorithm, Throwable cause) {
 			super("Unsupported algorithm: " + algorithm.name(), cause);
+			this.algorithm = algorithm;
 		}
 
+		/**
+		 * Returns the {@link Algorithm} that caused the {@link UnsupportedAlgorithmException}.
+		 *
+		 * @return the algorithm, never {@literal null}
+		 */
+		@NonNull
+		public Algorithm getAlgorithm() {
+			return algorithm;
+		}
 	}
 
 	/**
