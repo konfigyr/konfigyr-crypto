@@ -55,18 +55,18 @@ class ByteArrayTest {
 	@DisplayName("should create a byte array using the Base64 decoder function and test encoding")
 	void shouldDecodeAndEncodeBase64() {
 		final var data = "c3ViamVjdHM/ID4gMTA=";
-		final var array = ByteArray.decode(data, ByteArray.BASE_64_DECODER);
+		final var array = ByteArray.decode(data, ByteArrayCodec.BASE64);
 
 		assertThat(array)
 			.isNotNull()
 			.isEqualTo(ByteArray.fromBase64String(data));
 
 		assertThat(array.encodeBase64())
-			.isEqualTo(array.encode(ByteArray.BASE_64_ENCODER))
+			.isEqualTo(array.encode(ByteArrayCodec.BASE64))
 			.isEqualTo(data);
 
 		assertThat(array.encodeBase64Url())
-			.isNotEqualTo(array.encode(ByteArray.BASE_64_ENCODER))
+			.isNotEqualTo(array.encode(ByteArrayCodec.BASE64))
 			.isNotEqualTo(data);
 	}
 
@@ -74,19 +74,67 @@ class ByteArrayTest {
 	@DisplayName("should create a byte array using the Base64 URL safe decoder function and test encoding")
 	void shouldDecodeAndEncodeBase64UrlSafe() {
 		final var data = "c3ViamVjdHM_ID4gMTA=";
-		final var array = ByteArray.decode(data, ByteArray.BASE_64_URL_SAFE_DECODER);
+		final var array = ByteArray.decode(data, ByteArrayCodec.BASE64_URL_SAFE);
 
 		assertThat(array)
 			.isNotNull()
 			.isEqualTo(ByteArray.fromBase64UrlString(data));
 
 		assertThat(array.encodeBase64Url())
-			.isEqualTo(array.encode(ByteArray.BASE_64_URL_SAFE_ENCODER))
+			.isEqualTo(array.encode(ByteArrayCodec.BASE64_URL_SAFE))
 			.isEqualTo(data);
 
 		assertThat(array.encodeBase64())
-			.isNotEqualTo(array.encode(ByteArray.BASE_64_URL_SAFE_ENCODER))
+			.isNotEqualTo(array.encode(ByteArrayCodec.BASE64_URL_SAFE))
 			.isNotEqualTo(data);
+	}
+
+	@Test
+	@DisplayName("should create a byte array using the Base64 URL safe no-padding decoder and test encoding")
+	void shouldDecodeAndEncodeBase64UrlSafeNoPadding() {
+		final var data = "c3ViamVjdHM_ID4gMTA";
+		final var array = ByteArray.decode(data, ByteArrayCodec.BASE64_URL_SAFE_NO_PADDING);
+
+		assertThat(array)
+			.isNotNull()
+			.isEqualTo(ByteArray.fromBase64UrlString(data));
+
+		assertThat(array.encode(ByteArrayCodec.BASE64_URL_SAFE_NO_PADDING))
+			.isEqualTo(data)
+			.doesNotEndWith("=");
+
+		assertThat(array.encode(ByteArrayCodec.BASE64_URL_SAFE))
+			.isEqualTo(data + "=");
+	}
+
+	@Test
+	@DisplayName("should create a byte array using the hex string and test encoding")
+	void shouldDecodeAndEncodeHex() {
+		final var data = "737562a46563747320ee2034";
+		final var array = ByteArray.fromHexString(data);
+
+		assertThat(array)
+			.isNotNull()
+			.isEqualTo(ByteArray.decode(data, ByteArrayCodec.HEX));
+
+		assertThat(array.encodeHex())
+			.isEqualTo(array.encode(ByteArrayCodec.HEX))
+			.isEqualTo(data)
+			.matches("[0-9a-f]+");
+	}
+
+	@Test
+	@DisplayName("should create a ByteArrayCodec from encoder and decoder using the factory method")
+	void shouldCreateCodecFromEncoderAndDecoder() {
+		final var data = "c3ViamVjdHM/ID4gMTA=";
+		final var codec = ByteArrayCodec.of(ByteArrayCodec.BASE64, ByteArrayCodec.BASE64);
+
+		assertThat(ByteArray.decode(data, codec))
+			.isNotNull()
+			.isEqualTo(ByteArray.fromBase64String(data));
+
+		assertThat(ByteArray.fromBase64String(data).encode(codec))
+			.isEqualTo(data);
 	}
 
 	@Test
@@ -207,6 +255,59 @@ class ByteArrayTest {
 			.hasSameHashCodeAs(ByteArray.fromString("foo array"))
 			.isNotEqualTo(bar)
 			.doesNotHaveSameHashCodeAs(bar);
+	}
+
+	@Test
+	@DisplayName("should slice a byte array into a sub-range")
+	void shouldSliceByteArray() {
+		final var array = ByteArray.fromString("hello world");
+
+		assertThat(array.slice(0, 5))
+			.isEqualTo(ByteArray.fromString("hello"));
+
+		assertThat(array.slice(6, 5))
+			.isEqualTo(ByteArray.fromString("world"));
+
+		assertThat(array.slice(0, array.size()))
+			.isEqualTo(array);
+	}
+
+	@Test
+	@DisplayName("should concatenate two byte arrays into a new byte array")
+	void shouldConcatenateByteArrays() {
+		final var hello = ByteArray.fromString("hello");
+		final var world = ByteArray.fromString(" world");
+
+		assertThat(hello.concat(world))
+			.isEqualTo(ByteArray.fromString("hello world"));
+	}
+
+	@Test
+	@DisplayName("should return the other instance unchanged when concatenating with an empty array")
+	void shouldReturnOtherWhenConcatenatingWithEmpty() {
+		final var hello = ByteArray.fromString("hello");
+
+		assertThat(ByteArray.empty().concat(hello))
+			.isSameAs(hello);
+	}
+
+	@Test
+	@DisplayName("should return this instance unchanged when concatenating an empty array onto it")
+	void shouldReturnThisWhenConcatenatingEmpty() {
+		final var hello = ByteArray.fromString("hello");
+
+		assertThat(hello.concat(ByteArray.empty()))
+			.isSameAs(hello);
+	}
+
+	@Test
+	@DisplayName("should decode byte array contents to a string using the given charset")
+	void shouldDecodeByteArrayToString() {
+		assertThat(ByteArray.fromString(TEST_ORIGINAL).toString(StandardCharsets.UTF_8))
+			.isEqualTo(TEST_ORIGINAL);
+
+		assertThat(ByteArray.fromString(TEST_ORIGINAL, StandardCharsets.UTF_16).toString(StandardCharsets.UTF_16))
+			.isEqualTo(TEST_ORIGINAL);
 	}
 
 }
