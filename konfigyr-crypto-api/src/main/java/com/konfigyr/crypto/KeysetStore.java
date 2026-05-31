@@ -47,7 +47,7 @@ import java.util.Optional;
  * stored on a remote server, like KMS, and that these cryptographic operations are done inside those servers.
  * <p>
  * If that is not possible, please make sure that the {@link KeyEncryptionKey} is provided to your application
- * in a secure way and that you never store it in the same place where you store your {@link EncryptedKeyset eDEKs}.
+ * securely and that you never store it in the same place where you store your {@link EncryptedKeyset eDEKs}.
  *
  * <h2>Key rotation</h2>
  *

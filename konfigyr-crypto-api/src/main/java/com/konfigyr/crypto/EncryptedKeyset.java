@@ -15,13 +15,13 @@ import java.util.*;
 /**
  * Record that represents the {@link Keyset} at rest whose private key material is
  * encrypted by the {@link KeyEncryptionKey Key Encryption Key (KEK)}. The
- * {@link EncryptedKeyset} are retrieved, stored or removed by the
+ * {@link EncryptedKeyset} are retrieved, stored, or removed by the
  * {@link KeysetRepository}.
  * <p>
  * Where possible, {@link KeyEncryptionKey Key Encryption Keys} should be stored in a
  * separate location from {@link EncryptedKeyset encrypted keysets}. For example, if the
  * data is stored in a database, the keys should be stored in the filesystem. This means
- * that if an attacker only has access to one of these (for example through directory
+ * that if an attacker only has access to one of these (for example, through directory
  * traversal or SQL injection), they cannot access both the keys and the data.
  * <p>
  * Each individual {@link Key} has its own encrypted material stored as an {@link EncryptedKey},
@@ -145,7 +145,7 @@ public class EncryptedKeyset implements Iterable<EncryptedKey> {
 	 * {@link EncryptedKeyset}. All metadata fields are copied; the key list is left empty and must
 	 * be provided via {@link Builder#build(List)} or {@link Builder#build(EncryptedKey...)}.
 	 * <p>
-	 * Useful when reconstructing an {@link EncryptedKeyset} with a modified key list (e.g. after
+	 * Useful when reconstructing an {@link EncryptedKeyset} with a modified key list (e.g., after
 	 * a key status update) without having to re-specify all metadata fields.
 	 *
 	 * @param existing the source {@link EncryptedKeyset} to copy metadata from, can't be {@literal null}

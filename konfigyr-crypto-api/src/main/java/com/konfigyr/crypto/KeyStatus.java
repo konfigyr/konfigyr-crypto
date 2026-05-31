@@ -52,7 +52,7 @@ public enum KeyStatus {
 	PENDING_DESTRUCTION,
 
 	/**
-	 * Key material has been permanently erased. No cryptographic operations are permitted
+	 * Key material has been permanently erased. No cryptographic operations are permitted,
 	 * and the key can no longer be recovered.
 	 */
 	DESTROYED,

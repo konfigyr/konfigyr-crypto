@@ -54,7 +54,8 @@ class AlgorithmRegistryTest {
 	void shouldThrowWhenResolvingUnknownAlgorithm() {
 		assertThatExceptionOfType(CryptoException.UnknownAlgorithmException.class)
 			.isThrownBy(() -> registry.resolve("unknown"))
-			.withMessageContaining("unknown");
+			.withMessageContaining("No algorithm registered with name '%s", "unknown")
+			.returns("unknown", CryptoException.UnknownAlgorithmException::getAlgorithmName);
 	}
 
 	@Test

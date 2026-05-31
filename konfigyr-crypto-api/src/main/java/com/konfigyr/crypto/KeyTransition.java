@@ -148,7 +148,7 @@ public class KeyTransition {
 	 * {@link KeyStatus#DISABLED}, clearing the previously scheduled destruction time.
 	 *
 	 * @param keyset the keyset containing the key, can't be {@literal null}
-	 * @param keyId the identifier of the key whose destruction should be cancelled,
+	 * @param keyId the identifier of the key whose destruction should be canceled,
 	 *              can't be {@literal null}
 	 * @return the transition, never {@literal null}
 	 */

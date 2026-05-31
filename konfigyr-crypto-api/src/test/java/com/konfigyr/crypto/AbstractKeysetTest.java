@@ -307,6 +307,23 @@ class AbstractKeysetTest {
 	}
 
 	@Test
+	@DisplayName("should fail to rotate keyset with an unsupported algorithm")
+	void shouldFailToRotateWithUnsupportedAlgorithm() {
+		final var keyset = ConcreteKeyset.builder()
+			.name("test-keyset")
+			.factory("test-factory")
+			.purpose(KeysetPurpose.SIGNING)
+			.keyEncryptionKey(kek)
+			.key(createKey("primary-key", true))
+			.build();
+
+		assertThatExceptionOfType(CryptoException.UnsupportedAlgorithmException.class)
+			.isThrownBy(() -> keyset.rotate(KeyDefinition.of(TestAlgorithm.INSTANCE)))
+			.withMessage("Unsupported algorithm: %s", TestAlgorithm.INSTANCE)
+			.returns(TestAlgorithm.INSTANCE, CryptoException.UnsupportedAlgorithmException::getAlgorithm);
+	}
+
+	@Test
 	@DisplayName("should be equal when all fields match")
 	void shouldBeEqualWhenAllFieldsMatch() {
 		final var key = createKey("key-id", true);

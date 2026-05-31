@@ -306,7 +306,7 @@ public final class JoseAlgorithm implements Algorithm {
 
 	/**
 	 * RSA-PKCS1v1.5 signing algorithms retained exclusively for interoperability with external
-	 * relying parties that require PKCS1v1.5 signatures (e.g. legacy JOSE / JWT consumers).
+	 * relying parties that require PKCS1v1.5 signatures (e.g., legacy JOSE / JWT consumers).
 	 * <p>
 	 * These algorithms are <strong>not</strong> registered automatically. They must be explicitly
 	 * enabled by setting {@code konfigyr.crypto.jose.register-legacy-algorithms=true}.

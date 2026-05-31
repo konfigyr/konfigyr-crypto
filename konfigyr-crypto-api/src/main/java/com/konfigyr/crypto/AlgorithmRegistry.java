@@ -9,7 +9,7 @@ import java.util.Optional;
  * Registry that acts as the canonical source of all known {@link Algorithm} instances
  * within the application.
  * <p>
- * The registry serves two purposes. First, it provides a controlled vocabulary: only
+ * The registry serves two purposes. First, it provides controlled vocabulary: only
  * algorithms registered at startup can be resolved at runtime, which prevents algorithm
  * confusion attacks where a crafted {@link EncryptedKeyset} references an unknown or
  * unexpected algorithm name. Second, it is the resolution mechanism used by
@@ -17,7 +17,7 @@ import java.util.Optional;
  * {@link EncryptedKeyset} back to a concrete {@link Algorithm} instance.
  * <p>
  * Algorithms are contributed to the registry via {@link AlgorithmRegistrar} beans, which
- * are collected and invoked during application context initialisation. The registry is
+ * are collected and invoked during application context initialization. The registry is
  * sealed after all singletons have been instantiated, and any attempt to register an
  * algorithm after that point will throw an {@link IllegalStateException}.
  * <p>
@@ -36,7 +36,7 @@ public interface AlgorithmRegistry {
 	/**
 	 * Registers the given {@link Algorithm} with this registry.
 	 * <p>
-	 * This method must only be called during application context initialisation, before
+	 * This method must only be called during application context initialization before
 	 * the registry is sealed. Registering the same {@link Algorithm} instance more than
 	 * once is idempotent. Registering a different instance under an already-used name
 	 * will throw {@link IllegalArgumentException}.

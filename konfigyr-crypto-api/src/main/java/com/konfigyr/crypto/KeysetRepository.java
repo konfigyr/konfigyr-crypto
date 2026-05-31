@@ -38,7 +38,7 @@ public interface KeysetRepository {
 	 * value. If a concurrent modification is detected, throw
 	 * {@link CryptoException.KeysetConcurrentModificationException} rather than silently
 	 * overwriting. Callers should cache the returned keyset (not the input) so that the
-	 * next write carries the correct version.
+	 * next write operation carries the correct version.
 	 *
 	 * @param keyset encrypted keyset to be written, can't be {@literal null}
 	 * @return the persisted keyset with a version reflecting the committed state, never {@literal null}
