@@ -7,6 +7,7 @@ import com.nimbusds.jose.jwk.JWK;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NullMarked;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -94,7 +95,7 @@ public class JoseKeysetFactory implements KeysetFactory {
 
 			try {
 				final ByteArray unwrapped = kek.unwrap(encrypted.getData());
-				key = JWK.parse(unwrapped.encode(String::new));
+				key = JWK.parse(unwrapped.toString(StandardCharsets.UTF_8));
 			} catch (Exception e) {
 				throw new CryptoException.UnwrappingException(encryptedKeyset.getName(), kek, e);
 			}

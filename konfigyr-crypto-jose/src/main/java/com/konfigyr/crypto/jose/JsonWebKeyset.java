@@ -74,7 +74,7 @@ class JsonWebKeyset extends AbstractKeyset<JsonWebKey> implements JWKSource<Secu
 		assertKeysetOperation(KeysetOperation.DECRYPT);
 
 		try {
-			final JWEObject object = JWEObject.parse(new String(cipher.array(), StandardCharsets.UTF_8));
+			final JWEObject object = JWEObject.parse(cipher.toString(StandardCharsets.UTF_8));
 			final ByteArray aad = JoseUtils.resolveAdditionalAuthenticationData(object.getHeader());
 
 			if (!((context == null || context.isEmpty()) ? aad == null : context.constantTimeEquals(aad))) {
@@ -118,7 +118,7 @@ class JsonWebKeyset extends AbstractKeyset<JsonWebKey> implements JWKSource<Secu
 		assertKeysetOperation(KeysetOperation.VERIFY);
 
 		try {
-			final JWSObject object = JWSObject.parse(new String(signature.array(), StandardCharsets.UTF_8));
+			final JWSObject object = JWSObject.parse(signature.toString(StandardCharsets.UTF_8));
 
 			if (!object.verify(createVerifier(object.getHeader()))) {
 				return false;
