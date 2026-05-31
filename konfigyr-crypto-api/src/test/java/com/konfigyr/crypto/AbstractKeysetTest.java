@@ -195,7 +195,7 @@ class AbstractKeysetTest {
 		assertThat(keyset.getPrimary()).isNotNull();
 
 		assertThatExceptionOfType(CryptoException.KeysetDisabledException.class)
-			.isThrownBy(keyset::activePrimary)
+			.isThrownBy(keyset::requireActivePrimary)
 			.returns("test-keyset", CryptoException.KeysetException::getName);
 	}
 
@@ -213,7 +213,7 @@ class AbstractKeysetTest {
 		assertThat(keyset.getPrimary()).isNotNull();
 
 		assertThatExceptionOfType(CryptoException.KeysetPendingDestructionException.class)
-			.isThrownBy(keyset::activePrimary)
+			.isThrownBy(keyset::requireActivePrimary)
 			.returns("test-keyset", CryptoException.KeysetException::getName);
 	}
 
@@ -231,7 +231,7 @@ class AbstractKeysetTest {
 		assertThat(keyset.getPrimary()).isNotNull();
 
 		assertThatExceptionOfType(CryptoException.KeysetDestroyedException.class)
-			.isThrownBy(keyset::activePrimary)
+			.isThrownBy(keyset::requireActivePrimary)
 			.returns("test-keyset", CryptoException.KeysetException::getName);
 	}
 
@@ -249,7 +249,7 @@ class AbstractKeysetTest {
 		assertThat(keyset.getPrimary()).isNotNull();
 
 		assertThatExceptionOfType(CryptoException.KeysetCompromisedException.class)
-			.isThrownBy(keyset::activePrimary)
+			.isThrownBy(keyset::requireActivePrimary)
 			.returns("test-keyset", CryptoException.KeysetException::getName);
 	}
 
