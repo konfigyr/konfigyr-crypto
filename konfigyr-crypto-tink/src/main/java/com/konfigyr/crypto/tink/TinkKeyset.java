@@ -48,24 +48,21 @@ class TinkKeyset extends AbstractKeyset<TinkKey> {
 		Assert.isTrue(!data.isEmpty(), "Cannot encrypt an empty byte array");
 		assertSupportedOperation(KeysetOperation.ENCRYPT);
 
-		final byte[] associatedData = context == null ? null : context.array();
-		final byte[] encrypted;
+		final TinkKey key = requireActivePrimary();
 
-		try {
-			final TinkKey key = requireActivePrimary();
+		return data.transform(bytes -> {
+			final byte[] associatedData = context == null ? null : context.array();
 
-			if (KeyType.OCTET == key.getType()) {
-				encrypted = primitive(key, Aead.class)
-					.encrypt(data.array(), associatedData);
-			} else {
-				encrypted = primitive(key, HybridEncrypt.class)
-					.encrypt(data.array(), associatedData);
+			try {
+				if (KeyType.OCTET == key.getType()) {
+					return primitive(key, Aead.class).encrypt(bytes, associatedData);
+				} else {
+					return primitive(key, HybridEncrypt.class).encrypt(bytes, associatedData);
+				}
+			} catch (GeneralSecurityException e) {
+				throw new KeysetOperationException(name, KeysetOperation.ENCRYPT, e);
 			}
-		} catch (GeneralSecurityException e) {
-			throw new KeysetOperationException(name, KeysetOperation.ENCRYPT, e);
-		}
-
-		return new ByteArray(encrypted);
+		});
 	}
 
 	@Override
@@ -73,30 +70,28 @@ class TinkKeyset extends AbstractKeyset<TinkKey> {
 		Assert.isTrue(!cipher.isEmpty(), "Cannot decrypt an empty byte array");
 		assertSupportedOperation(KeysetOperation.DECRYPT);
 
-		final byte[] associatedData = context == null ? null : context.array();
-		GeneralSecurityException lastException = null;
+		return cipher.transform(bytes -> {
+			final byte[] associatedData = context == null ? null : context.array();
+			GeneralSecurityException lastException = null;
 
-		for (TinkKey key : prefixMap.getAllWithMatchingPrefix(cipher.array())) {
-			try {
-				final byte[] decrypted;
-
-				if (KeyType.OCTET == key.getType()) {
-					decrypted = primitive(key, Aead.class).decrypt(cipher.array(), associatedData);
-				} else {
-					decrypted = primitive(key, HybridDecrypt.class).decrypt(cipher.array(), associatedData);
+			for (TinkKey key : prefixMap.getAllWithMatchingPrefix(bytes)) {
+				try {
+					if (KeyType.OCTET == key.getType()) {
+						return primitive(key, Aead.class).decrypt(bytes, associatedData);
+					} else {
+						return primitive(key, HybridDecrypt.class).decrypt(bytes, associatedData);
+					}
+				} catch (GeneralSecurityException e) {
+					lastException = e;
 				}
-
-				return new ByteArray(decrypted);
-			} catch (GeneralSecurityException e) {
-				lastException = e;
 			}
-		}
 
-		if (lastException != null) {
-			throw new KeysetOperationException(name, KeysetOperation.DECRYPT, lastException);
-		}
+			if (lastException != null) {
+				throw new KeysetOperationException(name, KeysetOperation.DECRYPT, lastException);
+			}
 
-		throw new KeysetOperationException(name, KeysetOperation.DECRYPT, "Failed to decrypt cipher");
+			throw new KeysetOperationException(name, KeysetOperation.DECRYPT, "Failed to decrypt cipher");
+		});
 	}
 
 	@Override
@@ -104,17 +99,15 @@ class TinkKeyset extends AbstractKeyset<TinkKey> {
 		Assert.isTrue(!data.isEmpty(), "Cannot sign an empty byte array");
 		assertSupportedOperation(KeysetOperation.SIGN);
 
-		final byte[] signature;
+		final TinkKey key = requireActivePrimary();
 
-		try {
-			final TinkKey key = requireActivePrimary();
-
-			signature = primitive(key, PublicKeySign.class).sign(data.array());
-		} catch (GeneralSecurityException e) {
-			throw new KeysetOperationException(name, KeysetOperation.SIGN, e);
-		}
-
-		return new ByteArray(signature);
+		return data.transform(bytes -> {
+			try {
+				return primitive(key, PublicKeySign.class).sign(bytes);
+			} catch (GeneralSecurityException e) {
+				throw new KeysetOperationException(name, KeysetOperation.SIGN, e);
+			}
+		});
 	}
 
 	@Override
@@ -123,9 +116,12 @@ class TinkKeyset extends AbstractKeyset<TinkKey> {
 		Assert.isTrue(!data.isEmpty(), "Cannot verify a signature against an empty byte array");
 		assertSupportedOperation(KeysetOperation.VERIFY);
 
-		for (TinkKey key : prefixMap.getAllWithMatchingPrefix(signature.array())) {
+		// create only one byte array to avoid copying the data multiple times
+		final byte[] bytes = signature.array();
+
+		for (TinkKey key : prefixMap.getAllWithMatchingPrefix(bytes)) {
 			try {
-				primitive(key, PublicKeyVerify.class).verify(signature.array(), data.array());
+				primitive(key, PublicKeyVerify.class).verify(bytes, data.array());
 				return true;
 			} catch (GeneralSecurityException e) {
 				// try the next key in the chain...

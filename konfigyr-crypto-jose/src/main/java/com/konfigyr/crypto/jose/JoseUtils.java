@@ -2,13 +2,13 @@ package com.konfigyr.crypto.jose;
 
 import com.konfigyr.crypto.KeysetPurpose;
 import com.konfigyr.io.ByteArray;
+import com.konfigyr.io.ByteArrayCodec;
 import com.nimbusds.jose.EncryptionMethod;
 import com.nimbusds.jose.Header;
 import com.nimbusds.jose.JWEAlgorithm;
 import com.nimbusds.jose.JWEHeader;
 import com.nimbusds.jose.jwk.KeyOperation;
 import com.nimbusds.jose.jwk.KeyUse;
-import com.nimbusds.jose.util.Base64URL;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 import org.springframework.util.Assert;
@@ -50,7 +50,7 @@ final class JoseUtils {
 		).keyID(key.getId());
 
 		if (aad != null && !aad.isEmpty()) {
-			header.customParam(AAD_HEADER_NAME, Base64URL.encode(aad.array()).toString());
+			header.customParam(AAD_HEADER_NAME, aad.encode(ByteArrayCodec.BASE64_URL_SAFE_NO_PADDING));
 		}
 
 		return header.build();
@@ -64,8 +64,7 @@ final class JoseUtils {
 			return null;
 		}
 
-		final byte[] aad = Base64URL.from(value.toString()).decode();
-		return new ByteArray(aad);
+		return ByteArray.decode(value.toString(), ByteArrayCodec.BASE64_URL_SAFE_NO_PADDING);
 	}
 
 	static String generateKeyId() {
