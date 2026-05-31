@@ -13,6 +13,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 
 /**
@@ -50,6 +51,8 @@ import java.util.Arrays;
  * <ul>
  *   <li>{@link #slice(int, int)} — extract a sub-range as a new {@link ByteArray}</li>
  *   <li>{@link #concat(ByteArray)} — concatenate two arrays into a new {@link ByteArray}</li>
+ *   <li>{@link #transform(Transformer)} — apply a custom {@link Transformer} to produce a new {@link ByteArray}</li>
+ *   <li>{@link #digest(String)} / {@link #digest(MessageDigest)} — compute a cryptographic digest</li>
  * </ul>
  *
  * <h2>Security</h2>
@@ -252,6 +255,46 @@ public final class ByteArray implements InputStreamSource, Serializable {
 	}
 
 	/**
+	 * Applies the given {@link Transformer} to the contents of this byte array and wraps the
+	 * result in a new {@link ByteArray}.
+	 *
+	 * @param transformer transformer to apply, can't be {@literal null}
+	 * @return transformed byte array, never {@literal null}
+	 */
+	public ByteArray transform(Transformer transformer) {
+		return new ByteArray(transformer.transform(array()));
+	}
+
+	/**
+	 * Computes the digest of this byte array using the given algorithm and returns the result
+	 * as a new {@link ByteArray}. A fresh {@link MessageDigest} instance is created on each
+	 * call, so the algorithm name is validated eagerly.
+	 *
+	 * @param algorithm the digest algorithm name (e.g. {@literal "SHA-256"}), can't be {@literal null}
+	 * @return digest byte array, never {@literal null}
+	 * @throws IllegalArgumentException when the algorithm is not available
+	 */
+	public ByteArray digest(String algorithm) {
+		try {
+			return digest(MessageDigest.getInstance(algorithm));
+		} catch (NoSuchAlgorithmException e) {
+			throw new IllegalArgumentException("Unknown digest algorithm: " + algorithm, e);
+		}
+	}
+
+	/**
+	 * Computes the digest of this byte array using the given {@link MessageDigest} and returns
+	 * the result as a new {@link ByteArray}. The digest is reset after this call. Thread safety
+	 * is the caller's responsibility.
+	 *
+	 * @param digest the digest to use, can't be {@literal null}
+	 * @return digest byte array, never {@literal null}
+	 */
+	public ByteArray digest(MessageDigest digest) {
+		return transform(digest::digest);
+	}
+
+	/**
 	 * Encodes the contents of this byte array into a HEX string.
 	 *
 	 * @return HEX encoded string, never {@literal null}.
@@ -296,7 +339,7 @@ public final class ByteArray implements InputStreamSource, Serializable {
 	 * @return encoded string, never {@literal null}.
 	 */
 	public String encode(Encoder encoder) {
-		return encoder.encode(array);
+		return encoder.encode(array());
 	}
 
 	/**
@@ -400,6 +443,33 @@ public final class ByteArray implements InputStreamSource, Serializable {
 		 * @return the decoded byte array, never {@literal null}
 		 */
 		byte[] decode(String string);
+
+	}
+
+	/**
+	 * Interface used to transform a byte array into another byte array.
+	 */
+	@FunctionalInterface
+	public interface Transformer {
+
+		/**
+		 * Transforms the given byte array into another byte array.
+		 *
+		 * @param bytes the bytes to transform, can't be {@literal null}
+		 * @return the transformed byte array, never {@literal null}
+		 */
+		byte[] transform(byte[] bytes);
+
+		/**
+		 * Returns a composed {@link Transformer} that first applies this transformer and then
+		 * applies {@code after} to the result.
+		 *
+		 * @param after the transformer to apply after this one, can't be {@literal null}
+		 * @return composed transformer, never {@literal null}
+		 */
+		default Transformer andThen(Transformer after) {
+			return bytes -> after.transform(this.transform(bytes));
+		}
 
 	}
 }

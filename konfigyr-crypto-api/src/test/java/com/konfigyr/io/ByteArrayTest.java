@@ -8,8 +8,12 @@ import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import java.io.ByteArrayInputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * @author Vladimir Spasic
@@ -135,6 +139,19 @@ class ByteArrayTest {
 
 		assertThat(ByteArray.fromBase64String(data).encode(codec))
 			.isEqualTo(data);
+	}
+
+	@Test
+	@DisplayName("should not allow encoder to mutate the original byte array contents")
+	void encoderShouldNotMutateOriginalByteArray() {
+		final var array = ByteArray.fromString(TEST_ORIGINAL);
+
+		array.encode(bytes -> {
+			Arrays.fill(bytes, (byte) 0);
+			return "";
+		});
+
+		assertThat(array).isEqualTo(ByteArray.fromString(TEST_ORIGINAL));
 	}
 
 	@Test
@@ -308,6 +325,79 @@ class ByteArrayTest {
 
 		assertThat(ByteArray.fromString(TEST_ORIGINAL, StandardCharsets.UTF_16).toString(StandardCharsets.UTF_16))
 			.isEqualTo(TEST_ORIGINAL);
+	}
+
+	@Test
+	@DisplayName("should apply transformer to byte array contents and wrap the result")
+	void shouldTransformByteArray() {
+		final var array = ByteArray.fromString(TEST_ORIGINAL);
+
+		assertThat(array.transform(bytes -> new byte[0]))
+			.isEqualTo(ByteArray.empty());
+	}
+
+	@Test
+	@DisplayName("should not allow transformer to mutate the original byte array contents")
+	void transformerShouldNotMutateOriginalByteArray() {
+		final var array = ByteArray.fromString(TEST_ORIGINAL);
+
+		array.transform(bytes -> {
+			Arrays.fill(bytes, (byte) 0);
+			return bytes;
+		});
+
+		assertThat(array).isEqualTo(ByteArray.fromString(TEST_ORIGINAL));
+	}
+
+	@Test
+	@DisplayName("should compose transformers using andThen")
+	void shouldComposeTransformers() {
+		final var array = ByteArray.fromString("hello world");
+
+		final ByteArray.Transformer firstFive = bytes -> Arrays.copyOf(bytes, 5);
+		final ByteArray.Transformer reverse = bytes -> {
+			final var reversed = Arrays.copyOf(bytes, bytes.length);
+			for (int i = 0, j = reversed.length - 1; i < j; i++, j--) {
+				final byte tmp = reversed[i];
+				reversed[i] = reversed[j];
+				reversed[j] = tmp;
+			}
+			return reversed;
+		};
+
+		assertThat(array.transform(firstFive.andThen(reverse)))
+			.isEqualTo(ByteArray.fromString("olleh"));
+	}
+
+	@Test
+	@DisplayName("should compute digest of byte array contents using algorithm name")
+	void shouldDigestByteArrayWithAlgorithmName() throws NoSuchAlgorithmException {
+		final var array = ByteArray.fromString(TEST_ORIGINAL);
+		final var expected = MessageDigest.getInstance("SHA-256").digest(TEST_ORIGINAL.getBytes());
+
+		assertThat(array.digest("SHA-256"))
+			.isEqualTo(new ByteArray(expected));
+
+		assertThat(array.digest("SHA-256"))
+			.isEqualTo(array.digest(MessageDigest.getInstance("SHA-256")));
+	}
+
+	@Test
+	@DisplayName("should compute digest of byte array contents using a MessageDigest instance")
+	void shouldDigestByteArrayWithMessageDigest() throws NoSuchAlgorithmException {
+		final var array = ByteArray.fromString(TEST_ORIGINAL);
+		final var digest = MessageDigest.getInstance("SHA-512");
+
+		assertThat(array.digest(digest))
+			.isEqualTo(array.digest(digest));
+	}
+
+	@Test
+	@DisplayName("should throw IllegalArgumentException for unknown digest algorithm")
+	void shouldRejectUnknownDigestAlgorithm() {
+		assertThatThrownBy(() -> ByteArray.fromString(TEST_ORIGINAL).digest("NO-SUCH-ALG"))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessageContaining("NO-SUCH-ALG");
 	}
 
 }
