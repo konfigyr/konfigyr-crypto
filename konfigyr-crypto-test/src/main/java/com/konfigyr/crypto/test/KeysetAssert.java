@@ -1,19 +1,11 @@
 package com.konfigyr.crypto.test;
 
-import com.konfigyr.crypto.Key;
-import com.konfigyr.crypto.KeyEncryptionKey;
-import com.konfigyr.crypto.Keyset;
-import com.konfigyr.crypto.KeysetDefinition;
-import com.konfigyr.crypto.KeysetPurpose;
-import org.assertj.core.api.AbstractObjectAssert;
-import org.assertj.core.api.Assertions;
-import org.assertj.core.api.InstanceOfAssertFactory;
-import org.assertj.core.api.IterableAssert;
+import com.konfigyr.crypto.*;
+import org.assertj.core.api.*;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
 import java.time.Duration;
-import java.util.Objects;
 
 /**
  * AssertJ assertions for verifying the state of a {@link Keyset} instance.
@@ -60,7 +52,9 @@ public class KeysetAssert extends AbstractObjectAssert<KeysetAssert, @Nullable K
 	 * @return iterable assertion over the keyset's keys, never {@literal null}
 	 */
 	public IterableAssert<Key> assertThatKeys() {
-		return IterableAssert.assertThatIterable(actual.getKeys());
+		return assertThatKeyset()
+			.as("encrypted keys")
+			.extracting(Keyset::getKeys, InstanceOfAssertFactories.iterable(Key.class));
 	}
 
 	/**
@@ -84,10 +78,10 @@ public class KeysetAssert extends AbstractObjectAssert<KeysetAssert, @Nullable K
 	 * @return this assertion for chaining, never {@literal null}
 	 */
 	public KeysetAssert hasName(@Nullable String name) {
-		isNotNull();
-		if (!Objects.equals(actual.getName(), name)) {
-			failWithMessage("Expected keyset to have a name of <%s> but was <%s>", name, actual.getName());
-		}
+		assertThatKeyset()
+			.extracting(Keyset::getName, InstanceOfAssertFactories.STRING)
+			.as("keyset name")
+			.isEqualTo(name);
 		return myself;
 	}
 
@@ -98,11 +92,10 @@ public class KeysetAssert extends AbstractObjectAssert<KeysetAssert, @Nullable K
 	 * @return this assertion for chaining, never {@literal null}
 	 */
 	public KeysetAssert createdByFactory(@Nullable String name) {
-		isNotNull();
-		if (!Objects.equals(actual.getFactory(), name)) {
-			failWithMessage("Expected keyset to be managed by a <%s> keyset factory but was <%s>",
-				name, actual.getFactory());
-		}
+		assertThatKeyset()
+			.extracting(Keyset::getFactory, InstanceOfAssertFactories.STRING)
+			.as("keyset factory")
+			.isEqualTo(name);
 		return myself;
 	}
 
@@ -113,11 +106,10 @@ public class KeysetAssert extends AbstractObjectAssert<KeysetAssert, @Nullable K
 	 * @return this assertion for chaining, never {@literal null}
 	 */
 	public KeysetAssert hasPurpose(@Nullable KeysetPurpose purpose) {
-		isNotNull();
-		if (!Objects.equals(actual.getPurpose(), purpose)) {
-			failWithMessage("Expected keyset to have a purpose of <%s> but was <%s>",
-				purpose, actual.getPurpose());
-		}
+		assertThatKeyset()
+			.extracting(Keyset::getPurpose)
+			.as("keyset purpose")
+			.isEqualTo(purpose);
 		return myself;
 	}
 
@@ -128,11 +120,10 @@ public class KeysetAssert extends AbstractObjectAssert<KeysetAssert, @Nullable K
 	 * @return this assertion for chaining, never {@literal null}
 	 */
 	public KeysetAssert hasKeyEncryptionKey(@Nullable KeyEncryptionKey kek) {
-		isNotNull();
-		if (!Objects.equals(actual.getKeyEncryptionKey(), kek)) {
-			failWithMessage("Expected keyset to have a Key Encryption Key of <%s> but was <%s>",
-				kek, actual.getKeyEncryptionKey());
-		}
+		assertThatKeyset()
+			.extracting(Keyset::getKeyEncryptionKey)
+			.as("key encryption key")
+			.isEqualTo(kek);
 		return myself;
 	}
 
@@ -145,18 +136,14 @@ public class KeysetAssert extends AbstractObjectAssert<KeysetAssert, @Nullable K
 	 * @return this assertion for chaining, never {@literal null}
 	 */
 	public KeysetAssert hasKeyEncryptionKey(@Nullable String provider, @Nullable String id) {
-		isNotNull();
-
-		final KeyEncryptionKey kek = actual.getKeyEncryptionKey();
-
-		Assertions.assertThat(kek)
-			.as("Expected keyset to have a Key Encryption Key with provider of <%s> but was <%s>", provider, kek.getProvider())
-			.returns(provider, KeyEncryptionKey::getProvider);
-
-		Assertions.assertThat(kek)
-			.as("Expected keyset to have a Key Encryption Key with identifier of <%s> but was <%s>", id, kek.getId())
-			.returns(id, KeyEncryptionKey::getId);
-
+		assertThatKeyset()
+			.extracting(k -> k.getKeyEncryptionKey().getProvider(), InstanceOfAssertFactories.STRING)
+			.as("KEK provider")
+			.isEqualTo(provider);
+		assertThatKeyset()
+			.extracting(k -> k.getKeyEncryptionKey().getId(), InstanceOfAssertFactories.STRING)
+			.as("KEK identifier")
+			.isEqualTo(id);
 		return myself;
 	}
 
@@ -167,10 +154,10 @@ public class KeysetAssert extends AbstractObjectAssert<KeysetAssert, @Nullable K
 	 * @return this assertion for chaining, never {@literal null}
 	 */
 	public KeysetAssert hasSize(int size) {
-		isNotNull();
-		if (!Objects.equals(actual.size(), size)) {
-			failWithMessage("Expected keyset to have a size of <%s> but was <%s>", size, actual.size());
-		}
+		assertThatKeyset()
+			.extracting(Keyset::size, InstanceOfAssertFactories.INTEGER)
+			.as("keyset size")
+			.isEqualTo(size);
 		return myself;
 	}
 
@@ -180,12 +167,10 @@ public class KeysetAssert extends AbstractObjectAssert<KeysetAssert, @Nullable K
 	 * @return this assertion for chaining, never {@literal null}
 	 */
 	public KeysetAssert hasNoRotationInterval() {
-		isNotNull();
-
-		Assertions.assertThat(actual.getRotationInterval())
-			.as("Keyset should not have no rotation interval defined, but was <%s>", actual.getRotationInterval())
+		assertThatKeyset()
+			.extracting(Keyset::getRotationInterval, InstanceOfAssertFactories.optional(Duration.class))
+			.as("keyset rotation interval")
 			.isEmpty();
-
 		return myself;
 	}
 
@@ -197,15 +182,13 @@ public class KeysetAssert extends AbstractObjectAssert<KeysetAssert, @Nullable K
 	 * @return this assertion for chaining, never {@literal null}
 	 */
 	public KeysetAssert hasRotationInterval(@Nullable Duration interval) {
-		isNotNull();
-
-		final Duration duration = actual.getRotationInterval().orElse(null);
-
-		if (!Objects.equals(duration, interval)) {
-			failWithMessage("Expected keyset to have a rotation interval of <%s> but was <%s>",
-				interval, duration);
+		if (interval == null) {
+			return hasNoRotationInterval();
 		}
-
+		assertThatKeyset()
+			.extracting(Keyset::getRotationInterval, InstanceOfAssertFactories.optional(Duration.class))
+			.as("keyset rotation interval")
+			.hasValue(interval);
 		return myself;
 	}
 
@@ -215,12 +198,10 @@ public class KeysetAssert extends AbstractObjectAssert<KeysetAssert, @Nullable K
 	 * @return this assertion for chaining, never {@literal null}
 	 */
 	public KeysetAssert hasNoDestructionGracePeriod() {
-		isNotNull();
-
-		Assertions.assertThat(actual.getDestructionGracePeriod())
-			.as("Keyset should not have no destruction grace defined, but was <%s>", actual.getDestructionGracePeriod())
+		assertThatKeyset()
+			.extracting(Keyset::getDestructionGracePeriod, InstanceOfAssertFactories.optional(Duration.class))
+			.as("keyset destruction grace period")
 			.isEmpty();
-
 		return myself;
 	}
 
@@ -232,16 +213,18 @@ public class KeysetAssert extends AbstractObjectAssert<KeysetAssert, @Nullable K
 	 * @return this assertion for chaining, never {@literal null}
 	 */
 	public KeysetAssert hasDestructionGracePeriod(@Nullable Duration interval) {
-		isNotNull();
-
-		final Duration duration = actual.getDestructionGracePeriod().orElse(null);
-
-		if (!Objects.equals(duration, interval)) {
-			failWithMessage("Expected keyset to have a destruction grace period of <%s> but was <%s>",
-				interval, duration);
+		if (interval == null) {
+			return hasNoDestructionGracePeriod();
 		}
-
+		assertThatKeyset()
+			.extracting(Keyset::getDestructionGracePeriod, InstanceOfAssertFactories.optional(Duration.class))
+			.as("keyset destruction grace period")
+			.hasValue(interval);
 		return myself;
+	}
+
+	private ObjectAssert<Keyset> assertThatKeyset() {
+		return Assertions.assertThatObject(actual).isNotNull();
 	}
 
 }

@@ -6,14 +6,11 @@ import com.konfigyr.crypto.KeyEncryptionKey;
 import com.konfigyr.crypto.Keyset;
 import com.konfigyr.crypto.KeysetDefinition;
 import com.konfigyr.crypto.KeysetPurpose;
-import org.assertj.core.api.AbstractObjectAssert;
-import org.assertj.core.api.InstanceOfAssertFactory;
-import org.assertj.core.api.IterableAssert;
+import org.assertj.core.api.*;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
 import java.time.Duration;
-import java.util.Objects;
 
 /**
  * AssertJ assertions for verifying the state of an {@link EncryptedKeyset} instance.
@@ -27,7 +24,7 @@ import java.util.Objects;
  * @see EncryptedKeyset
  */
 @NullMarked
-public class EncryptedKeysetAssert extends AbstractObjectAssert<EncryptedKeysetAssert, EncryptedKeyset> {
+public class EncryptedKeysetAssert extends AbstractObjectAssert<EncryptedKeysetAssert, @Nullable EncryptedKeyset> {
 
 	/**
 	 * Returns an {@link InstanceOfAssertFactory} that creates {@link EncryptedKeysetAssert} instances,
@@ -60,7 +57,9 @@ public class EncryptedKeysetAssert extends AbstractObjectAssert<EncryptedKeysetA
 	 * @return iterable assertion over the encrypted keys, never {@literal null}
 	 */
 	public IterableAssert<EncryptedKey> assertThatKeys() {
-		return IterableAssert.assertThatIterable(actual.getKeys());
+		return assertThatKeyset()
+			.as("encrypted keys")
+			.extracting(EncryptedKeyset::getKeys, InstanceOfAssertFactories.iterable(EncryptedKey.class));
 	}
 
 	/**
@@ -103,10 +102,10 @@ public class EncryptedKeysetAssert extends AbstractObjectAssert<EncryptedKeysetA
 	 * @return this assertion for chaining, never {@literal null}
 	 */
 	public EncryptedKeysetAssert hasName(@Nullable String name) {
-		isNotNull();
-		if (!Objects.equals(actual.getName(), name)) {
-			failWithMessage("Expected keyset to have a name of <%s> but was <%s>", name, actual.getName());
-		}
+		assertThatKeyset()
+			.extracting(EncryptedKeyset::getName, InstanceOfAssertFactories.STRING)
+			.as("keyset name")
+			.isEqualTo(name);
 		return myself;
 	}
 
@@ -117,11 +116,10 @@ public class EncryptedKeysetAssert extends AbstractObjectAssert<EncryptedKeysetA
 	 * @return this assertion for chaining, never {@literal null}
 	 */
 	public EncryptedKeysetAssert createdByFactory(@Nullable String name) {
-		isNotNull();
-		if (!Objects.equals(actual.getFactory(), name)) {
-			failWithMessage("Expected keyset to be managed by a <%s> keyset factory but was <%s>",
-				name, actual.getFactory());
-		}
+		assertThatKeyset()
+			.extracting(EncryptedKeyset::getFactory, InstanceOfAssertFactories.STRING)
+			.as("keyset factory")
+			.isEqualTo(name);
 		return myself;
 	}
 
@@ -142,11 +140,10 @@ public class EncryptedKeysetAssert extends AbstractObjectAssert<EncryptedKeysetA
 	 * @return this assertion for chaining, never {@literal null}
 	 */
 	public EncryptedKeysetAssert hasPurpose(@Nullable String purpose) {
-		isNotNull();
-		if (!Objects.equals(actual.getPurpose(), purpose)) {
-			failWithMessage("Expected keyset to have a purpose of <%s> but was <%s>",
-				purpose, actual.getPurpose());
-		}
+		assertThatKeyset()
+			.extracting(EncryptedKeyset::getPurpose, InstanceOfAssertFactories.STRING)
+			.as("keyset purpose")
+			.isEqualTo(purpose);
 		return myself;
 	}
 
@@ -173,18 +170,14 @@ public class EncryptedKeysetAssert extends AbstractObjectAssert<EncryptedKeysetA
 	 * @return this assertion for chaining, never {@literal null}
 	 */
 	public EncryptedKeysetAssert hasKeyEncryptionKey(@Nullable String provider, @Nullable String id) {
-		isNotNull();
-
-		if (!Objects.equals(actual.getProvider(), provider)) {
-			failWithMessage("Expected keyset to have a Key Encryption Key with provider of <%s> but was <%s>",
-				provider, actual.getProvider());
-		}
-
-		if (!Objects.equals(actual.getKeyEncryptionKey(), id)) {
-			failWithMessage("Expected keyset to have a Key Encryption Key with identifier of <%s> but was <%s>",
-				id, actual.getKeyEncryptionKey());
-		}
-
+		assertThatKeyset()
+			.extracting(EncryptedKeyset::getProvider, InstanceOfAssertFactories.STRING)
+			.as("KEK provider")
+			.isEqualTo(provider);
+		assertThatKeyset()
+			.extracting(EncryptedKeyset::getKeyEncryptionKey, InstanceOfAssertFactories.STRING)
+			.as("KEK identifier")
+			.isEqualTo(id);
 		return myself;
 	}
 
@@ -195,10 +188,10 @@ public class EncryptedKeysetAssert extends AbstractObjectAssert<EncryptedKeysetA
 	 * @return this assertion for chaining, never {@literal null}
 	 */
 	public EncryptedKeysetAssert hasSize(int size) {
-		isNotNull();
-		if (!Objects.equals(actual.size(), size)) {
-			failWithMessage("Expected keyset to have a size of <%s> but was <%s>", size, actual.size());
-		}
+		assertThatKeyset()
+			.extracting(EncryptedKeyset::size, InstanceOfAssertFactories.INTEGER)
+			.as("keyset size")
+			.isEqualTo(size);
 		return myself;
 	}
 
@@ -210,13 +203,10 @@ public class EncryptedKeysetAssert extends AbstractObjectAssert<EncryptedKeysetA
 	 * @return this assertion for chaining, never {@literal null}
 	 */
 	public EncryptedKeysetAssert hasRotationInterval(@Nullable Duration interval) {
-		isNotNull();
-
-		if (!Objects.equals(actual.getRotationInterval(), interval)) {
-			failWithMessage("Expected keyset to have a rotation interval of <%s> but was <%s>",
-				interval, actual.getRotationInterval());
-		}
-
+		assertThatKeyset()
+			.extracting(EncryptedKeyset::getRotationInterval)
+			.as("keyset rotation interval")
+			.isEqualTo(interval);
 		return myself;
 	}
 
@@ -228,14 +218,15 @@ public class EncryptedKeysetAssert extends AbstractObjectAssert<EncryptedKeysetA
 	 * @return this assertion for chaining, never {@literal null}
 	 */
 	public EncryptedKeysetAssert hasDestructionGracePeriod(@Nullable Duration interval) {
-		isNotNull();
-
-		if (!Objects.equals(actual.getDestructionGracePeriod(), interval)) {
-			failWithMessage("Expected keyset to have a destruction grace period of <%s> but was <%s>",
-				interval, actual.getDestructionGracePeriod());
-		}
-
+		assertThatKeyset()
+			.extracting(EncryptedKeyset::getDestructionGracePeriod)
+			.as("keyset destruction grace period")
+			.isEqualTo(interval);
 		return myself;
+	}
+
+	private ObjectAssert<EncryptedKeyset> assertThatKeyset() {
+		return Assertions.assertThatObject(actual).isNotNull();
 	}
 
 }
