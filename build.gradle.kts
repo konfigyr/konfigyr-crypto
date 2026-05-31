@@ -13,7 +13,7 @@ apply(plugin = "com.konfigyr.sonatype")
 
 allprojects {
     group = "com.konfigyr"
-	version = "1.0.0-RC6"
+	version = "1.0.0-RC7"
 }
 
 subprojects {
