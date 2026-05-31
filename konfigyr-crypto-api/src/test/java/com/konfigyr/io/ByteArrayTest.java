@@ -257,4 +257,57 @@ class ByteArrayTest {
 			.doesNotHaveSameHashCodeAs(bar);
 	}
 
+	@Test
+	@DisplayName("should slice a byte array into a sub-range")
+	void shouldSliceByteArray() {
+		final var array = ByteArray.fromString("hello world");
+
+		assertThat(array.slice(0, 5))
+			.isEqualTo(ByteArray.fromString("hello"));
+
+		assertThat(array.slice(6, 5))
+			.isEqualTo(ByteArray.fromString("world"));
+
+		assertThat(array.slice(0, array.size()))
+			.isEqualTo(array);
+	}
+
+	@Test
+	@DisplayName("should concatenate two byte arrays into a new byte array")
+	void shouldConcatenateByteArrays() {
+		final var hello = ByteArray.fromString("hello");
+		final var world = ByteArray.fromString(" world");
+
+		assertThat(hello.concat(world))
+			.isEqualTo(ByteArray.fromString("hello world"));
+	}
+
+	@Test
+	@DisplayName("should return the other instance unchanged when concatenating with an empty array")
+	void shouldReturnOtherWhenConcatenatingWithEmpty() {
+		final var hello = ByteArray.fromString("hello");
+
+		assertThat(ByteArray.empty().concat(hello))
+			.isSameAs(hello);
+	}
+
+	@Test
+	@DisplayName("should return this instance unchanged when concatenating an empty array onto it")
+	void shouldReturnThisWhenConcatenatingEmpty() {
+		final var hello = ByteArray.fromString("hello");
+
+		assertThat(hello.concat(ByteArray.empty()))
+			.isSameAs(hello);
+	}
+
+	@Test
+	@DisplayName("should decode byte array contents to a string using the given charset")
+	void shouldDecodeByteArrayToString() {
+		assertThat(ByteArray.fromString(TEST_ORIGINAL).toString(StandardCharsets.UTF_8))
+			.isEqualTo(TEST_ORIGINAL);
+
+		assertThat(ByteArray.fromString(TEST_ORIGINAL, StandardCharsets.UTF_16).toString(StandardCharsets.UTF_16))
+			.isEqualTo(TEST_ORIGINAL);
+	}
+
 }
