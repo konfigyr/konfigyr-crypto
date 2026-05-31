@@ -167,72 +167,109 @@ class AbstractKeysetTest {
 	@Test
 	@DisplayName("should throw when no primary key is present in the keyset")
 	void shouldThrowWhenNoPrimaryKeyPresent() {
+		final var keyset = ConcreteKeyset.builder()
+			.name("test-keyset")
+			.factory("test-factory")
+			.purpose(KeysetPurpose.ENCRYPTION)
+			.keyEncryptionKey(kek)
+			.key(createKey("non-primary-key", false))
+			.build();
+
 		assertThatExceptionOfType(CryptoException.KeysetException.class)
-			.isThrownBy(() -> ConcreteKeyset.builder()
-				.name("test-keyset")
-				.factory("test-factory")
-				.purpose(KeysetPurpose.ENCRYPTION)
-				.keyEncryptionKey(kek)
-				.key(createKey("non-primary-key", false))
-				.build())
-			.withMessageContaining("must have a primary key")
+			.isThrownBy(keyset::getPrimary)
+			.withMessageContaining("has no primary key")
 			.returns("test-keyset", CryptoException.KeysetException::getName);
 	}
 
 	@Test
 	@DisplayName("should throw KeysetDisabledException when the primary key is disabled")
 	void shouldThrowWhenPrimaryKeyIsDisabled() {
+		final var keyset = ConcreteKeyset.builder()
+			.name("test-keyset")
+			.factory("test-factory")
+			.purpose(KeysetPurpose.ENCRYPTION)
+			.keyEncryptionKey(kek)
+			.key(createKey("primary-key", true, KeyStatus.DISABLED))
+			.build();
+
+		assertThat(keyset.getPrimary()).isNotNull();
+
 		assertThatExceptionOfType(CryptoException.KeysetDisabledException.class)
-			.isThrownBy(() -> ConcreteKeyset.builder()
-				.name("test-keyset")
-				.factory("test-factory")
-				.purpose(KeysetPurpose.ENCRYPTION)
-				.keyEncryptionKey(kek)
-				.key(createKey("primary-key", true, KeyStatus.DISABLED))
-				.build())
+			.isThrownBy(keyset::activePrimary)
 			.returns("test-keyset", CryptoException.KeysetException::getName);
 	}
 
 	@Test
 	@DisplayName("should throw KeysetPendingDestructionException when the primary key is pending destruction")
 	void shouldThrowWhenPrimaryKeyIsPendingDestruction() {
+		final var keyset = ConcreteKeyset.builder()
+			.name("test-keyset")
+			.factory("test-factory")
+			.purpose(KeysetPurpose.ENCRYPTION)
+			.keyEncryptionKey(kek)
+			.key(createKey("primary-key", true, KeyStatus.PENDING_DESTRUCTION))
+			.build();
+
+		assertThat(keyset.getPrimary()).isNotNull();
+
 		assertThatExceptionOfType(CryptoException.KeysetPendingDestructionException.class)
-			.isThrownBy(() -> ConcreteKeyset.builder()
-				.name("test-keyset")
-				.factory("test-factory")
-				.purpose(KeysetPurpose.ENCRYPTION)
-				.keyEncryptionKey(kek)
-				.key(createKey("primary-key", true, KeyStatus.PENDING_DESTRUCTION))
-				.build())
+			.isThrownBy(keyset::activePrimary)
 			.returns("test-keyset", CryptoException.KeysetException::getName);
 	}
 
 	@Test
 	@DisplayName("should throw KeysetDestroyedException when the primary key has been destroyed")
 	void shouldThrowWhenPrimaryKeyIsDestroyed() {
+		final var keyset = ConcreteKeyset.builder()
+			.name("test-keyset")
+			.factory("test-factory")
+			.purpose(KeysetPurpose.ENCRYPTION)
+			.keyEncryptionKey(kek)
+			.key(createKey("primary-key", true, KeyStatus.DESTROYED))
+			.build();
+
+		assertThat(keyset.getPrimary()).isNotNull();
+
 		assertThatExceptionOfType(CryptoException.KeysetDestroyedException.class)
-			.isThrownBy(() -> ConcreteKeyset.builder()
-				.name("test-keyset")
-				.factory("test-factory")
-				.purpose(KeysetPurpose.ENCRYPTION)
-				.keyEncryptionKey(kek)
-				.key(createKey("primary-key", true, KeyStatus.DESTROYED))
-				.build())
+			.isThrownBy(keyset::activePrimary)
 			.returns("test-keyset", CryptoException.KeysetException::getName);
 	}
 
 	@Test
 	@DisplayName("should throw KeysetCompromisedException when the primary key is compromised")
 	void shouldThrowWhenPrimaryKeyIsCompromised() {
+		final var keyset = ConcreteKeyset.builder()
+			.name("test-keyset")
+			.factory("test-factory")
+			.purpose(KeysetPurpose.ENCRYPTION)
+			.keyEncryptionKey(kek)
+			.key(createKey("primary-key", true, KeyStatus.COMPROMISED))
+			.build();
+
+		assertThat(keyset.getPrimary()).isNotNull();
+
 		assertThatExceptionOfType(CryptoException.KeysetCompromisedException.class)
-			.isThrownBy(() -> ConcreteKeyset.builder()
+			.isThrownBy(keyset::activePrimary)
+			.returns("test-keyset", CryptoException.KeysetException::getName);
+	}
+
+	@Test
+	@DisplayName("should allow rotation when the primary key is in a non-operational state")
+	void shouldAllowRotationWhenPrimaryKeyIsNonOperational() {
+		for (final KeyStatus status : new KeyStatus[]{
+			KeyStatus.COMPROMISED, KeyStatus.DISABLED, KeyStatus.PENDING_DESTRUCTION, KeyStatus.DESTROYED
+		}) {
+			final var keyset = ConcreteKeyset.builder()
 				.name("test-keyset")
 				.factory("test-factory")
 				.purpose(KeysetPurpose.ENCRYPTION)
 				.keyEncryptionKey(kek)
-				.key(createKey("primary-key", true, KeyStatus.COMPROMISED))
-				.build())
-			.returns("test-keyset", CryptoException.KeysetException::getName);
+				.key(createKey("primary-key", true, status))
+				.build();
+
+			assertThat(keyset.rotate(KeyDefinition.of(TestAlgorithm.INSTANCE)))
+				.isNotNull();
+		}
 	}
 
 	@Test
@@ -458,6 +495,10 @@ class AbstractKeysetTest {
 		@Override
 		protected Keyset doRotate(KeyDefinition definition, String uniqueId) {
 			return this;
+		}
+
+		AbstractKeyTest.ConcreteKey activePrimary() {
+			return requireActivePrimary();
 		}
 
 		static Builder builder() {
