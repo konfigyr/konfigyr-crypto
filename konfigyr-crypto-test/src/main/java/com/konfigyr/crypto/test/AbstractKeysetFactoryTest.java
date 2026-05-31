@@ -336,11 +336,15 @@ public abstract class AbstractKeysetFactoryTest {
 
 			assertThatExceptionOfType(CryptoException.UnsupportedKeysetOperationException.class)
 				.as("Keyset '%s' must reject encrypt on a signing keyset", keyset.getName())
-				.isThrownBy(() -> keyset.encrypt(data));
+				.isThrownBy(() -> keyset.encrypt(data))
+				.returns(KeysetOperation.ENCRYPT, CryptoException.KeysetOperationException::attemptedOperation)
+				.returns(KeysetPurpose.SIGNING.operations(), CryptoException.UnsupportedKeysetOperationException::supportedOperations);
 
 			assertThatExceptionOfType(CryptoException.UnsupportedKeysetOperationException.class)
 				.as("Keyset '%s' must reject decrypt on a signing keyset", keyset.getName())
-				.isThrownBy(() -> keyset.decrypt(data));
+				.isThrownBy(() -> keyset.decrypt(data))
+				.returns(KeysetOperation.DECRYPT, CryptoException.KeysetOperationException::attemptedOperation)
+				.returns(KeysetPurpose.SIGNING.operations(), CryptoException.UnsupportedKeysetOperationException::supportedOperations);
 
 			assertThatIllegalArgumentException()
 				.as("sign must reject empty data for algorithm '%s'", label)
@@ -368,23 +372,30 @@ public abstract class AbstractKeysetFactoryTest {
 
 			assertThatExceptionOfType(CryptoException.KeysetOperationException.class)
 				.as("Keyset '%s' must throw when decrypting with a different context than the one used during encryption", keyset.getName())
-				.isThrownBy(() -> keyset.decrypt(cipherWithContext, ByteArray.fromString("wrong-context")));
+				.isThrownBy(() -> keyset.decrypt(cipherWithContext, ByteArray.fromString("wrong-context")))
+				.returns(KeysetOperation.DECRYPT, CryptoException.KeysetOperationException::attemptedOperation);
 
 			assertThatExceptionOfType(CryptoException.KeysetOperationException.class)
 				.as("Keyset '%s' must throw when decrypting with no context when one was used during encryption", keyset.getName())
-				.isThrownBy(() -> keyset.decrypt(cipherWithContext));
+				.isThrownBy(() -> keyset.decrypt(cipherWithContext))
+				.returns(KeysetOperation.DECRYPT, CryptoException.KeysetOperationException::attemptedOperation);
 
 			assertThatExceptionOfType(CryptoException.KeysetOperationException.class)
 				.as("Keyset '%s' must throw when decrypting a garbage byte sequence", keyset.getName())
-				.isThrownBy(() -> keyset.decrypt(garbage));
+				.isThrownBy(() -> keyset.decrypt(garbage))
+				.returns(KeysetOperation.DECRYPT, CryptoException.KeysetOperationException::attemptedOperation);
 
 			assertThatExceptionOfType(CryptoException.UnsupportedKeysetOperationException.class)
 				.as("Keyset '%s' must reject sign on an encryption keyset", keyset.getName())
-				.isThrownBy(() -> keyset.sign(data));
+				.isThrownBy(() -> keyset.sign(data))
+				.returns(KeysetOperation.SIGN, CryptoException.KeysetOperationException::attemptedOperation)
+				.returns(KeysetPurpose.ENCRYPTION.operations(), CryptoException.UnsupportedKeysetOperationException::supportedOperations);
 
 			assertThatExceptionOfType(CryptoException.UnsupportedKeysetOperationException.class)
 				.as("Keyset '%s' must reject verify on an encryption keyset", keyset.getName())
-				.isThrownBy(() -> keyset.verify(data, data));
+				.isThrownBy(() -> keyset.verify(data, data))
+				.returns(KeysetOperation.VERIFY, CryptoException.KeysetOperationException::attemptedOperation)
+				.returns(KeysetPurpose.ENCRYPTION.operations(), CryptoException.UnsupportedKeysetOperationException::supportedOperations);
 
 			assertThatIllegalArgumentException()
 				.as("encrypt must reject empty data for algorithm '%s'", label)

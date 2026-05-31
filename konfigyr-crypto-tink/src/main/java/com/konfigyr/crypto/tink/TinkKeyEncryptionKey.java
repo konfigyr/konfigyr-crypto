@@ -188,8 +188,8 @@ public class TinkKeyEncryptionKey extends AbstractKeyEncryptionKey {
 		 * {@link com.google.crypto.tink.KmsClient} that is responsible for handling the
 		 * given Key Encryption Key (KEK) URI.
 		 * <p>
-		 * The wrapping and unwrapping of private material key is executed remotely,
-		 * usually via HTTPS. Keep in mind that entire payload of the private key material
+		 * The wrapping and unwrapping of a private material key is executed remotely,
+		 * usually via HTTPS. Keep in mind that the entire payload of the private key material
 		 * is sent over the wire which, if not using SSL, may load to leaks of your
 		 * private keys. Apart from possible security risks, this way of wrapping your
 		 * keys could introduce performance penalties when it comes to handling larger
@@ -211,15 +211,15 @@ public class TinkKeyEncryptionKey extends AbstractKeyEncryptionKey {
 		 * {@link com.google.crypto.tink.KmsClient} that is responsible for handling the
 		 * given Key Encryption Key (KEK) URI.
 		 * <p>
-		 * The wrapping and unwrapping of private material key is executed via a randomly
+		 * The wrapping and unwrapping of a private material key is executed via a randomly
 		 * generated data encryption key (DEK) which is then sent to a KMS to be encrypted
 		 * or decrypted. The encrypted DEK is then stored with the encrypted key material.
 		 * When the {@link com.google.crypto.tink.proto.EncryptedKeyset} should be
 		 * unwrapped, the encrypted DEK is extracted and decrypted by the KMS and then
 		 * used to decrypt the key material.
 		 * <p>
-		 * When creating this typo of {@link KeyEncryptionKey} you can must supply the DEK
-		 * key template that would be generated, usually an AES key template is used.
+		 * When creating this typo of {@link KeyEncryptionKey} you must supply the DEK
+		 * key template that would be generated; usually an AES key template is used.
 		 * @param kekUri location where the remote KEK is located, can't be
 		 * {@literal null}
 		 * @param template the template name that should be used to generate the DEK,
@@ -239,18 +239,18 @@ public class TinkKeyEncryptionKey extends AbstractKeyEncryptionKey {
 		 * {@link com.google.crypto.tink.KmsClient} that is responsible for handling the
 		 * given Key Encryption Key (KEK) URI.
 		 * <p>
-		 * The wrapping and unwrapping of private material key is executed via a randomly
+		 * The wrapping and unwrapping of a private material key is executed via a randomly
 		 * generated data encryption key (DEK) which is then sent to a KMS to be encrypted
 		 * or decrypted. The encrypted DEK is then stored with the encrypted key material.
 		 * When the {@link com.google.crypto.tink.proto.EncryptedKeyset} should be
 		 * unwrapped, the encrypted DEK is extracted and decrypted by the KMS and then
 		 * used to decrypt the key material.
 		 * <p>
-		 * When creating this typo of {@link KeyEncryptionKey} you can must supply the DEK
-		 * key template that would be generated, usually an AES key template is used.
+		 * When creating this typo of {@link KeyEncryptionKey} you must supply the DEK
+		 * key template that would be generated; usually an AES key template is used.
 		 * @param kekUri location where the remote KEK is located, can't be
 		 * {@literal null}
-		 * @param template the template that should be used to generate the DEK, can't be
+		 * @param template the template that should be used to generate the DEK can't be
 		 * {@literal null}
 		 * @return Remote Envelope KMS key encryption key
 		 * @see <a href=

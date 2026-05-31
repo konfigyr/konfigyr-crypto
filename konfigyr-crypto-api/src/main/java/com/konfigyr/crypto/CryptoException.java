@@ -84,12 +84,18 @@ public abstract class CryptoException extends RuntimeException {
 		private static final long serialVersionUID = SERIAL;
 
 		/**
+		 * The algorithm that is not supported.
+		 */
+		private final Algorithm algorithm;
+
+		/**
 		 * Creates a new {@link UnsupportedAlgorithmException} for the given algorithm.
 		 *
 		 * @param algorithm unsupported algorithm, can't be {@literal null}
 		 */
 		public UnsupportedAlgorithmException(Algorithm algorithm) {
 			super("Unsupported algorithm: " + algorithm.name());
+			this.algorithm = algorithm;
 		}
 
 		/**
@@ -100,8 +106,18 @@ public abstract class CryptoException extends RuntimeException {
 		 */
 		public UnsupportedAlgorithmException(Algorithm algorithm, Throwable cause) {
 			super("Unsupported algorithm: " + algorithm.name(), cause);
+			this.algorithm = algorithm;
 		}
 
+		/**
+		 * Returns the {@link Algorithm} that caused the {@link UnsupportedAlgorithmException}.
+		 *
+		 * @return the algorithm, never {@literal null}
+		 */
+		@NonNull
+		public Algorithm getAlgorithm() {
+			return algorithm;
+		}
 	}
 
 	/**
@@ -233,16 +249,6 @@ public abstract class CryptoException extends RuntimeException {
 		private final String name;
 
 		/**
-		 * Creates a new {@link KeysetException} for the given {@link KeysetDefinition} and exception message.
-		 *
-		 * @param definition {@link KeysetDefinition} for which the exception was thrown, can't be {@literal null}
-		 * @param message exception message, can't be {@literal null}
-		 */
-		public KeysetException(KeysetDefinition definition, String message) {
-			this(definition.getName(), message);
-		}
-
-		/**
 		 * Creates a new {@link KeysetException} for the given {@link KeysetDefinition} name and exception message.
 		 *
 		 * @param name keyset name for which the exception was thrown, can't be {@literal null}
@@ -266,7 +272,7 @@ public abstract class CryptoException extends RuntimeException {
 		}
 
 		/**
-		 * Creates a new {@link KeysetException} for the given {@link KeysetDefinition} name,exception message
+		 * Creates a new {@link KeysetException} for the given {@link KeysetDefinition} name,exception message,
 		 * and cause.
 		 *
 		 * @param name keyset name for which the exception was thrown, can't be {@literal null}
@@ -355,7 +361,7 @@ public abstract class CryptoException extends RuntimeException {
 		private final KeysetOperation attemptedOperation;
 
 		/**
-		 * Creates a new {@link KeysetOperationException} for the given {@link Keyset}, operation
+		 * Creates a new {@link KeysetOperationException} for the given {@link Keyset}, operation,
 		 * and message.
 		 *
 		 * @param key the {@link Keyset} that was attempted to perform the operation upon, can't be {@literal null}
@@ -368,7 +374,7 @@ public abstract class CryptoException extends RuntimeException {
 		}
 
 		/**
-		 * Creates a new {@link KeysetOperationException} for the given {@link Keyset}, operation and cause.
+		 * Creates a new {@link KeysetOperationException} for the given {@link Keyset}, operation, and cause.
 		 *
 		 * @param key the {@link Keyset} that was attempted to perform the operation upon, can't be {@literal null}
 		 * @param operation the attempted {@link KeysetOperation}, can't be {@literal null}
@@ -381,7 +387,7 @@ public abstract class CryptoException extends RuntimeException {
 
 		/**
 		 * Creates a new {@link KeysetOperationException} for the given {@link Keyset}, operation,
-		 * exception message and cause.
+		 * exception message, and cause.
 		 *
 		 * @param key the {@link Keyset} that was attempted to perform the operation upon, can't be {@literal null}
 		 * @param operation the attempted {@link KeysetOperation}, can't be {@literal null}
@@ -423,7 +429,7 @@ public abstract class CryptoException extends RuntimeException {
 		private final Collection<KeysetOperation> supportedOperations;
 
 		/**
-		 * Creates a new {@link UnsupportedKeysetOperationException} for the given {@link Keyset}, operation
+		 * Creates a new {@link UnsupportedKeysetOperationException} for the given {@link Keyset}, operation,
 		 * and a collection of supported operations.
 		 *
 		 * @param name the name of the {@link Keyset} that attempted to perform the operation, can't be {@literal null}
@@ -474,17 +480,6 @@ public abstract class CryptoException extends RuntimeException {
 		 */
 		public KeysetNotFoundException(String name, String message) {
 			super(name, message);
-		}
-
-		/**
-		 * Creates a new {@link KeysetNotFoundException} for the given name, exception message and cause.
-		 *
-		 * @param name the name of the {@link Keyset} that was not found, can't be {@literal null}
-		 * @param message the exception message, can't be {@literal null}
-		 * @param cause the cause of the exception, can be {@literal null}
-		 */
-		public KeysetNotFoundException(String name, String message, Throwable cause) {
-			super(name, message, cause);
 		}
 
 	}
@@ -717,7 +712,7 @@ public abstract class CryptoException extends RuntimeException {
 	/**
 	 * Exception thrown when a {@link KeysetRepository#write(EncryptedKeyset)} call detects that
 	 * the keyset was modified by a concurrent operation between the time it was read and the time
-	 * the write was attempted. Callers should retry the operation from a fresh read.
+	 * the write operation was attempted. Callers should retry the operation from a fresh read.
 	 */
 	public static class KeysetConcurrentModificationException extends KeysetException {
 

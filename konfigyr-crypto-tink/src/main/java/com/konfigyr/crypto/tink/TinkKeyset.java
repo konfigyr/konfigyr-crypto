@@ -52,7 +52,7 @@ class TinkKeyset extends AbstractKeyset<TinkKey> {
 		final byte[] encrypted;
 
 		try {
-			final TinkKey key = getPrimary();
+			final TinkKey key = requireActivePrimary();
 
 			if (KeyType.OCTET == key.getType()) {
 				encrypted = primitive(key, Aead.class)
@@ -107,7 +107,7 @@ class TinkKeyset extends AbstractKeyset<TinkKey> {
 		final byte[] signature;
 
 		try {
-			final TinkKey key = getPrimary();
+			final TinkKey key = requireActivePrimary();
 
 			signature = primitive(key, PublicKeySign.class).sign(data.array());
 		} catch (GeneralSecurityException e) {

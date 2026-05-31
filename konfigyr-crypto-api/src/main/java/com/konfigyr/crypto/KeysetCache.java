@@ -15,7 +15,7 @@ import java.util.function.Supplier;
 public interface KeysetCache {
 
 	/**
-	 * Retrieves the {@link EncryptedKeyset} with the specified cached key, obtaining that
+	 * Retrieves the {@link EncryptedKeyset} with the specified cached key, getting that
 	 * value from {@link Supplier} if it is not present.
 	 * <p>
 	 * If possible, implementations of this method should ensure that the loading
@@ -23,7 +23,7 @@ public interface KeysetCache {
 	 * once in case of concurrent access on the same key.
 	 * @param key the key for which the {@link EncryptedKeyset} is to be returned, can't
 	 * be {@literal null}
-	 * @param supplier function that would obtain the value if the cached value is not
+	 * @param supplier function that would retrieve the value if the cached value is not
 	 * present in the cache, can't be {@literal null}
 	 * @return cached encrypted keyset, never {@literal null}
 	 */
