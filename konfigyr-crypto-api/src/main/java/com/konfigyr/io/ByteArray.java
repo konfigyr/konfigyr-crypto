@@ -22,8 +22,8 @@ import java.util.Arrays;
  * making a copy upon initialization and also makes a copy if the underlying bytes are
  * read.
  * <p>
- * This class also provides a way to encode the byte array into a plain or Base64 encoded
- * string.
+ * This class also provides a way to encode the byte array into a plain, Base64, or
+ * hexadecimal encoded string.
  *
  * @author Vladimir Spasic
  * @since 1.0.0
@@ -139,6 +139,17 @@ public final class ByteArray implements InputStreamSource, Serializable {
 	}
 
 	/**
+	 * Creates a new {@link ByteArray} instance from the given HEX encoded string.
+	 *
+	 * @return byte array, never {@literal null}
+	 * @param data HEX encoded string to be wrapped, can't be {@literal null}
+	 * @throws IllegalArgumentException when the HEX string is invalid
+	 */
+	public static ByteArray fromHexString(String data) {
+		return decode(data, ByteArrayCodec.HEX);
+	}
+
+	/**
 	 * Creates a new {@link ByteArray} instance from the given Base64 encoded string.
 	 *
 	 * @return byte array, never {@literal null}
@@ -172,6 +183,15 @@ public final class ByteArray implements InputStreamSource, Serializable {
 	@Override
 	public InputStream getInputStream() {
 		return new ByteArrayInputStream(array());
+	}
+
+	/**
+	 * Encodes the contents of this byte array into a HEX string.
+	 *
+	 * @return HEX encoded string, never {@literal null}.
+	 */
+	public String encodeHex() {
+		return encode(ByteArrayCodec.HEX);
 	}
 
 	/**

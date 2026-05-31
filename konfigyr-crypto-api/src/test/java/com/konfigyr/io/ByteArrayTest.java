@@ -108,16 +108,17 @@ class ByteArrayTest {
 	}
 
 	@Test
-	@DisplayName("should create a byte array using the hex codec and test encoding")
+	@DisplayName("should create a byte array using the hex string and test encoding")
 	void shouldDecodeAndEncodeHex() {
 		final var data = "737562a46563747320ee2034";
-		final var array = ByteArray.decode(data, ByteArrayCodec.HEX);
+		final var array = ByteArray.fromHexString(data);
 
 		assertThat(array)
 			.isNotNull()
 			.isEqualTo(ByteArray.decode(data, ByteArrayCodec.HEX));
 
-		assertThat(array.encode(ByteArrayCodec.HEX))
+		assertThat(array.encodeHex())
+			.isEqualTo(array.encode(ByteArrayCodec.HEX))
 			.isEqualTo(data)
 			.matches("[0-9a-f]+");
 	}
