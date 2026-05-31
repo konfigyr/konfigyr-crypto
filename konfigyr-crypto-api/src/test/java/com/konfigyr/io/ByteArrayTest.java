@@ -55,18 +55,18 @@ class ByteArrayTest {
 	@DisplayName("should create a byte array using the Base64 decoder function and test encoding")
 	void shouldDecodeAndEncodeBase64() {
 		final var data = "c3ViamVjdHM/ID4gMTA=";
-		final var array = ByteArray.decode(data, ByteArray.BASE_64_DECODER);
+		final var array = ByteArray.decode(data, ByteArrayCodec.BASE64);
 
 		assertThat(array)
 			.isNotNull()
 			.isEqualTo(ByteArray.fromBase64String(data));
 
 		assertThat(array.encodeBase64())
-			.isEqualTo(array.encode(ByteArray.BASE_64_ENCODER))
+			.isEqualTo(array.encode(ByteArrayCodec.BASE64))
 			.isEqualTo(data);
 
 		assertThat(array.encodeBase64Url())
-			.isNotEqualTo(array.encode(ByteArray.BASE_64_ENCODER))
+			.isNotEqualTo(array.encode(ByteArrayCodec.BASE64))
 			.isNotEqualTo(data);
 	}
 
@@ -74,19 +74,66 @@ class ByteArrayTest {
 	@DisplayName("should create a byte array using the Base64 URL safe decoder function and test encoding")
 	void shouldDecodeAndEncodeBase64UrlSafe() {
 		final var data = "c3ViamVjdHM_ID4gMTA=";
-		final var array = ByteArray.decode(data, ByteArray.BASE_64_URL_SAFE_DECODER);
+		final var array = ByteArray.decode(data, ByteArrayCodec.BASE64_URL_SAFE);
 
 		assertThat(array)
 			.isNotNull()
 			.isEqualTo(ByteArray.fromBase64UrlString(data));
 
 		assertThat(array.encodeBase64Url())
-			.isEqualTo(array.encode(ByteArray.BASE_64_URL_SAFE_ENCODER))
+			.isEqualTo(array.encode(ByteArrayCodec.BASE64_URL_SAFE))
 			.isEqualTo(data);
 
 		assertThat(array.encodeBase64())
-			.isNotEqualTo(array.encode(ByteArray.BASE_64_URL_SAFE_ENCODER))
+			.isNotEqualTo(array.encode(ByteArrayCodec.BASE64_URL_SAFE))
 			.isNotEqualTo(data);
+	}
+
+	@Test
+	@DisplayName("should create a byte array using the Base64 URL safe no-padding decoder and test encoding")
+	void shouldDecodeAndEncodeBase64UrlSafeNoPadding() {
+		final var data = "c3ViamVjdHM_ID4gMTA";
+		final var array = ByteArray.decode(data, ByteArrayCodec.BASE64_URL_SAFE_NO_PADDING);
+
+		assertThat(array)
+			.isNotNull()
+			.isEqualTo(ByteArray.fromBase64UrlString(data));
+
+		assertThat(array.encode(ByteArrayCodec.BASE64_URL_SAFE_NO_PADDING))
+			.isEqualTo(data)
+			.doesNotEndWith("=");
+
+		assertThat(array.encode(ByteArrayCodec.BASE64_URL_SAFE))
+			.isEqualTo(data + "=");
+	}
+
+	@Test
+	@DisplayName("should create a byte array using the hex codec and test encoding")
+	void shouldDecodeAndEncodeHex() {
+		final var data = "737562a46563747320ee2034";
+		final var array = ByteArray.decode(data, ByteArrayCodec.HEX);
+
+		assertThat(array)
+			.isNotNull()
+			.isEqualTo(ByteArray.decode(data, ByteArrayCodec.HEX));
+
+		assertThat(array.encode(ByteArrayCodec.HEX))
+			.isEqualTo(data)
+			.matches("[0-9a-f]+");
+	}
+
+	@Test
+	@DisplayName("should create a ByteArrayCodec from encoder and decoder using the factory method")
+	void shouldCreateCodecFromEncoderAndDecoder() {
+		final var data = "c3ViamVjdHM/ID4gMTA=";
+		final var codec = ByteArrayCodec.of(ByteArrayCodec.BASE64, ByteArrayCodec.BASE64);
+
+		assertThat(ByteArray.decode(data, codec))
+			.isNotNull()
+			.isEqualTo(ByteArray.fromBase64String(data));
+
+		assertThat(ByteArray.fromBase64String(data).encode(codec))
+			.isEqualTo(data);
 	}
 
 	@Test

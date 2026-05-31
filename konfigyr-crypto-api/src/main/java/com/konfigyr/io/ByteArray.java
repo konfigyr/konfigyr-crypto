@@ -14,7 +14,6 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Arrays;
-import java.util.Base64;
 
 /**
  * Utility class that serves as an immutable wrapper around a byte array.
@@ -36,28 +35,6 @@ public final class ByteArray implements InputStreamSource, Serializable {
 	private static final long serialVersionUID = 3838515107166328896L;
 
 	private static final ByteArray EMPTY = new ByteArray(new byte[0]);
-
-	/**
-	 * The implementation of the {@link Encoder} that uses {@link Base64.Encoder} to encode the byte array.
-	 */
-	public static final Encoder BASE_64_ENCODER = Base64.getEncoder()::encodeToString;
-
-	/**
-	 * The implementation of the {@link Decoder} that uses {@link Base64.Decoder} to decode the byte array.
-	 */
-	public static final Decoder BASE_64_DECODER = Base64.getDecoder()::decode;
-
-	/**
-	 * The implementation of the {@link Encoder} that uses URL Safe variant of the {@link Base64.Encoder} to
-	 * encode the value to a byte array.
-	 */
-	public static final Encoder BASE_64_URL_SAFE_ENCODER = Base64.getUrlEncoder()::encodeToString;
-
-	/**
-	 * The implementation of the {@link Decoder} that uses URL Safe variant of the {@link Base64.Decoder} to
-	 * decode the value to a byte array.
-	 */
-	public static final Decoder BASE_64_URL_SAFE_DECODER = Base64.getUrlDecoder()::decode;
 
 	/**
 	 * The underlying byte array that contains the actual data.
@@ -169,7 +146,7 @@ public final class ByteArray implements InputStreamSource, Serializable {
 	 * @throws IllegalArgumentException when the Base64 string is invalid
 	 */
 	public static ByteArray fromBase64String(String data) {
-		return decode(data, BASE_64_DECODER);
+		return decode(data, ByteArrayCodec.BASE64);
 	}
 
 	/**
@@ -180,7 +157,7 @@ public final class ByteArray implements InputStreamSource, Serializable {
 	 * @throws IllegalArgumentException when the Base64 string is invalid
 	 */
 	public static ByteArray fromBase64UrlString(String data) {
-		return decode(data, BASE_64_URL_SAFE_DECODER);
+		return decode(data, ByteArrayCodec.BASE64_URL_SAFE);
 	}
 
 	/**
@@ -203,7 +180,7 @@ public final class ByteArray implements InputStreamSource, Serializable {
 	 * @return Base64 encoded string, never {@literal null}.
 	 */
 	public String encodeBase64() {
-		return encode(BASE_64_ENCODER);
+		return encode(ByteArrayCodec.BASE64);
 	}
 
 	/**
@@ -212,7 +189,7 @@ public final class ByteArray implements InputStreamSource, Serializable {
 	 * @return Base64 URL encoded string, never {@literal null}.
 	 */
 	public String encodeBase64Url() {
-		return encode(BASE_64_URL_SAFE_ENCODER);
+		return encode(ByteArrayCodec.BASE64_URL_SAFE);
 	}
 
 	/**

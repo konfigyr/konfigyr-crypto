@@ -18,6 +18,9 @@ import org.jspecify.annotations.NullMarked;
 @NullMarked
 public enum TestAlgorithm implements Algorithm {
 
+	/**
+	 * The singleton instance of the {@link TestAlgorithm}.
+	 */
 	INSTANCE;
 
 	@Override
