@@ -1,34 +1,65 @@
 package com.konfigyr.crypto.test;
 
-import com.konfigyr.crypto.*;
+import com.konfigyr.crypto.Algorithm;
+import com.konfigyr.crypto.EncryptedKey;
+import com.konfigyr.crypto.Key;
+import com.konfigyr.crypto.KeyStatus;
+import com.konfigyr.crypto.KeyType;
 import com.konfigyr.crypto.WrappedKeyMaterial;
 import com.konfigyr.io.ByteArray;
-import org.assertj.core.api.AbstractObjectAssert;
-import org.assertj.core.api.Assertions;
-import org.assertj.core.api.InstanceOfAssertFactory;
-import org.assertj.core.api.InstantAssert;
-import org.assertj.core.description.Description;
-import org.assertj.core.description.TextDescription;
+import org.assertj.core.api.*;
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Objects;
+import java.util.function.Function;
 
-@SuppressWarnings("unused")
-public class EncryptedKeyAssert extends AbstractObjectAssert<EncryptedKeyAssert, EncryptedKey> {
+/**
+ * AssertJ assertions for verifying the state of an {@link EncryptedKey} instance.
+ * <p>
+ * Use {@link #assertThat(EncryptedKey)} as the primary entry point, or {@link #factory()} when
+ * working with {@link AbstractObjectAssert#asInstanceOf(InstanceOfAssertFactory)}.
+ * All assertion methods return {@code this} to support fluent method chaining.
+ *
+ * @author Vladimir Spasic
+ * @since 1.0.0
+ * @see EncryptedKey
+ */
+@NullMarked
+public class EncryptedKeyAssert extends AbstractObjectAssert<EncryptedKeyAssert, @Nullable EncryptedKey> {
 
+	/**
+	 * Returns an {@link InstanceOfAssertFactory} that creates {@link EncryptedKeyAssert} instances,
+	 * for use with {@link AbstractObjectAssert#asInstanceOf(InstanceOfAssertFactory)}.
+	 *
+	 * @return the instance-of assert factory, never {@literal null}
+	 */
 	public static InstanceOfAssertFactory<EncryptedKey, EncryptedKeyAssert> factory() {
 		return new InstanceOfAssertFactory<>(EncryptedKey.class, EncryptedKeyAssert::new);
 	}
 
-	public static EncryptedKeyAssert assertThat(EncryptedKey key) {
+	/**
+	 * Creates a new {@link EncryptedKeyAssert} for the given {@link EncryptedKey}.
+	 *
+	 * @param key the encrypted key to assert on, can be {@literal null}
+	 * @return the assertion, never {@literal null}
+	 */
+	public static EncryptedKeyAssert assertThat(@Nullable EncryptedKey key) {
 		return new EncryptedKeyAssert(key);
 	}
 
-	private EncryptedKeyAssert(EncryptedKey actual) {
+	private EncryptedKeyAssert(@Nullable EncryptedKey actual) {
 		super(actual, EncryptedKeyAssert.class);
 	}
 
+	/**
+	 * Verifies that all fields of this encrypted key — id, algorithm, type, status, primary flag,
+	 * and all timestamps — match the corresponding fields of the given {@link Key}.
+	 *
+	 * @param key the key to match against, can't be {@literal null}
+	 * @return this assertion for chaining, never {@literal null}
+	 */
 	public EncryptedKeyAssert matchesKey(Key key) {
 		return hasId(key.getId())
 			.hasAlgorithm(key.getAlgorithm())
@@ -42,142 +73,278 @@ public class EncryptedKeyAssert extends AbstractObjectAssert<EncryptedKeyAssert,
 			.isDestroyedAt(key.getDestroyedAt());
 	}
 
-	public EncryptedKeyAssert hasId(String id) {
-		isNotNull();
-		if (!Objects.equals(actual.getId(), id)) {
-			failWithMessage("Expected key to have an identifier <%s> but was <%s>", id, actual.getId());
-		}
+	/**
+	 * Verifies that the encrypted key has the expected identifier.
+	 *
+	 * @param id the expected identifier, can be {@literal null}
+	 * @return this assertion for chaining, never {@literal null}
+	 */
+	public EncryptedKeyAssert hasId(@Nullable String id) {
+		assertThatKey()
+			.extracting(EncryptedKey::getId, InstanceOfAssertFactories.STRING)
+			.as("key identifier")
+			.isEqualTo(id);
 		return myself;
 	}
 
-	public EncryptedKeyAssert hasAlgorithm(Algorithm algorithm) {
+	/**
+	 * Verifies that the encrypted key uses the expected {@link Algorithm}, compared by name.
+	 *
+	 * @param algorithm the expected algorithm, can be {@literal null}
+	 * @return this assertion for chaining, never {@literal null}
+	 */
+	public EncryptedKeyAssert hasAlgorithm(@Nullable Algorithm algorithm) {
 		return hasAlgorithm(algorithm == null ? null : algorithm.name());
 	}
 
-	public EncryptedKeyAssert hasAlgorithm(String algorithm) {
-		isNotNull();
-		if (!Objects.equals(actual.getAlgorithm(), algorithm)) {
-			failWithMessage("Expected key to have an algorithm <%s> but was <%s>",
-				algorithm, actual.getAlgorithm());
-		}
+	/**
+	 * Verifies that the encrypted key has the expected algorithm name.
+	 *
+	 * @param algorithm the expected algorithm name, can be {@literal null}
+	 * @return this assertion for chaining, never {@literal null}
+	 */
+	public EncryptedKeyAssert hasAlgorithm(@Nullable String algorithm) {
+		assertThatKey()
+			.extracting(EncryptedKey::getAlgorithm, InstanceOfAssertFactories.STRING)
+			.as("key algorithm")
+			.isEqualTo(algorithm);
 		return myself;
 	}
 
-	public EncryptedKeyAssert hasType(KeyType type) {
-		isNotNull();
-		if (!Objects.equals(actual.getType(), type)) {
-			failWithMessage("Expected key to be type of <%s> but was <%s>", type, actual.getType());
-		}
+	/**
+	 * Verifies that the encrypted key has the expected {@link KeyType}.
+	 *
+	 * @param type the expected key type, can be {@literal null}
+	 * @return this assertion for chaining, never {@literal null}
+	 */
+	public EncryptedKeyAssert hasType(@Nullable KeyType type) {
+		assertThatKey()
+			.extracting(EncryptedKey::getType)
+			.as("key type")
+			.isEqualTo(type);
 		return myself;
 	}
 
+	/**
+	 * Verifies that the encrypted key is in {@link KeyStatus#ENABLED} status.
+	 *
+	 * @return this assertion for chaining, never {@literal null}
+	 */
 	public EncryptedKeyAssert isEnabled() {
 		return hasStatus(KeyStatus.ENABLED);
 	}
 
-	public EncryptedKeyAssert hasStatus(KeyStatus status) {
+	/**
+	 * Verifies that the encrypted key has the expected {@link KeyStatus}.
+	 *
+	 * @param status the expected status, can be {@literal null}
+	 * @return this assertion for chaining, never {@literal null}
+	 */
+	public EncryptedKeyAssert hasStatus(@Nullable KeyStatus status) {
 		isNotNull();
-		if (!Objects.equals(actual.getStatus(), status)) {
-			failWithMessage("Expected key to be in status <%s> but was <%s>", status, actual.getStatus());
-		}
+		assertThatKey()
+			.extracting(EncryptedKey::getStatus)
+			.as("key status")
+			.isEqualTo(status);
 		return myself;
 	}
 
+	/**
+	 * Verifies that the encrypted key is the primary key in its keyset.
+	 *
+	 * @return this assertion for chaining, never {@literal null}
+	 */
 	public EncryptedKeyAssert isPrimary() {
 		return isPrimary(true);
 	}
 
+	/**
+	 * Verifies that the encrypted key is not the primary key in its keyset.
+	 *
+	 * @return this assertion for chaining, never {@literal null}
+	 */
 	public EncryptedKeyAssert isNotPrimary() {
 		return isPrimary(false);
 	}
 
+	/**
+	 * Verifies that the encrypted key's primary flag matches the expected value.
+	 *
+	 * @param primary the expected primary flag value
+	 * @return this assertion for chaining, never {@literal null}
+	 */
 	public EncryptedKeyAssert isPrimary(boolean primary) {
 		isNotNull();
-		if (primary != actual.isPrimary()) {
-			failWithMessage("Expected key to have primary state of <%s> but was <%s>",
-				primary, actual.isPrimary());
-		}
+		assertThatKey()
+			.extracting(EncryptedKey::isPrimary, InstanceOfAssertFactories.BOOLEAN)
+			.as("key primary flag")
+			.isEqualTo(primary);
 		return myself;
 	}
 
-	public EncryptedKeyAssert hasMaterial(String material) {
+	/**
+	 * Verifies that the encrypted key has the expected wrapped key material, supplied as a string.
+	 *
+	 * @param material the expected key material as a string, can be {@literal null}
+	 * @return this assertion for chaining, never {@literal null}
+	 */
+	public EncryptedKeyAssert hasMaterial(@Nullable String material) {
 		return hasMaterial(material == null ? null : WrappedKeyMaterial.of(material));
 	}
 
-	public EncryptedKeyAssert hasMaterial(ByteArray material) {
+	/**
+	 * Verifies that the encrypted key has the expected wrapped key material, supplied as a
+	 * {@link ByteArray}.
+	 *
+	 * @param material the expected key material, can be {@literal null}
+	 * @return this assertion for chaining, never {@literal null}
+	 */
+	public EncryptedKeyAssert hasMaterial(@Nullable ByteArray material) {
 		return hasMaterial(material == null ? null : WrappedKeyMaterial.of(material));
 	}
 
-	public EncryptedKeyAssert hasMaterial(WrappedKeyMaterial material) {
+	/**
+	 * Verifies that the encrypted key has the expected {@link WrappedKeyMaterial}.
+	 *
+	 * @param material the expected wrapped key material, can be {@literal null}
+	 * @return this assertion for chaining, never {@literal null}
+	 */
+	public EncryptedKeyAssert hasMaterial(@Nullable WrappedKeyMaterial material) {
 		isNotNull();
-		if (!Objects.equals(actual.getData(), material)) {
-			failWithMessage("Expected key to have key material of <%s> but was <%s>",
-				material, actual.getData());
-		}
+		assertThatKey()
+			.extracting(EncryptedKey::getData)
+			.as("key material")
+			.isEqualTo(material);
 		return myself;
 	}
 
-	public EncryptedKeyAssert isCreatedAt(Instant createdAt) {
+	/**
+	 * Verifies that the encrypted key was created at exactly the expected timestamp.
+	 *
+	 * @param createdAt the expected creation timestamp, can be {@literal null}
+	 * @return this assertion for chaining, never {@literal null}
+	 */
+	public EncryptedKeyAssert isCreatedAt(@Nullable Instant createdAt) {
 		return isCreatedAt(createdAt, Duration.ZERO);
 	}
 
-	public EncryptedKeyAssert isCreatedAt(Instant createdAt, Duration tolerance) {
-		return assertInstant(actual.getCreatedAt(), createdAt, tolerance, new TextDescription(
-			"Expected key to be created at <%s> but was <%s>", createdAt, actual.getCreatedAt()
-		));
+	/**
+	 * Verifies that the encrypted key was created within {@code tolerance} of the expected timestamp.
+	 *
+	 * @param createdAt the expected creation timestamp, can be {@literal null}
+	 * @param tolerance maximum acceptable difference, can't be {@literal null}
+	 * @return this assertion for chaining, never {@literal null}
+	 */
+	public EncryptedKeyAssert isCreatedAt(@Nullable Instant createdAt, Duration tolerance) {
+		return assertInstant(EncryptedKey::getCreatedAt, createdAt, tolerance, "key creation timestamp");
 	}
 
-	public EncryptedKeyAssert isInitializedAt(Instant initializedAt) {
+	/**
+	 * Verifies that the encrypted key was initialized at exactly the expected timestamp.
+	 *
+	 * @param initializedAt the expected initialization timestamp, can be {@literal null}
+	 * @return this assertion for chaining, never {@literal null}
+	 */
+	public EncryptedKeyAssert isInitializedAt(@Nullable Instant initializedAt) {
 		return isInitializedAt(initializedAt, Duration.ZERO);
 	}
 
-	public EncryptedKeyAssert isInitializedAt(Instant initializedAt, Duration tolerance) {
-		return assertInstant(actual.getInitializedAt(), initializedAt, tolerance, new TextDescription(
-			"Expected key to be initialized at <%s> but was <%s>", initializedAt, actual.getInitializedAt()
-		));
+	/**
+	 * Verifies that the encrypted key was initialized within {@code tolerance} of the expected timestamp.
+	 *
+	 * @param initializedAt the expected initialization timestamp, can be {@literal null}
+	 * @param tolerance maximum acceptable difference, can't be {@literal null}
+	 * @return this assertion for chaining, never {@literal null}
+	 */
+	public EncryptedKeyAssert isInitializedAt(@Nullable Instant initializedAt, Duration tolerance) {
+		return assertInstant(EncryptedKey::getInitializedAt, initializedAt, tolerance, "key initialization timestamp");
 	}
 
-	public EncryptedKeyAssert expiresAt(Instant expiresAt) {
+	/**
+	 * Verifies that the encrypted key expires at exactly the expected timestamp.
+	 *
+	 * @param expiresAt the expected expiry timestamp, can be {@literal null}
+	 * @return this assertion for chaining, never {@literal null}
+	 */
+	public EncryptedKeyAssert expiresAt(@Nullable Instant expiresAt) {
 		return expiresAt(expiresAt, Duration.ZERO);
 	}
 
-	public EncryptedKeyAssert expiresAt(Instant expiresAt, Duration tolerance) {
-		return assertInstant(actual.getExpiresAt(), expiresAt, tolerance, new TextDescription(
-			"Expected key to expire at <%s> but was <%s>", expiresAt, actual.getExpiresAt()
-		));
+	/**
+	 * Verifies that the encrypted key expires within {@code tolerance} of the expected timestamp.
+	 *
+	 * @param expiresAt the expected expiry timestamp, can be {@literal null}
+	 * @param tolerance maximum acceptable difference, can't be {@literal null}
+	 * @return this assertion for chaining, never {@literal null}
+	 */
+	public EncryptedKeyAssert expiresAt(@Nullable Instant expiresAt, Duration tolerance) {
+		return assertInstant(EncryptedKey::getExpiresAt, expiresAt, tolerance, "key expiry timestamp");
 	}
 
-	public EncryptedKeyAssert destructionScheduledAt(Instant destructionScheduledAt) {
+	/**
+	 * Verifies that key destruction is scheduled at exactly the expected timestamp.
+	 *
+	 * @param destructionScheduledAt the expected scheduled destruction timestamp, can be {@literal null}
+	 * @return this assertion for chaining, never {@literal null}
+	 */
+	public EncryptedKeyAssert destructionScheduledAt(@Nullable Instant destructionScheduledAt) {
 		return destructionScheduledAt(destructionScheduledAt, Duration.ZERO);
 	}
 
-	public EncryptedKeyAssert destructionScheduledAt(Instant destructionScheduledAt, Duration tolerance) {
-		return assertInstant(actual.getDestructionScheduledAt(), destructionScheduledAt, tolerance, new TextDescription(
-			"Expected key to be destroyed at <%s> but was <%s>", destructionScheduledAt,
-			actual.getDestructionScheduledAt()
-		));
+	/**
+	 * Verifies that key destruction is scheduled within {@code tolerance} of the expected timestamp.
+	 *
+	 * @param destructionScheduledAt the expected scheduled destruction timestamp, can be {@literal null}
+	 * @param tolerance maximum acceptable difference, can't be {@literal null}
+	 * @return this assertion for chaining, never {@literal null}
+	 */
+	public EncryptedKeyAssert destructionScheduledAt(@Nullable Instant destructionScheduledAt, Duration tolerance) {
+		return assertInstant(EncryptedKey::getDestructionScheduledAt, destructionScheduledAt, tolerance,
+			"key scheduled destruction timestamp");
 	}
 
-	public EncryptedKeyAssert isDestroyedAt(Instant destroyedAt) {
+	/**
+	 * Verifies that the encrypted key was destroyed at exactly the expected timestamp.
+	 *
+	 * @param destroyedAt the expected destruction timestamp, can be {@literal null}
+	 * @return this assertion for chaining, never {@literal null}
+	 */
+	public EncryptedKeyAssert isDestroyedAt(@Nullable Instant destroyedAt) {
 		return isDestroyedAt(destroyedAt, Duration.ZERO);
 	}
 
-	public EncryptedKeyAssert isDestroyedAt(Instant destroyedAt, Duration tolerance) {
-		return assertInstant(actual.getDestroyedAt(), destroyedAt, tolerance, new TextDescription(
-			"Expected key to be destroyed at <%s> but was <%s>", destroyedAt, actual.getDestroyedAt()
-		));
+	/**
+	 * Verifies that the encrypted key was destroyed within {@code tolerance} of the expected timestamp.
+	 *
+	 * @param destroyedAt the expected destruction timestamp, can be {@literal null}
+	 * @param tolerance maximum acceptable difference, can't be {@literal null}
+	 * @return this assertion for chaining, never {@literal null}
+	 */
+	public EncryptedKeyAssert isDestroyedAt(@Nullable Instant destroyedAt, Duration tolerance) {
+		return assertInstant(EncryptedKey::getDestroyedAt, destroyedAt, tolerance, "key destruction timestamp");
 	}
 
-	private EncryptedKeyAssert assertInstant(Instant actual, Instant expected, Duration tolerance, Description description) {
-		isNotNull();
+	private ObjectAssert<EncryptedKey> assertThatKey() {
+		return Assertions.assertThatObject(actual).isNotNull();
+	}
 
-		final InstantAssert assertion = new InstantAssert(actual)
-			.as(description);
-
+	private EncryptedKeyAssert assertInstant(
+		Function<EncryptedKey, @Nullable Instant> supplier,
+		@Nullable Instant expected,
+		Duration tolerance,
+		String description
+	) {
 		if (expected == null) {
-			assertion.isNull();
+			assertThatKey()
+				.extracting(supplier)
+				.as(description)
+				.isNull();
 		} else {
-			assertion.isCloseTo(actual, Assertions.within(tolerance));
+			assertThatKey()
+				.extracting(supplier)
+				.asInstanceOf(InstanceOfAssertFactories.INSTANT)
+				.as(description)
+				.isCloseTo(expected, Assertions.within(tolerance));
 		}
 
 		return myself;

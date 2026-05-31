@@ -3,15 +3,15 @@ package com.konfigyr.crypto;
 import com.konfigyr.crypto.test.KeyAssert;
 import com.konfigyr.crypto.test.KeysetAssert;
 import com.konfigyr.crypto.test.TestAlgorithm;
+import com.konfigyr.crypto.test.TestKey;
+import com.konfigyr.crypto.test.TestKeyset;
 import com.konfigyr.crypto.test.TestKeyEncryptionKey;
-import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -20,12 +20,12 @@ class AbstractKeysetTest {
 	static final KeyEncryptionKey kek = new TestKeyEncryptionKey("test-kek", "test-provider");
 	static final Instant now = Instant.parse("2026-01-01T00:00:00Z");
 
-	static AbstractKeyTest.ConcreteKey createKey(String id, boolean primary) {
+	static TestKey createKey(String id, boolean primary) {
 		return createKey(id, primary, KeyStatus.ENABLED);
 	}
 
-	static AbstractKeyTest.ConcreteKey createKey(String id, boolean primary, KeyStatus status) {
-		return AbstractKeyTest.ConcreteKey.builder()
+	static TestKey createKey(String id, boolean primary, KeyStatus status) {
+		return TestKey.builder()
 			.id(id)
 			.algorithm(TestAlgorithm.INSTANCE)
 			.status(status)
@@ -40,7 +40,7 @@ class AbstractKeysetTest {
 		final var primaryKey = createKey("primary-key", true);
 		final var secondKey = createKey("second-key", false);
 
-		final var keyset = ConcreteKeyset.builder()
+		final var keyset = TestKeyset.builder()
 			.name("test-keyset")
 			.factory("test-factory")
 			.purpose(KeysetPurpose.ENCRYPTION)
@@ -66,7 +66,7 @@ class AbstractKeysetTest {
 	void shouldBuildKeysetFromDefinition() {
 		final var definition = KeysetDefinition.of("test-keyset", TestAlgorithm.INSTANCE);
 
-		final var keyset = ConcreteKeyset.builder(definition)
+		final var keyset = TestKeyset.builder(definition)
 			.keyEncryptionKey(kek)
 			.key(createKey("primary-key", true))
 			.build();
@@ -86,7 +86,7 @@ class AbstractKeysetTest {
 			.disableDestructionGracePeriod()
 			.build();
 
-		final var keyset = ConcreteKeyset.builder(definition)
+		final var keyset = TestKeyset.builder(definition)
 			.keyEncryptionKey(kek)
 			.key(createKey("primary-key", true))
 			.build();
@@ -102,7 +102,7 @@ class AbstractKeysetTest {
 	void shouldCopyAllFieldsUsingCopyConstructor() {
 		final var primaryKey = createKey("primary-key", true);
 
-		final var original = ConcreteKeyset.builder()
+		final var original = TestKeyset.builder()
 			.name("test-keyset")
 			.factory("test-factory")
 			.purpose(KeysetPurpose.ENCRYPTION)
@@ -112,7 +112,7 @@ class AbstractKeysetTest {
 			.key(primaryKey)
 			.build();
 
-		final var copy = ConcreteKeyset.builder(original)
+		final var copy = TestKeyset.builder(original)
 			.keys(original.getKeys())
 			.build();
 
@@ -132,7 +132,7 @@ class AbstractKeysetTest {
 			.destructionGracePeriod(Duration.ofDays(30))
 			.build(List.of());
 
-		final var keyset = ConcreteKeyset.builder(encryptedKeyset)
+		final var keyset = TestKeyset.builder(encryptedKeyset)
 			.keyEncryptionKey(kek)
 			.key(createKey("primary-key", true))
 			.build();
@@ -152,7 +152,7 @@ class AbstractKeysetTest {
 		final var primaryKey = createKey("primary-key", true);
 		final var otherKey = createKey("other-key", false);
 
-		final var keyset = ConcreteKeyset.builder()
+		final var keyset = TestKeyset.builder()
 			.name("test-keyset")
 			.factory("test-factory")
 			.purpose(KeysetPurpose.ENCRYPTION)
@@ -167,7 +167,7 @@ class AbstractKeysetTest {
 	@Test
 	@DisplayName("should throw when no primary key is present in the keyset")
 	void shouldThrowWhenNoPrimaryKeyPresent() {
-		final var keyset = ConcreteKeyset.builder()
+		final var keyset = TestKeyset.builder()
 			.name("test-keyset")
 			.factory("test-factory")
 			.purpose(KeysetPurpose.ENCRYPTION)
@@ -184,7 +184,7 @@ class AbstractKeysetTest {
 	@Test
 	@DisplayName("should throw KeysetDisabledException when the primary key is disabled")
 	void shouldThrowWhenPrimaryKeyIsDisabled() {
-		final var keyset = ConcreteKeyset.builder()
+		final var keyset = TestKeyset.builder()
 			.name("test-keyset")
 			.factory("test-factory")
 			.purpose(KeysetPurpose.ENCRYPTION)
@@ -195,14 +195,14 @@ class AbstractKeysetTest {
 		assertThat(keyset.getPrimary()).isNotNull();
 
 		assertThatExceptionOfType(CryptoException.KeysetDisabledException.class)
-			.isThrownBy(keyset::activePrimary)
+			.isThrownBy(keyset::requireActivePrimary)
 			.returns("test-keyset", CryptoException.KeysetException::getName);
 	}
 
 	@Test
 	@DisplayName("should throw KeysetPendingDestructionException when the primary key is pending destruction")
 	void shouldThrowWhenPrimaryKeyIsPendingDestruction() {
-		final var keyset = ConcreteKeyset.builder()
+		final var keyset = TestKeyset.builder()
 			.name("test-keyset")
 			.factory("test-factory")
 			.purpose(KeysetPurpose.ENCRYPTION)
@@ -213,14 +213,14 @@ class AbstractKeysetTest {
 		assertThat(keyset.getPrimary()).isNotNull();
 
 		assertThatExceptionOfType(CryptoException.KeysetPendingDestructionException.class)
-			.isThrownBy(keyset::activePrimary)
+			.isThrownBy(keyset::requireActivePrimary)
 			.returns("test-keyset", CryptoException.KeysetException::getName);
 	}
 
 	@Test
 	@DisplayName("should throw KeysetDestroyedException when the primary key has been destroyed")
 	void shouldThrowWhenPrimaryKeyIsDestroyed() {
-		final var keyset = ConcreteKeyset.builder()
+		final var keyset = TestKeyset.builder()
 			.name("test-keyset")
 			.factory("test-factory")
 			.purpose(KeysetPurpose.ENCRYPTION)
@@ -231,14 +231,14 @@ class AbstractKeysetTest {
 		assertThat(keyset.getPrimary()).isNotNull();
 
 		assertThatExceptionOfType(CryptoException.KeysetDestroyedException.class)
-			.isThrownBy(keyset::activePrimary)
+			.isThrownBy(keyset::requireActivePrimary)
 			.returns("test-keyset", CryptoException.KeysetException::getName);
 	}
 
 	@Test
 	@DisplayName("should throw KeysetCompromisedException when the primary key is compromised")
 	void shouldThrowWhenPrimaryKeyIsCompromised() {
-		final var keyset = ConcreteKeyset.builder()
+		final var keyset = TestKeyset.builder()
 			.name("test-keyset")
 			.factory("test-factory")
 			.purpose(KeysetPurpose.ENCRYPTION)
@@ -249,7 +249,7 @@ class AbstractKeysetTest {
 		assertThat(keyset.getPrimary()).isNotNull();
 
 		assertThatExceptionOfType(CryptoException.KeysetCompromisedException.class)
-			.isThrownBy(keyset::activePrimary)
+			.isThrownBy(keyset::requireActivePrimary)
 			.returns("test-keyset", CryptoException.KeysetException::getName);
 	}
 
@@ -259,7 +259,7 @@ class AbstractKeysetTest {
 		for (final KeyStatus status : new KeyStatus[]{
 			KeyStatus.COMPROMISED, KeyStatus.DISABLED, KeyStatus.PENDING_DESTRUCTION, KeyStatus.DESTROYED
 		}) {
-			final var keyset = ConcreteKeyset.builder()
+			final var keyset = TestKeyset.builder()
 				.name("test-keyset")
 				.factory("test-factory")
 				.purpose(KeysetPurpose.ENCRYPTION)
@@ -278,7 +278,7 @@ class AbstractKeysetTest {
 		final var primaryKey = createKey("primary-key", true);
 		final var otherKey = createKey("other-key", false);
 
-		final var keyset = ConcreteKeyset.builder()
+		final var keyset = TestKeyset.builder()
 			.name("test-keyset")
 			.factory("test-factory")
 			.purpose(KeysetPurpose.ENCRYPTION)
@@ -299,7 +299,7 @@ class AbstractKeysetTest {
 	void shouldReplaceKeysUsingKeysMethod() {
 		final var replacement = createKey("replacement-key", true);
 
-		final var keyset = ConcreteKeyset.builder()
+		final var keyset = TestKeyset.builder()
 			.name("test-keyset")
 			.factory("test-factory")
 			.purpose(KeysetPurpose.ENCRYPTION)
@@ -316,11 +316,11 @@ class AbstractKeysetTest {
 	@Test
 	@DisplayName("should return rotation interval wrapped in an optional")
 	void shouldReturnRotationIntervalAsOptional() {
-		final var withInterval = ConcreteKeyset.builder()
+		final var withInterval = TestKeyset.builder()
 			.name("test-keyset").factory("test-factory").purpose(KeysetPurpose.ENCRYPTION)
 			.keyEncryptionKey(kek).rotationInterval(Duration.ofDays(90)).key(createKey("k", true)).build();
 
-		final var withoutInterval = ConcreteKeyset.builder()
+		final var withoutInterval = TestKeyset.builder()
 			.name("test-keyset").factory("test-factory").purpose(KeysetPurpose.ENCRYPTION)
 			.keyEncryptionKey(kek).rotationInterval(null).key(createKey("k", true)).build();
 
@@ -331,11 +331,11 @@ class AbstractKeysetTest {
 	@Test
 	@DisplayName("should return destruction grace period wrapped in an optional")
 	void shouldReturnDestructionGracePeriodAsOptional() {
-		final var withGrace = ConcreteKeyset.builder()
+		final var withGrace = TestKeyset.builder()
 			.name("test-keyset").factory("test-factory").purpose(KeysetPurpose.ENCRYPTION)
 			.keyEncryptionKey(kek).destructionGracePeriod(Duration.ofDays(30)).key(createKey("k", true)).build();
 
-		final var withoutGrace = ConcreteKeyset.builder()
+		final var withoutGrace = TestKeyset.builder()
 			.name("test-keyset").factory("test-factory").purpose(KeysetPurpose.ENCRYPTION)
 			.keyEncryptionKey(kek).destructionGracePeriod(null).key(createKey("k", true)).build();
 
@@ -346,7 +346,7 @@ class AbstractKeysetTest {
 	@Test
 	@DisplayName("should fail to rotate keyset with an unsupported algorithm")
 	void shouldFailToRotateWithUnsupportedAlgorithm() {
-		final var keyset = ConcreteKeyset.builder()
+		final var keyset = TestKeyset.builder()
 			.name("test-keyset")
 			.factory("test-factory")
 			.purpose(KeysetPurpose.SIGNING)
@@ -365,10 +365,10 @@ class AbstractKeysetTest {
 	void shouldBeEqualWhenAllFieldsMatch() {
 		final var key = createKey("key-id", true);
 
-		final var a = ConcreteKeyset.builder()
+		final var a = TestKeyset.builder()
 			.name("test-keyset").factory("test-factory").purpose(KeysetPurpose.ENCRYPTION)
 			.keyEncryptionKey(kek).key(key).build();
-		final var b = ConcreteKeyset.builder()
+		final var b = TestKeyset.builder()
 			.name("test-keyset").factory("test-factory").purpose(KeysetPurpose.ENCRYPTION)
 			.keyEncryptionKey(kek).key(key).build();
 
@@ -381,15 +381,15 @@ class AbstractKeysetTest {
 	void shouldNotBeEqualWhenFieldsDiffer() {
 		final var key = createKey("key-id", true);
 
-		final var keyset = ConcreteKeyset.builder()
+		final var keyset = TestKeyset.builder()
 			.name("test-keyset").factory("test-factory").purpose(KeysetPurpose.ENCRYPTION)
 			.keyEncryptionKey(kek).key(key).build();
 
-		assertThat(keyset).isNotEqualTo(ConcreteKeyset.builder()
+		assertThat(keyset).isNotEqualTo(TestKeyset.builder()
 			.name("other-keyset").factory("test-factory").purpose(KeysetPurpose.ENCRYPTION)
 			.keyEncryptionKey(kek).key(key).build());
 
-		assertThat(keyset).isNotEqualTo(ConcreteKeyset.builder()
+		assertThat(keyset).isNotEqualTo(TestKeyset.builder()
 			.name("test-keyset").factory("test-factory").purpose(KeysetPurpose.ENCRYPTION)
 			.keyEncryptionKey(kek).rotationInterval(Duration.ofDays(90)).key(key).build());
 	}
@@ -397,12 +397,12 @@ class AbstractKeysetTest {
 	@Test
 	@DisplayName("should include keyset fields in toString output")
 	void shouldIncludeFieldsInToString() {
-		final var keyset = ConcreteKeyset.builder()
+		final var keyset = TestKeyset.builder()
 			.name("test-keyset").factory("test-factory").purpose(KeysetPurpose.ENCRYPTION)
 			.keyEncryptionKey(kek).key(createKey("k", true)).build();
 
 		assertThat(keyset.toString())
-			.contains("ConcreteKeyset")
+			.contains("TestKeyset")
 			.contains("test-keyset")
 			.contains(KeysetPurpose.ENCRYPTION.name());
 	}
@@ -411,7 +411,7 @@ class AbstractKeysetTest {
 	@DisplayName("should fail to build when keyset name is blank")
 	void shouldFailToBuildWithBlankName() {
 		assertThatIllegalArgumentException()
-			.isThrownBy(() -> ConcreteKeyset.builder()
+			.isThrownBy(() -> TestKeyset.builder()
 				.factory("test-factory").purpose(KeysetPurpose.ENCRYPTION)
 				.keyEncryptionKey(kek).key(createKey("k", true)).build())
 			.withMessage("Keyset name can't be blank");
@@ -421,7 +421,7 @@ class AbstractKeysetTest {
 	@DisplayName("should fail to build when factory is null")
 	void shouldFailToBuildWithNullFactory() {
 		assertThatIllegalArgumentException()
-			.isThrownBy(() -> ConcreteKeyset.builder()
+			.isThrownBy(() -> TestKeyset.builder()
 				.name("test-keyset").purpose(KeysetPurpose.ENCRYPTION)
 				.keyEncryptionKey(kek).key(createKey("k", true)).build())
 			.withMessage("Keyset factory can't be null");
@@ -431,7 +431,7 @@ class AbstractKeysetTest {
 	@DisplayName("should fail to build when purpose is null")
 	void shouldFailToBuildWithNullPurpose() {
 		assertThatIllegalArgumentException()
-			.isThrownBy(() -> ConcreteKeyset.builder()
+			.isThrownBy(() -> TestKeyset.builder()
 				.name("test-keyset").factory("test-factory")
 				.keyEncryptionKey(kek).key(createKey("k", true)).build())
 			.withMessage("Keyset purpose can't be null");
@@ -441,7 +441,7 @@ class AbstractKeysetTest {
 	@DisplayName("should fail to build when key encryption key is null")
 	void shouldFailToBuildWithNullKek() {
 		assertThatIllegalArgumentException()
-			.isThrownBy(() -> ConcreteKeyset.builder()
+			.isThrownBy(() -> TestKeyset.builder()
 				.name("test-keyset").factory("test-factory").purpose(KeysetPurpose.ENCRYPTION)
 				.key(createKey("k", true)).build())
 			.withMessage("Keyset key encryption key can't be null");
@@ -451,7 +451,7 @@ class AbstractKeysetTest {
 	@DisplayName("should fail to build when the keyset has no keys")
 	void shouldFailToBuildWithNoKeys() {
 		assertThatIllegalArgumentException()
-			.isThrownBy(() -> ConcreteKeyset.builder()
+			.isThrownBy(() -> TestKeyset.builder()
 				.name("test-keyset").factory("test-factory").purpose(KeysetPurpose.ENCRYPTION)
 				.keyEncryptionKey(kek).build())
 			.withMessage("Keyset must have at least one key");
@@ -461,7 +461,7 @@ class AbstractKeysetTest {
 	@DisplayName("should reject a duplicate key id when using the key builder method")
 	void shouldRejectDuplicateKeyIdViaKeyMethod() {
 		assertThatIllegalArgumentException()
-			.isThrownBy(() -> ConcreteKeyset.builder()
+			.isThrownBy(() -> TestKeyset.builder()
 				.name("test-keyset").factory("test-factory").purpose(KeysetPurpose.ENCRYPTION)
 				.keyEncryptionKey(kek)
 				.key(createKey("duplicate-id", true))
@@ -473,75 +473,11 @@ class AbstractKeysetTest {
 	@DisplayName("should reject a duplicate key id when using the keys builder method")
 	void shouldRejectDuplicateKeyIdViaKeysMethod() {
 		assertThatIllegalArgumentException()
-			.isThrownBy(() -> ConcreteKeyset.builder()
+			.isThrownBy(() -> TestKeyset.builder()
 				.name("test-keyset").factory("test-factory").purpose(KeysetPurpose.ENCRYPTION)
 				.keyEncryptionKey(kek)
 				.keys(List.of(createKey("duplicate-id", true), createKey("duplicate-id", false))))
 			.withMessage("Key with id 'duplicate-id' already exists in this keyset");
-	}
-
-	@NullMarked
-	static final class ConcreteKeyset extends AbstractKeyset<AbstractKeyTest.ConcreteKey> {
-
-		private ConcreteKeyset(Builder builder) {
-			super(builder);
-		}
-
-		@Override
-		protected String generateId() {
-			return UUID.randomUUID().toString();
-		}
-
-		@Override
-		protected Keyset doRotate(KeyDefinition definition, String uniqueId) {
-			return this;
-		}
-
-		AbstractKeyTest.ConcreteKey activePrimary() {
-			return requireActivePrimary();
-		}
-
-		static Builder builder() {
-			return new Builder();
-		}
-
-		static Builder builder(KeysetDefinition definition) {
-			return new Builder(definition);
-		}
-
-		static Builder builder(ConcreteKeyset keyset) {
-			return new Builder(keyset);
-		}
-
-		static Builder builder(EncryptedKeyset keyset) {
-			return new Builder(keyset);
-		}
-
-		static final class Builder extends AbstractKeyset.Builder<AbstractKeyTest.ConcreteKey, ConcreteKeyset, Builder> {
-
-			Builder() {
-				super();
-			}
-
-			Builder(KeysetDefinition definition) {
-				super(definition);
-			}
-
-			Builder(ConcreteKeyset keyset) {
-				super(keyset);
-			}
-
-			Builder(EncryptedKeyset keyset) {
-				super(keyset);
-			}
-
-			@Override
-			public ConcreteKeyset build() {
-				return new ConcreteKeyset(this);
-			}
-
-		}
-
 	}
 
 }

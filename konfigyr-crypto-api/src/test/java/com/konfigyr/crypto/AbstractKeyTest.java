@@ -2,6 +2,7 @@ package com.konfigyr.crypto;
 
 import com.konfigyr.crypto.test.KeyAssert;
 import com.konfigyr.crypto.test.TestAlgorithm;
+import com.konfigyr.crypto.test.TestKey;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -19,7 +20,7 @@ class AbstractKeyTest {
 	void shouldSetCreationTimestampByDefault() {
 		final var before = Instant.now();
 
-		final var key = ConcreteKey.builder()
+		final var key = TestKey.builder()
 			.id("key-id")
 			.algorithm(TestAlgorithm.INSTANCE)
 			.status(KeyStatus.ENABLED)
@@ -31,7 +32,7 @@ class AbstractKeyTest {
 	@Test
 	@DisplayName("should build a key with all fields populated")
 	void shouldBuildKeyWithAllFields() {
-		final var key = ConcreteKey.builder()
+		final var key = TestKey.builder()
 			.id("key-id")
 			.algorithm(TestAlgorithm.INSTANCE)
 			.status(KeyStatus.ENABLED)
@@ -59,7 +60,7 @@ class AbstractKeyTest {
 	@Test
 	@DisplayName("should use enabled() shorthand to set ENABLED status")
 	void shouldUseEnabledShorthand() {
-		final var key = ConcreteKey.builder()
+		final var key = TestKey.builder()
 			.id("key-id")
 			.algorithm(TestAlgorithm.INSTANCE)
 			.enabled()
@@ -72,7 +73,7 @@ class AbstractKeyTest {
 	@Test
 	@DisplayName("should use primary() shorthand to mark key as primary")
 	void shouldUsePrimaryShorthand() {
-		final var key = ConcreteKey.builder()
+		final var key = TestKey.builder()
 			.id("key-id")
 			.algorithm(TestAlgorithm.INSTANCE)
 			.enabled()
@@ -88,7 +89,7 @@ class AbstractKeyTest {
 	void shouldCalculateExpiryFromRotationInterval() {
 		final var before = Instant.now();
 
-		final var key = ConcreteKey.builder()
+		final var key = TestKey.builder()
 			.id("key-id")
 			.algorithm(TestAlgorithm.INSTANCE)
 			.enabled()
@@ -104,7 +105,7 @@ class AbstractKeyTest {
 	@Test
 	@DisplayName("should set expiry time to null when rotation interval is null")
 	void shouldSetExpiryToNullWhenRotationIntervalIsNull() {
-		final var key = ConcreteKey.builder()
+		final var key = TestKey.builder()
 			.id("key-id")
 			.algorithm(TestAlgorithm.INSTANCE)
 			.enabled()
@@ -120,7 +121,7 @@ class AbstractKeyTest {
 	void shouldCalculateDestructionTimeFromGracePeriod() {
 		final var before = Instant.now();
 
-		final var key = ConcreteKey.builder()
+		final var key = TestKey.builder()
 			.id("key-id")
 			.algorithm(TestAlgorithm.INSTANCE)
 			.enabled()
@@ -136,7 +137,7 @@ class AbstractKeyTest {
 	@Test
 	@DisplayName("should set scheduled destruction time to null when grace period is null")
 	void shouldSetDestructionToNullWhenGracePeriodIsNull() {
-		final var key = ConcreteKey.builder()
+		final var key = TestKey.builder()
 			.id("key-id")
 			.algorithm(TestAlgorithm.INSTANCE)
 			.enabled()
@@ -150,7 +151,7 @@ class AbstractKeyTest {
 	@Test
 	@DisplayName("should copy all fields using the copy constructor")
 	void shouldCopyAllFieldsUsingCopyConstructor() {
-		final var original = ConcreteKey.builder()
+		final var original = TestKey.builder()
 			.id("key-id")
 			.algorithm(TestAlgorithm.INSTANCE)
 			.status(KeyStatus.ENABLED)
@@ -160,7 +161,7 @@ class AbstractKeyTest {
 			.expiresAt(now.plusSeconds(3600))
 			.build();
 
-		final var copy = new ConcreteKey.Builder(original).build();
+		final var copy = TestKey.builder(original).build();
 
 		assertThat(copy).isEqualTo(original);
 		assertThat(copy.hashCode()).isEqualTo(original.hashCode());
@@ -169,13 +170,13 @@ class AbstractKeyTest {
 	@Test
 	@DisplayName("should be equal when all fields match")
 	void shouldBeEqualWhenAllFieldsMatch() {
-		final var a = ConcreteKey.builder()
+		final var a = TestKey.builder()
 			.id("key-id").algorithm(TestAlgorithm.INSTANCE)
 			.status(KeyStatus.ENABLED)
 			.createdAt(now)
 			.build();
 
-		final var b = ConcreteKey.builder()
+		final var b = TestKey.builder()
 			.id("key-id")
 			.algorithm(TestAlgorithm.INSTANCE)
 			.status(KeyStatus.ENABLED)
@@ -189,27 +190,27 @@ class AbstractKeyTest {
 	@Test
 	@DisplayName("should not be equal when fields differ")
 	void shouldNotBeEqualWhenFieldsDiffer() {
-		final var key = ConcreteKey.builder()
+		final var key = TestKey.builder()
 			.id("key-id").algorithm(TestAlgorithm.INSTANCE).status(KeyStatus.ENABLED).createdAt(now).build();
 
-		assertThat(key).isNotEqualTo(ConcreteKey.builder()
+		assertThat(key).isNotEqualTo(TestKey.builder()
 			.id("other-id").algorithm(TestAlgorithm.INSTANCE).status(KeyStatus.ENABLED).createdAt(now).build());
 
-		assertThat(key).isNotEqualTo(ConcreteKey.builder()
+		assertThat(key).isNotEqualTo(TestKey.builder()
 			.id("key-id").algorithm(TestAlgorithm.INSTANCE).status(KeyStatus.DISABLED).createdAt(now).build());
 
-		assertThat(key).isNotEqualTo(ConcreteKey.builder()
+		assertThat(key).isNotEqualTo(TestKey.builder()
 			.id("key-id").algorithm(TestAlgorithm.INSTANCE).status(KeyStatus.ENABLED).primary(true).createdAt(now).build());
 	}
 
 	@Test
 	@DisplayName("should include key fields in toString output")
 	void shouldIncludeFieldsInToString() {
-		final var key = ConcreteKey.builder()
+		final var key = TestKey.builder()
 			.id("key-id").algorithm(TestAlgorithm.INSTANCE).status(KeyStatus.ENABLED).createdAt(now).build();
 
 		assertThat(key.toString())
-			.contains("ConcreteKey")
+			.contains("TestKey")
 			.contains("key-id")
 			.contains(KeyStatus.ENABLED.name());
 	}
@@ -218,7 +219,7 @@ class AbstractKeyTest {
 	@DisplayName("should fail to build when key identifier is null")
 	void shouldFailToBuildWithNullId() {
 		assertThatIllegalArgumentException()
-			.isThrownBy(() -> ConcreteKey.builder()
+			.isThrownBy(() -> TestKey.builder()
 				.algorithm(TestAlgorithm.INSTANCE)
 				.status(KeyStatus.ENABLED)
 				.createdAt(now)
@@ -230,7 +231,7 @@ class AbstractKeyTest {
 	@DisplayName("should fail to build when algorithm is null")
 	void shouldFailToBuildWithNullAlgorithm() {
 		assertThatIllegalArgumentException()
-			.isThrownBy(() -> ConcreteKey.builder()
+			.isThrownBy(() -> TestKey.builder()
 				.id("key-id").status(KeyStatus.ENABLED).createdAt(now).build())
 			.withMessage("Key algorithm can't be null");
 	}
@@ -239,7 +240,7 @@ class AbstractKeyTest {
 	@DisplayName("should fail to build when status is null")
 	void shouldFailToBuildWithNullStatus() {
 		assertThatIllegalArgumentException()
-			.isThrownBy(() -> ConcreteKey.builder()
+			.isThrownBy(() -> TestKey.builder()
 				.id("key-id").algorithm(TestAlgorithm.INSTANCE).createdAt(now).build())
 			.withMessage("Key status can't be null");
 	}
@@ -248,37 +249,9 @@ class AbstractKeyTest {
 	@DisplayName("should fail to build when creation timestamp is null")
 	void shouldFailToBuildWithNullCreatedAt() {
 		assertThatIllegalArgumentException()
-			.isThrownBy(() -> ConcreteKey.builder()
+			.isThrownBy(() -> TestKey.builder()
 				.id("key-id").algorithm(TestAlgorithm.INSTANCE).status(KeyStatus.ENABLED).createdAt(null).build())
 			.withMessage("Key creation time can't be null");
-	}
-
-	static final class ConcreteKey extends AbstractKey<Algorithm> {
-
-		private ConcreteKey(Builder builder) {
-			super(builder);
-		}
-
-		static Builder builder() {
-			return new Builder();
-		}
-
-		static final class Builder extends AbstractKey.Builder<Algorithm, ConcreteKey, Builder> {
-
-			Builder() {
-			}
-
-			Builder(ConcreteKey key) {
-				super(key);
-			}
-
-			@Override
-			public ConcreteKey build() {
-				return new ConcreteKey(this);
-			}
-
-		}
-
 	}
 
 }
