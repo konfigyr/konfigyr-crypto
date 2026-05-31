@@ -16,6 +16,63 @@ Where possible, Key Encryption Keys should be stored in a separate location from
 
 It is recommended that your Key Encryption Keys are managed by an external Key Management Service where wrapping and unwrapping of the DEKs occurs on the KMS servers . This way the private key material of the KEK is not known to your application making your system more resilient to attackers.
 
+## Getting Started
+
+The easiest way to consume this library is to import the BOM and then declare only the modules you need — without specifying versions.
+
+**Gradle (Kotlin DSL)**
+
+```kotlin
+dependencies {
+    implementation(platform("com.konfigyr:konfigyr-crypto-dependencies:1.0.0-RC6"))
+
+    // pick the modules you need — versions are managed by the BOM
+    implementation("com.konfigyr:konfigyr-crypto-api")
+    implementation("com.konfigyr:konfigyr-crypto-tink")   // Google Tink implementation
+    implementation("com.konfigyr:konfigyr-crypto-jose")   // Nimbus JOSE JWT implementation
+    implementation("com.konfigyr:konfigyr-crypto-jdbc")   // JDBC KeysetRepository
+}
+```
+
+**Maven**
+
+```xml
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>com.konfigyr</groupId>
+            <artifactId>konfigyr-crypto-dependencies</artifactId>
+            <version>1.0.0-RC6</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+
+<dependencies>
+    <dependency>
+        <groupId>com.konfigyr</groupId>
+        <artifactId>konfigyr-crypto-api</artifactId>
+    </dependency>
+    <!-- add konfigyr-crypto-tink, konfigyr-crypto-jose, or konfigyr-crypto-jdbc as needed -->
+</dependencies>
+```
+
+Check [Maven Central](https://central.sonatype.com/search?q=g%3Acom.konfigyr) for the latest release version.
+
+### Available modules
+
+| Artifact | Description |
+|---|---|
+| `konfigyr-crypto-api` | Core API — interfaces, autoconfiguration, and `KeysetStore` |
+| `konfigyr-crypto-tink` | [Google Tink](https://github.com/tink-crypto/tink-java) `KeysetFactory` and `KeyEncryptionKey` implementation |
+| `konfigyr-crypto-jose` | [Nimbus JOSE JWT](https://connect2id.com/products/nimbus-jose-jwt) `KeysetFactory` implementation |
+| `konfigyr-crypto-jdbc` | JDBC-backed `KeysetRepository` |
+| `konfigyr-crypto-test` | Test-support library — AssertJ assertions and base test classes for custom `KeysetFactory` implementations; use in `testImplementation` scope |
+| `konfigyr-crypto-dependencies` | BOM — import this to manage all module versions in one place |
+
+---
+
 ## Key concepts
 
 The goal of this library is not re-implement the wheel when it comes to cryptography, but rather to define a Java API how should a client application encrypt data and manage the keys that are used to encrypt it.

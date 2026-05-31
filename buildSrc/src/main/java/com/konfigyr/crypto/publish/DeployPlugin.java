@@ -2,6 +2,7 @@ package com.konfigyr.crypto.publish;
 
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
+import org.gradle.api.plugins.JavaPlatformPlugin;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginExtension;
 import org.gradle.api.publish.Publication;
@@ -47,10 +48,18 @@ public class DeployPlugin implements Plugin<@NonNull Project> {
 		final PublishingExtension publishing = project.getExtensions().getByType(PublishingExtension.class);
 
 		final MavenPublication publication = publishing.getPublications().create("maven", MavenPublication.class);
-		publication.from(project.getComponents().findByName("java"));
-		publication.versionMapping(this::customizeVersionMappings);
 
-		customizePom(publication.getPom(), project);
+		project.getPlugins().withType(JavaPlugin.class, plugin -> {
+			publication.from(project.getComponents().getByName("java"));
+			publication.versionMapping(this::customizeVersionMappings);
+			customizePom(publication.getPom(), project, true);
+		});
+
+		project.getPlugins().withType(JavaPlatformPlugin.class, plugin -> {
+			publication.from(project.getComponents().getByName("javaPlatform"));
+			customizePom(publication.getPom(), project, false);
+		});
+
 		customizeSigningExtension(publication, project, extension);
 	}
 
@@ -67,7 +76,7 @@ public class DeployPlugin implements Plugin<@NonNull Project> {
 		mappings.usage("java-runtime", VariantVersionMappingStrategy::fromResolutionResult);
 	}
 
-	private void customizePom(MavenPom pom, Project project) {
+	private void customizePom(MavenPom pom, Project project, boolean cleanup) {
 		pom.getUrl().set("https://github.com/konfigyr/konfigyr-crypto");
 		pom.getName().set(project.provider(project::getName));
 		pom.getDescription().set(project.provider(project::getDescription));
@@ -95,6 +104,12 @@ public class DeployPlugin implements Plugin<@NonNull Project> {
 			licence.getName().set("The Apache License, Version 2.0");
 			licence.getUrl().set("https://www.apache.org/licenses/LICENSE-2.0.txt");
 		}));
+
+		// BOM (java-platform) modules must retain `dependencyManagement`, it is the entire content of
+		// a BOM POM. For all other modules, remove it because versions are resolved via version mapping.
+		if (!cleanup) {
+			return;
+		}
 
 		// Removes the dependency management node from the generated POM. This is not needed as the
 		// dependency versions are already resolved using configured version mapping strategies

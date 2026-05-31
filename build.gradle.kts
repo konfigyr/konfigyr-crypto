@@ -17,6 +17,10 @@ allprojects {
 }
 
 subprojects {
+    if (name == "konfigyr-crypto-dependencies") {
+        return@subprojects
+    }
+
     apply(plugin = "jacoco")
     apply(plugin = "checkstyle")
     apply(plugin = "java-library")

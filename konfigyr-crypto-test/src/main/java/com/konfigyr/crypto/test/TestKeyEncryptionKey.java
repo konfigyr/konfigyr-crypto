@@ -37,7 +37,7 @@ public class TestKeyEncryptionKey extends AbstractKeyEncryptionKey {
 	/**
 	 * The default instance of {@link TestKeyEncryptionKey}.
 	 */
-	public static KeyEncryptionKey INSTANCE = new TestKeyEncryptionKey("test-provider", "test-kek");
+	public static KeyEncryptionKey INSTANCE = new TestKeyEncryptionKey("test-kek", "test-provider");
 
 	private final SecretKey secretKey;
 
