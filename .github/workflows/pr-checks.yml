@@ -43,6 +43,6 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Test coverage reports
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
