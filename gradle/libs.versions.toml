@@ -12,7 +12,7 @@ spring-starter-test = { module = "org.springframework.boot:spring-boot-starter-t
 spring-starter-jdbc-test = { module = "org.springframework.boot:spring-boot-starter-jdbc-test", version.ref = "spring-boot" }
 
 jose-jwt = { module = "com.nimbusds:nimbus-jose-jwt", version = "10.9.1" }
-tink = { module = "com.google.crypto.tink:tink", version = "1.21.0" }
+tink = { module = "com.google.crypto.tink:tink", version = "1.22.0" }
 
 [plugins]
 lombok = { id = "io.freefair.lombok", version = "9.5.0" }

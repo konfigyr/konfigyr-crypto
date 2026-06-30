@@ -1,10 +1,10 @@
 package com.konfigyr.crypto.tink;
 
 import com.google.crypto.tink.*;
+import com.google.crypto.tink.ProtoKeySerialization;
 import com.google.crypto.tink.internal.MutableSerializationRegistry;
-import com.google.crypto.tink.internal.ProtoKeySerialization;
+import com.google.crypto.tink.internal.ProtoConversions;
 import com.google.crypto.tink.proto.KeyData;
-import com.google.crypto.tink.proto.OutputPrefixType;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.konfigyr.crypto.*;
 import com.konfigyr.crypto.Key;
@@ -74,11 +74,11 @@ public class TinkKeysetFactory implements KeysetFactory {
 
 			try {
 				final ProtoKeySerialization serialization = MutableSerializationRegistry.globalInstance()
-					.serializeKey(((TinkKey) key).getValue(), ProtoKeySerialization.class, InsecureSecretKeyAccess.get());
+					.serializeKey(((TinkKey) key).getValue(), InsecureSecretKeyAccess.get());
 
 				final KeyData data = KeyData.newBuilder()
 					.setTypeUrl(serialization.getTypeUrl())
-					.setKeyMaterialType(serialization.getKeyMaterialType())
+					.setKeyMaterialType(ProtoConversions.toProto(serialization.getKeyMaterialType()))
 					.setValue(serialization.getValue())
 					.build();
 
@@ -118,8 +118,8 @@ public class TinkKeysetFactory implements KeysetFactory {
 				final ProtoKeySerialization serialization = ProtoKeySerialization.create(
 					data.getTypeUrl(),
 					data.getValue(),
-					data.getKeyMaterialType(),
-					OutputPrefixType.TINK,
+					ProtoConversions.fromProto(data.getKeyMaterialType()),
+					ProtoKeySerialization.OutputPrefixType.TINK,
 					Integer.parseInt(encrypted.getId())
 				);
 
