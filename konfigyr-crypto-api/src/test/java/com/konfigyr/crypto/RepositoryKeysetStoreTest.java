@@ -706,6 +706,81 @@ class RepositoryKeysetStoreTest {
 		assertThatIllegalArgumentException().isThrownBy(() -> store.destroy(definition.getName(), ""));
 	}
 
+	@Test
+	@DisplayName("should rotate the keyset by name with a key definition and persist the result")
+	void shouldRotateKeysetByNameWithDefinition() throws IOException {
+		final var rotated = mock(Keyset.class);
+		final var rotatedEncryptedKeyset = mock(EncryptedKeyset.class);
+		final var keyDefinition = KeyDefinition.of(TestAlgorithm.INSTANCE);
+
+		doReturn(true).when(factory).supports(any(EncryptedKeyset.class));
+		doReturn(keyset).when(factory).create(kek, encryptedKeyset);
+		doReturn(KeysetPurpose.ENCRYPTION).when(keyset).getPurpose();
+		doReturn(FACTORY_NAME).when(factory).getName();
+		doReturn(FACTORY_NAME).when(keyset).getFactory();
+		doReturn(rotated).when(keyset).rotate(keyDefinition);
+		doReturn(rotatedEncryptedKeyset).when(factory).create(rotated);
+		doReturn(definition.getName()).when(rotatedEncryptedKeyset).name();
+		doReturn(rotatedEncryptedKeyset).when(repository).write(rotatedEncryptedKeyset);
+
+		repository.write(encryptedKeyset);
+
+		assertThatNoException().isThrownBy(() -> store.rotate(definition.getName(), keyDefinition));
+
+		verify(keyset).rotate(keyDefinition);
+		verify(factory).create(rotated);
+		verify(repository).write(rotatedEncryptedKeyset);
+		verify(cache).put(definition.getName(), rotatedEncryptedKeyset);
+	}
+
+	@Test
+	@DisplayName("should rotate the keyset by reference with a key definition and persist the result")
+	void shouldRotateKeysetWithDefinition() throws IOException {
+		final var rotated = mock(Keyset.class);
+		final var keyDefinition = KeyDefinition.of(TestAlgorithm.INSTANCE);
+
+		doReturn(KeysetPurpose.ENCRYPTION).when(keyset).getPurpose();
+		doReturn(FACTORY_NAME).when(factory).getName();
+		doReturn(FACTORY_NAME).when(keyset).getFactory();
+		doReturn(rotated).when(keyset).rotate(keyDefinition);
+		doReturn(encryptedKeyset).when(factory).create(rotated);
+
+		assertThatNoException().isThrownBy(() -> store.rotate(keyset, keyDefinition));
+
+		verify(keyset).rotate(keyDefinition);
+		verify(factory).create(rotated);
+		verify(repository).write(encryptedKeyset);
+		verify(cache).put(definition.getName(), encryptedKeyset);
+	}
+
+	@Test
+	@DisplayName("should throw UnsupportedAlgorithmException when key definition algorithm purpose does not match keyset purpose")
+	void shouldFailToRotateWhenAlgorithmPurposeMismatch() {
+		final var keyDefinition = KeyDefinition.of(TestAlgorithm.INSTANCE); // ENCRYPTION purpose
+
+		doReturn(KeysetPurpose.SIGNING).when(keyset).getPurpose(); // mismatch
+
+		assertThatExceptionOfType(CryptoException.UnsupportedAlgorithmException.class)
+			.isThrownBy(() -> store.rotate(keyset, keyDefinition))
+			.returns(TestAlgorithm.INSTANCE, CryptoException.UnsupportedAlgorithmException::getAlgorithm);
+
+		verifyNoInteractions(repository);
+	}
+
+	@Test
+	@DisplayName("should throw KeysetException when repository raises an IOException during key status update")
+	void shouldFailToUpdateKeyStatusOnIOException() throws IOException {
+		final var cause = new IOException("db error");
+
+		repository.write(keysetWith("enabled-key", KeyStatus.ENABLED));
+		doThrow(cause).when(repository).updateKeyStatus(any());
+
+		assertThatExceptionOfType(CryptoException.KeysetException.class)
+			.isThrownBy(() -> store.disable(definition.getName(), "enabled-key"))
+			.withCause(cause)
+			.returns(definition.getName(), CryptoException.KeysetException::getName);
+	}
+
 	private EncryptedKeyset keysetWith(String keyId, KeyStatus status) {
 		return EncryptedKeyset.builder(definition)
 			.provider(kek.getProvider())

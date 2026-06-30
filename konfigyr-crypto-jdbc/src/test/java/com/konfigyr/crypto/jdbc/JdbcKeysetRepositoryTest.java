@@ -431,6 +431,30 @@ class JdbcKeysetRepositoryTest {
 	}
 
 	@Test
+	@DisplayName("should accept custom SQL query overrides and still resolve defaults when null is provided")
+	void shouldAcceptCustomSqlQueryOverrides() {
+		final var repo = new JdbcKeysetRepository(jdbcOperations, transactionOperations);
+		repo.setGetKeysetQuery(null);
+		repo.setGetKeysQuery(null);
+		repo.setKeysetExistsQuery(null);
+		repo.setCreateKeysetQuery(null);
+		repo.setUpdateKeysetQuery(null);
+		repo.setCreateKeyQuery(null);
+		repo.setUpdateKeyQuery(null);
+		repo.setDeleteKeyQuery(null);
+		repo.setDeleteKeysQuery(null);
+		repo.setDeleteKeysetQuery(null);
+		repo.setUpdateKeyStatusQuery(null);
+		repo.setDestroyKeyQuery(null);
+		repo.setFindPendingDestructionQuery(null);
+		repo.setFindPendingRotationQuery(null);
+		repo.setBumpKeysetVersionQuery(null);
+		repo.afterPropertiesSet();
+
+		assertThat(repo.read("non-existent")).isEmpty();
+	}
+
+	@Test
 	@DisplayName("should reject table names that are not valid SQL identifiers")
 	void shouldRejectInvalidTableNames() {
 		final var repo = new JdbcKeysetRepository(jdbcOperations, transactionOperations);
