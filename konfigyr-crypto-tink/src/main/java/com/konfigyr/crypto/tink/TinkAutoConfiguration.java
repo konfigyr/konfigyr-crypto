@@ -22,6 +22,12 @@ import org.springframework.context.annotation.Bean;
 @ConditionalOnMissingBean(TinkKeysetFactory.class)
 public class TinkAutoConfiguration {
 
+	/**
+	 * Creates a new {@link TinkAutoConfiguration} instance.
+	 */
+	public TinkAutoConfiguration() {
+	}
+
 	@Bean
 	AlgorithmRegistrar tinkAlgorithmRegistrar() {
 		return registry -> TinkAlgorithm.DEFAULT_ALGORITHMS.forEach(registry::register);

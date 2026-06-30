@@ -1,8 +1,9 @@
 package com.konfigyr.crypto;
 
-import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.cache.support.NoOpCache;
 import org.springframework.util.Assert;
 
@@ -73,10 +74,10 @@ public interface KeysetStore {
 	/**
 	 * Creates a new {@link Builder} instance that can be used to create {@link KeysetStore} instances.
 	 * <p>
-	 * This builder would return an instance of {@link RepostoryKeysetStore} by default.
+	 * This builder would return an instance of {@link RepositoryKeysetStore} by default.
 	 *
 	 * @return the keyset store builder, never {@literal null}.
-	 * @see RepostoryKeysetStore
+	 * @see RepositoryKeysetStore
 	 */
 	static Builder builder() {
 		return new Builder();
@@ -359,7 +360,7 @@ public interface KeysetStore {
 	 * Permanently destroys the specified {@link Key} within the named {@link Keyset} by erasing
 	 * its encrypted key material and transitioning it to {@link KeyStatus#DESTROYED}.
 	 * <p>
-	 * The key row is retained for audit purposes but its {@link EncryptedKey#getData() data} is
+	 * The key row is retained for audit purposes but its {@link EncryptedKey#data() data} is
 	 * set to {@literal null} and can never be recovered. This is a soft-delete of the key material.
 	 * <p>
 	 * Requires the key to be in {@link KeyStatus#PENDING_DESTRUCTION} state. To destroy without
@@ -376,10 +377,11 @@ public interface KeysetStore {
 
 	/**
 	 * Builder class used to create {@link KeysetStore} instances. This builder would return an instance of
-	 * {@link RepostoryKeysetStore} by default.
+	 * {@link RepositoryKeysetStore} by default.
 	 */
-	@Slf4j
 	final class Builder {
+		private final Logger log = LoggerFactory.getLogger(KeysetStore.Builder.class);
+
 		private @Nullable KeysetCache cache;
 		private @Nullable KeysetRepository repository;
 		private final List<KeysetFactory> factories;
@@ -478,7 +480,7 @@ public interface KeysetStore {
 				cache = new SpringKeysetCache(new NoOpCache("noop-keyset-cache"));
 			}
 
-			return new RepostoryKeysetStore(cache, repository, factories, providers);
+			return new RepositoryKeysetStore(cache, repository, factories, providers);
 		}
 	}
 

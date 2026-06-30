@@ -7,7 +7,6 @@ import com.konfigyr.crypto.AbstractKey;
 import com.konfigyr.crypto.CryptoException;
 import com.konfigyr.crypto.KeyDefinition;
 import com.konfigyr.crypto.KeyStatus;
-import lombok.Getter;
 import org.jspecify.annotations.NullMarked;
 
 import java.security.GeneralSecurityException;
@@ -19,11 +18,14 @@ import java.security.GeneralSecurityException;
  * @author Vladimir Spasic
  * @since 1.0.0
  **/
-@Getter
 @NullMarked
 class TinkKey extends AbstractKey<TinkAlgorithm> {
 
 	private final com.google.crypto.tink.Key value;
+
+	com.google.crypto.tink.Key getValue() {
+		return value;
+	}
 
 	/**
 	 * Internal constructor used by the {@link AbstractKey} implementations to create the {@link Key} instances.

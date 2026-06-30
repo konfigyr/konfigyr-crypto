@@ -22,6 +22,12 @@ import org.springframework.context.annotation.Bean;
 @ConditionalOnMissingBean(JoseKeysetFactory.class)
 public class JoseAutoConfiguration {
 
+	/**
+	 * Creates a new {@link JoseAutoConfiguration} instance.
+	 */
+	public JoseAutoConfiguration() {
+	}
+
 	@Bean
 	AlgorithmRegistrar joseAlgorithmRegistrar() {
 		return registry -> JoseAlgorithm.DEFAULT_ALGORITHMS.forEach(registry::register);

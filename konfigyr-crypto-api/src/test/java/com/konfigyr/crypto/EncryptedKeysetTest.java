@@ -72,7 +72,7 @@ class EncryptedKeysetTest {
 			.destructionGracePeriod(Duration.ofDays(30))
 			.build(List.of(key));
 
-		final var copy = EncryptedKeyset.builder(original).build(original.getKeys());
+		final var copy = EncryptedKeyset.builder(original).build(original.keys());
 
 		assertThat(copy).isEqualTo(original);
 	}

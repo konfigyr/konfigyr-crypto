@@ -11,13 +11,13 @@ import com.nimbusds.jose.jwk.gen.ECKeyGenerator;
 import com.nimbusds.jose.jwk.gen.JWKGenerator;
 import com.nimbusds.jose.jwk.gen.OctetSequenceKeyGenerator;
 import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
-import lombok.EqualsAndHashCode;
 import org.jspecify.annotations.NullMarked;
 import org.springframework.util.Assert;
 
 import java.time.Instant;
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Supplier;
 
 /**
@@ -43,7 +43,6 @@ import java.util.function.Supplier;
  * @see com.nimbusds.jose.JWEAlgorithm
  */
 @NullMarked
-@EqualsAndHashCode(of = "name")
 public final class JoseAlgorithm implements Algorithm {
 
 	/* -------------------------------------------------------------------------
@@ -316,10 +315,19 @@ public final class JoseAlgorithm implements Algorithm {
 	 */
 	public static final List<JoseAlgorithm> LEGACY_ALGORITHMS = List.of(RS256, RS384, RS512);
 
+	/** Stable unique algorithm name with {@code "jose:"} prefix. */
 	private final String name;
+
+	/** Key material type produced by this algorithm. */
 	private final KeyType type;
+
+	/** Intended cryptographic purpose (signing or encryption). */
 	private final KeysetPurpose purpose;
+
+	/** Backing Nimbus JOSE algorithm identifier used for JWS/JWE operations. */
 	private final com.nimbusds.jose.Algorithm algorithm;
+
+	/** Factory that creates a fresh {@link JWKGenerator} instance per key-generation request. */
 	private final Supplier<JWKGenerator<? extends JWK>> generator;
 
 	/**
@@ -392,6 +400,18 @@ public final class JoseAlgorithm implements Algorithm {
 			.keyUse(JoseUtils.resolveKeyUse(purpose))
 			.keyOperations(JoseUtils.resolveKeyOperations(purpose))
 			.notBeforeTime(Date.from(Instant.ofEpochSecond(System.currentTimeMillis() / 1000)));
+	}
+
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (!(o instanceof JoseAlgorithm that)) return false;
+		return Objects.equals(name, that.name);
+	}
+
+	@Override
+	public int hashCode() {
+		return Objects.hash(name);
 	}
 
 	@Override

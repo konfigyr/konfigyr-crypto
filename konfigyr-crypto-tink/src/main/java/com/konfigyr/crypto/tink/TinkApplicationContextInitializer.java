@@ -14,6 +14,12 @@ import org.springframework.context.ConfigurableApplicationContext;
 @NullMarked
 public class TinkApplicationContextInitializer implements ApplicationContextInitializer<ConfigurableApplicationContext> {
 
+	/**
+	 * Creates a new {@link TinkApplicationContextInitializer} instance.
+	 */
+	public TinkApplicationContextInitializer() {
+	}
+
 	@Override
 	public void initialize(ConfigurableApplicationContext ctx) {
 		TinkUtils.register();

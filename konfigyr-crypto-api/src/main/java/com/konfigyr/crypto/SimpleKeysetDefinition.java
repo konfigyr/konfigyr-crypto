@@ -1,12 +1,12 @@
 package com.konfigyr.crypto;
 
-import lombok.Value;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
 import java.io.Serial;
 import java.io.Serializable;
 import java.time.Duration;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -17,24 +17,47 @@ import java.util.Optional;
  * @since 1.0.0
  * @see KeysetFactory#create(KeyEncryptionKey, KeysetDefinition)
  **/
-@Value
 @NullMarked
-class SimpleKeysetDefinition implements KeysetDefinition, Serializable {
+final class SimpleKeysetDefinition implements KeysetDefinition, Serializable {
 
 	@Serial
 	private static final long serialVersionUID = 283753676517870624L;
 
-	String name;
+	private final String name;
 
-	KeysetPurpose purpose;
+	private final KeysetPurpose purpose;
 
-	Algorithm algorithm;
-
-	@Nullable
-	Duration rotationInterval;
+	private final Algorithm algorithm;
 
 	@Nullable
-	Duration destructionGracePeriod;
+	private final Duration rotationInterval;
+
+	@Nullable
+	private final Duration destructionGracePeriod;
+
+	SimpleKeysetDefinition(String name, KeysetPurpose purpose, Algorithm algorithm,
+			@Nullable Duration rotationInterval, @Nullable Duration destructionGracePeriod) {
+		this.name = name;
+		this.purpose = purpose;
+		this.algorithm = algorithm;
+		this.rotationInterval = rotationInterval;
+		this.destructionGracePeriod = destructionGracePeriod;
+	}
+
+	@Override
+	public String getName() {
+		return name;
+	}
+
+	@Override
+	public KeysetPurpose getPurpose() {
+		return purpose;
+	}
+
+	@Override
+	public Algorithm getAlgorithm() {
+		return algorithm;
+	}
 
 	@Override
 	public Optional<@Nullable Duration> getRotationInterval() {
@@ -44,6 +67,31 @@ class SimpleKeysetDefinition implements KeysetDefinition, Serializable {
 	@Override
 	public Optional<@Nullable Duration> getDestructionGracePeriod() {
 		return Optional.ofNullable(destructionGracePeriod);
+	}
+
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (!(o instanceof SimpleKeysetDefinition that)) return false;
+		return Objects.equals(name, that.name)
+			&& Objects.equals(purpose, that.purpose)
+			&& Objects.equals(algorithm, that.algorithm)
+			&& Objects.equals(rotationInterval, that.rotationInterval)
+			&& Objects.equals(destructionGracePeriod, that.destructionGracePeriod);
+	}
+
+	@Override
+	public int hashCode() {
+		return Objects.hash(name, purpose, algorithm, rotationInterval, destructionGracePeriod);
+	}
+
+	@Override
+	public String toString() {
+		return "SimpleKeysetDefinition[name=" + name
+			+ ", purpose=" + purpose
+			+ ", algorithm=" + algorithm
+			+ ", rotationInterval=" + rotationInterval
+			+ ", destructionGracePeriod=" + destructionGracePeriod + "]";
 	}
 
 }

@@ -12,6 +12,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.test.context.SpringBootTest;
 
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.transaction.support.TransactionOperations;
 
@@ -92,7 +94,7 @@ class JdbcKeysetRepositoryTest {
 		assertThat(repository.read(definition.getName())).isNotEmpty().hasValue(metadataOnly);
 
 		// --- remove ---
-		repository.remove(metadataOnly.getName());
+		repository.remove(metadataOnly.name());
 		assertThat(repository.read(definition.getName())).isEmpty();
 	}
 
@@ -112,8 +114,8 @@ class JdbcKeysetRepositoryTest {
 				assertThat(ks.getKey("key-1"))
 					.isPresent()
 					.hasValueSatisfying(k -> {
-						assertThat(k.getStatus()).isEqualTo(KeyStatus.DISABLED);
-						assertThat(k.getData()).isNotNull();
+						assertThat(k.status()).isEqualTo(KeyStatus.DISABLED);
+						assertThat(k.data()).isNotNull();
 					})
 			);
 
@@ -145,9 +147,9 @@ class JdbcKeysetRepositoryTest {
 				assertThat(ks.getKey("key-1"))
 					.isPresent()
 					.hasValueSatisfying(k -> {
-						assertThat(k.getStatus()).isEqualTo(KeyStatus.DESTROYED);
-						assertThat(k.getData()).isNull();
-						assertThat(k.getDestroyedAt()).isEqualTo(destroyedAt);
+						assertThat(k.status()).isEqualTo(KeyStatus.DESTROYED);
+						assertThat(k.data()).isNull();
+						assertThat(k.destroyedAt()).isEqualTo(destroyedAt);
 					})
 			);
 
@@ -186,11 +188,11 @@ class JdbcKeysetRepositoryTest {
 		assertThat(results)
 			.hasSize(1)
 			.first()
-			.returns("lifecycle-pending", EncryptedKeyset::getName)
-			.extracting(EncryptedKeyset::getKeys, InstanceOfAssertFactories.iterable(EncryptedKey.class))
+			.returns("lifecycle-pending", EncryptedKeyset::name)
+			.extracting(EncryptedKeyset::keys, InstanceOfAssertFactories.iterable(EncryptedKey.class))
 			.hasSize(1)
 			.first()
-			.returns("past-key", EncryptedKey::getId);
+			.returns("past-key", EncryptedKey::id);
 
 		repository.remove("lifecycle-pending");
 	}
@@ -211,7 +213,7 @@ class JdbcKeysetRepositoryTest {
 		repository.write(encryptedKeyset("lifecycle-future", futureKey));
 
 		assertThat(repository.findPendingDestruction())
-			.extracting(EncryptedKeyset::getName)
+			.extracting(EncryptedKeyset::name)
 			.doesNotContain("lifecycle-future");
 
 		repository.remove("lifecycle-future");
@@ -236,12 +238,12 @@ class JdbcKeysetRepositoryTest {
 		final var results = repository.findPendingRotation();
 
 		assertThat(results)
-			.extracting(EncryptedKeyset::getName)
+			.extracting(EncryptedKeyset::name)
 			.contains("rotation-due");
 		assertThat(results)
-			.filteredOn(ks -> "rotation-due".equals(ks.getName()))
+			.filteredOn(ks -> "rotation-due".equals(ks.name()))
 			.first()
-			.extracting(EncryptedKeyset::getKeys)
+			.extracting(EncryptedKeyset::keys)
 			.isEqualTo(List.of());
 
 		repository.remove("rotation-due");
@@ -264,7 +266,7 @@ class JdbcKeysetRepositoryTest {
 		repository.write(encryptedKeyset("rotation-not-due", primaryKey));
 
 		assertThat(repository.findPendingRotation())
-			.extracting(EncryptedKeyset::getName)
+			.extracting(EncryptedKeyset::name)
 			.doesNotContain("rotation-not-due");
 
 		repository.remove("rotation-not-due");
@@ -322,14 +324,14 @@ class JdbcKeysetRepositoryTest {
 		assertThat(stored.getKey("old-key"))
 			.isPresent()
 			.hasValueSatisfying(key -> {
-				assertThat(key.getStatus()).isEqualTo(KeyStatus.DESTROYED);
-				assertThat(key.getData()).isNull();
-				assertThat(key.getDestroyedAt()).isEqualTo(destroyedAt);
+				assertThat(key.status()).isEqualTo(KeyStatus.DESTROYED);
+				assertThat(key.data()).isNull();
+				assertThat(key.destroyedAt()).isEqualTo(destroyedAt);
 			});
 
 		assertThat(stored.getKey("primary-key"))
 			.isPresent()
-			.hasValueSatisfying(key -> assertThat(key.getData()).isNotNull());
+			.hasValueSatisfying(key -> assertThat(key.data()).isNotNull());
 
 		repository.remove("keyset");
 	}
@@ -367,6 +369,89 @@ class JdbcKeysetRepositoryTest {
 				.isInstanceOf(CryptoException.KeysetConcurrentModificationException.class);
 
 		repository.remove("status-conflict");
+	}
+
+	@Test
+	@DisplayName("should roll back KEYSETS row when insertKeys throws during create")
+	void shouldRollbackCreateOnInsertKeysFailure() throws IOException {
+		final String name = "rollback-create";
+		final Instant t0 = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+		final EncryptedKey key = encryptedKey("key-1", true, t0, ByteArray.fromString("key-material"));
+		final EncryptedKeyset keyset = encryptedKeyset(name, key);
+
+		final JdbcKeysetRepository failingRepo = new JdbcKeysetRepository(jdbcOperations, transactionOperations) {
+			@Override
+			protected void insertKeys(String keysetName, List<EncryptedKey> keys) {
+				throw new DataIntegrityViolationException("simulated key insertion failure");
+			}
+		};
+		failingRepo.afterPropertiesSet();
+
+		try {
+			assertThatThrownBy(() -> failingRepo.write(keyset))
+				.isInstanceOf(DataAccessException.class);
+
+			assertThat(repository.read(name)).isEmpty();
+		} finally {
+			repository.remove(name);
+		}
+	}
+
+	@Test
+	@DisplayName("should roll back KEYSETS update when updateKeys throws during update")
+	void shouldRollbackUpdateOnUpdateKeysSyncFailure() throws IOException {
+		final String name = "rollback-update";
+		final Instant t0 = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+		final EncryptedKey originalKey = encryptedKey("key-1", true, t0, ByteArray.fromString("original-material"));
+		final EncryptedKeyset original = encryptedKeyset(name, originalKey);
+
+		final EncryptedKeyset written = repository.write(original);
+
+		final JdbcKeysetRepository failingRepo = new JdbcKeysetRepository(jdbcOperations, transactionOperations) {
+			@Override
+			protected void updateKeys(String keysetName, List<EncryptedKey> newKeys) {
+				throw new DataIntegrityViolationException("simulated key sync failure");
+			}
+		};
+		failingRepo.afterPropertiesSet();
+
+		try {
+			final EncryptedKey newKey = encryptedKey("key-2", false, t0.plusSeconds(1), ByteArray.fromString("new-material"));
+			final EncryptedKeyset updated = EncryptedKeyset.builder(written).build(originalKey, newKey);
+
+			assertThatThrownBy(() -> failingRepo.write(updated))
+				.isInstanceOf(DataAccessException.class);
+
+			assertThat(repository.read(name))
+				.isNotEmpty()
+				.hasValue(original);
+		} finally {
+			repository.remove(name);
+		}
+	}
+
+	@Test
+	@DisplayName("should accept custom SQL query overrides and still resolve defaults when null is provided")
+	void shouldAcceptCustomSqlQueryOverrides() {
+		final var repo = new JdbcKeysetRepository(jdbcOperations, transactionOperations);
+		repo.setGetKeysetQuery(null);
+		repo.setGetKeysQuery(null);
+		repo.setKeysetExistsQuery(null);
+		repo.setCreateKeysetQuery(null);
+		repo.setUpdateKeysetQuery(null);
+		repo.setCreateKeyQuery(null);
+		repo.setUpdateKeyQuery(null);
+		repo.setDeleteKeyQuery(null);
+		repo.setDeleteKeysQuery(null);
+		repo.setDeleteKeysetQuery(null);
+		repo.setUpdateKeyStatusQuery(null);
+		repo.setDestroyKeyQuery(null);
+		repo.setFindPendingDestructionQuery(null);
+		repo.setFindPendingRotationQuery(null);
+		repo.setBumpKeysetVersionQuery(null);
+		repo.afterPropertiesSet();
+
+		assertThat(repo.read("non-existent")).isEmpty();
 	}
 
 	@Test

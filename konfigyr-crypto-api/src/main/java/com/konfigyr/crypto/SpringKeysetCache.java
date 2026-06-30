@@ -1,6 +1,5 @@
 package com.konfigyr.crypto;
 
-import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 import org.springframework.cache.Cache;
@@ -15,10 +14,18 @@ import java.util.function.Supplier;
  * @since 1.0.0
  **/
 @NullMarked
-@RequiredArgsConstructor
 public class SpringKeysetCache implements KeysetCache {
 
 	private final Cache cache;
+
+	/**
+	 * Creates a new {@link SpringKeysetCache} backed by the given Spring {@link Cache}.
+	 *
+	 * @param cache the backing Spring cache, can't be {@literal null}
+	 */
+	public SpringKeysetCache(Cache cache) {
+		this.cache = cache;
+	}
 
 	@Override
 	public synchronized EncryptedKeyset get(String key, Supplier<@Nullable EncryptedKeyset> supplier) {

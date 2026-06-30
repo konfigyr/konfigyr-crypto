@@ -24,7 +24,7 @@ The easiest way to consume this library is to import the BOM and then declare on
 
 ```kotlin
 dependencies {
-    implementation(platform("com.konfigyr:konfigyr-crypto-dependencies:1.0.0-RC6"))
+    implementation(platform("com.konfigyr:konfigyr-crypto-dependencies:1.0.0"))
 
     // pick the modules you need — versions are managed by the BOM
     implementation("com.konfigyr:konfigyr-crypto-api")
@@ -42,7 +42,7 @@ dependencies {
         <dependency>
             <groupId>com.konfigyr</groupId>
             <artifactId>konfigyr-crypto-dependencies</artifactId>
-            <version>1.0.0-RC6</version>
+            <version>1.0.0</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>

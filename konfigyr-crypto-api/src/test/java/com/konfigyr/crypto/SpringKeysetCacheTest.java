@@ -40,11 +40,11 @@ class SpringKeysetCacheTest {
 		final var keyset = createEncryptedKeyset("test-keyset");
 		doReturn(keyset).when(supplier).get();
 
-		assertThat(cache.get(keyset.getName(), supplier)).isEqualTo(keyset);
-		assertThat(cache.get(keyset.getName(), supplier)).isEqualTo(keyset);
+		assertThat(cache.get(keyset.name(), supplier)).isEqualTo(keyset);
+		assertThat(cache.get(keyset.name(), supplier)).isEqualTo(keyset);
 
 		verify(supplier).get();
-		verify(delegate, times(2)).get(eq(keyset.getName()), eq(EncryptedKeyset.class));
+		verify(delegate, times(2)).get(eq(keyset.name()), eq(EncryptedKeyset.class));
 	}
 
 	@Test

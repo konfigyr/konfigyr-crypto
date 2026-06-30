@@ -32,7 +32,7 @@ import static com.konfigyr.crypto.CryptoException.*;
  * @since 1.0.0
  **/
 @NullMarked
-public class RepostoryKeysetStore implements KeysetStore {
+public class RepositoryKeysetStore implements KeysetStore {
 
 	private final Logger logger = LoggerFactory.getLogger(getClass());
 
@@ -45,14 +45,14 @@ public class RepostoryKeysetStore implements KeysetStore {
 	private final List<KeyEncryptionKeyProvider> providers;
 
 	/**
-	 * Creates a new {@link RepostoryKeysetStore} instance using the provided arguments.
+	 * Creates a new {@link RepositoryKeysetStore} instance using the provided arguments.
 	 *
 	 * @param cache the keyset cache implementation, can't be {@literal null}
 	 * @param repository the keyset repository implementation, can't be {@literal null}
 	 * @param factories the list of keyset factories, can't be {@literal null}
 	 * @param providers the list of key encryption key providers, can't be {@literal null}
 	 */
-	public RepostoryKeysetStore(
+	public RepositoryKeysetStore(
 		KeysetCache cache,
 		KeysetRepository repository,
 		List<KeysetFactory> factories,
@@ -187,7 +187,7 @@ public class RepostoryKeysetStore implements KeysetStore {
 		Assert.hasText(keyId, "Key ID must not be blank");
 
 		performKeyTransition(keysetName, keyset -> {
-			final Duration gracePeriod = keyset.getDestructionGracePeriod();
+			final Duration gracePeriod = keyset.destructionGracePeriod();
 
 			if (gracePeriod != null) {
 				return KeyTransition.scheduleDestruction(keyset, keyId, Instant.now().plus(gracePeriod));
@@ -230,20 +230,20 @@ public class RepostoryKeysetStore implements KeysetStore {
 	private void performKeyTransition(String keysetName, Function<EncryptedKeyset, KeyTransition> transitionFactory) {
 		final EncryptedKeyset encryptedKeyset = lookupKeyset(keysetName);
 		final KeyTransition transition = transitionFactory.apply(encryptedKeyset);
-		final String keyId = transition.getKeyId();
+		final String keyId = transition.keyId();
 
 		final EncryptedKey key = encryptedKeyset.getKey(keyId).orElseThrow(
 			() -> new KeyNotFoundException(keysetName, keyId)
 		);
 
-		if (!key.getStatus().canTransitionTo(transition.getStatus())) {
-			throw new InvalidKeyStatusTransitionException(keysetName, keyId, key.getStatus(),
-				transition.getStatus());
+		if (!key.status().canTransitionTo(transition.status())) {
+			throw new InvalidKeyStatusTransitionException(keysetName, keyId, key.status(),
+				transition.status());
 		}
 
 		if (logger.isDebugEnabled()) {
 			logger.debug("Transitioning key '{}' in keyset '{}' from {} to {}", keyId, keysetName,
-				key.getStatus(), transition.getStatus());
+				key.status(), transition.status());
 		}
 
 		try {
@@ -364,11 +364,11 @@ public class RepostoryKeysetStore implements KeysetStore {
 	 */
 	protected Keyset read(KeysetFactory factory, EncryptedKeyset encryptedKeyset) {
 		if (logger.isDebugEnabled()) {
-			logger.debug("Reading encrypted keyset data with name: {}", encryptedKeyset.getName());
+			logger.debug("Reading encrypted keyset data with name: {}", encryptedKeyset.name());
 		}
 
-		final KeyEncryptionKeyProvider provider = provider(encryptedKeyset.getProvider())
-			.orElseThrow(() -> new ProviderNotFoundException(encryptedKeyset.getProvider()));
+		final KeyEncryptionKeyProvider provider = provider(encryptedKeyset.provider())
+			.orElseThrow(() -> new ProviderNotFoundException(encryptedKeyset.provider()));
 
 		final KeyEncryptionKey kek = provider.provide(encryptedKeyset);
 
@@ -376,7 +376,7 @@ public class RepostoryKeysetStore implements KeysetStore {
 			return factory.create(kek, encryptedKeyset);
 		}
 		catch (IOException e) {
-			throw new UnwrappingException(encryptedKeyset.getName(), kek, e);
+			throw new UnwrappingException(encryptedKeyset.name(), kek, e);
 		}
 	}
 
@@ -410,7 +410,7 @@ public class RepostoryKeysetStore implements KeysetStore {
 					"Could not write encrypted keyset with name: " + keyset.getName(), e);
 		}
 
-		cache.put(written.getName(), written);
+		cache.put(written.name(), written);
 	}
 
 	/**

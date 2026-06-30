@@ -1,6 +1,5 @@
 package com.konfigyr.crypto;
 
-import lombok.Getter;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 import org.springframework.util.Assert;
@@ -46,7 +45,6 @@ import java.util.*;
  * @see Key
  * @see KeysetFactory
  */
-@Getter
 @NullMarked
 public abstract class AbstractKeyset<T extends Key> implements Keyset {
 
@@ -117,6 +115,36 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 		this.rotationInterval = builder.rotationInterval;
 		this.destructionGracePeriod = builder.destructionGracePeriod;
 		this.version = builder.version;
+	}
+
+	@Override
+	public String getName() {
+		return name;
+	}
+
+	@Override
+	public long getVersion() {
+		return version;
+	}
+
+	@Override
+	public String getFactory() {
+		return factory;
+	}
+
+	@Override
+	public KeysetPurpose getPurpose() {
+		return purpose;
+	}
+
+	@Override
+	public KeyEncryptionKey getKeyEncryptionKey() {
+		return keyEncryptionKey;
+	}
+
+	@Override
+	public List<T> getKeys() {
+		return keys;
 	}
 
 	@Override
@@ -312,10 +340,18 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 		private long version = 0L;
 		private final List<T> keys;
 
+		/**
+		 * Creates a new empty builder instance.
+		 */
 		protected Builder() {
 			keys = new ArrayList<>();
 		}
 
+		/**
+		 * Creates a new builder instance pre-populated from the given {@link KeysetDefinition}.
+		 *
+		 * @param definition the keyset definition to copy values from, can't be {@literal null}
+		 */
 		protected Builder(KeysetDefinition definition) {
 			name = definition.getName();
 			factory = definition.getAlgorithm().factory();
@@ -325,6 +361,11 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 			keys = new ArrayList<>();
 		}
 
+		/**
+		 * Creates a new builder instance pre-populated from an existing {@link Keyset}.
+		 *
+		 * @param keyset the existing keyset to copy values from, can't be {@literal null}
+		 */
 		protected Builder(K keyset) {
 			name = keyset.getName();
 			factory = keyset.getFactory();
@@ -336,13 +377,18 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 			keys = new ArrayList<>(keyset.size());
 		}
 
+		/**
+		 * Creates a new builder instance pre-populated from an existing {@link EncryptedKeyset}.
+		 *
+		 * @param keyset the encrypted keyset to copy metadata from, can't be {@literal null}
+		 */
 		protected Builder(EncryptedKeyset keyset) {
-			name = keyset.getName();
-			factory = keyset.getFactory();
-			purpose = KeysetPurpose.valueOf(keyset.getPurpose());
-			rotationInterval = keyset.getRotationInterval();
-			destructionGracePeriod = keyset.getDestructionGracePeriod();
-			version = keyset.getVersion();
+			name = keyset.name();
+			factory = keyset.factory();
+			purpose = KeysetPurpose.valueOf(keyset.purpose());
+			rotationInterval = keyset.rotationInterval();
+			destructionGracePeriod = keyset.destructionGracePeriod();
+			version = keyset.version();
 			keys = new ArrayList<>(keyset.size());
 		}
 

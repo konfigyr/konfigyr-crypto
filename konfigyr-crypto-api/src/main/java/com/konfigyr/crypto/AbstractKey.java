@@ -1,6 +1,5 @@
 package com.konfigyr.crypto;
 
-import lombok.Getter;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 import org.springframework.util.Assert;
@@ -18,7 +17,6 @@ import java.util.StringJoiner;
  * @author Vladimir Spasic
  * @since 1.0.0
  */
-@Getter
 @NullMarked
 public abstract class AbstractKey<A extends Algorithm> implements Key {
 
@@ -92,6 +90,51 @@ public abstract class AbstractKey<A extends Algorithm> implements Key {
 		this.expiresAt = builder.expiresAt;
 		this.destructionScheduledAt = builder.destructionScheduledAt;
 		this.destroyedAt = builder.destroyedAt;
+	}
+
+	@Override
+	public String getId() {
+		return id;
+	}
+
+	@Override
+	public A getAlgorithm() {
+		return algorithm;
+	}
+
+	@Override
+	public KeyStatus getStatus() {
+		return status;
+	}
+
+	@Override
+	public boolean isPrimary() {
+		return primary;
+	}
+
+	@Override
+	public Instant getCreatedAt() {
+		return createdAt;
+	}
+
+	@Override
+	public @Nullable Instant getInitializedAt() {
+		return initializedAt;
+	}
+
+	@Override
+	public @Nullable Instant getExpiresAt() {
+		return expiresAt;
+	}
+
+	@Override
+	public @Nullable Instant getDestructionScheduledAt() {
+		return destructionScheduledAt;
+	}
+
+	@Override
+	public @Nullable Instant getDestroyedAt() {
+		return destroyedAt;
 	}
 
 	@Override
@@ -202,10 +245,18 @@ public abstract class AbstractKey<A extends Algorithm> implements Key {
 		@Nullable
 		protected Instant destroyedAt;
 
+		/**
+		 * Creates a new builder instance with the creation timestamp set to now.
+		 */
 		protected Builder() {
 			this.createdAt = Instant.now();
 		}
 
+		/**
+		 * Creates a new builder instance pre-populated from the given {@link KeyDefinition}.
+		 *
+		 * @param definition the key definition to copy values from, can't be {@literal null}
+		 */
 		@SuppressWarnings("unchecked")
 		protected Builder(KeyDefinition definition) {
 			this.algorithm = (A) definition.getAlgorithm();
@@ -216,6 +267,11 @@ public abstract class AbstractKey<A extends Algorithm> implements Key {
 				.orElse(null);
 		}
 
+		/**
+		 * Creates a new builder instance pre-populated from an existing {@link Key}.
+		 *
+		 * @param key the existing key to copy values from, can't be {@literal null}
+		 */
 		protected Builder(K key) {
 			this.id = key.id;
 			this.algorithm = key.algorithm;

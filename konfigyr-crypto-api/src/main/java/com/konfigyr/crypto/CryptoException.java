@@ -1,6 +1,5 @@
 package com.konfigyr.crypto;
 
-import lombok.Getter;
 import org.jspecify.annotations.NonNull;
 
 import java.io.Serial;
@@ -52,6 +51,9 @@ public abstract class CryptoException extends RuntimeException {
 		@Serial
 		private static final long serialVersionUID = SERIAL;
 
+		/**
+		 * The name of the unknown algorithm.
+		 */
 		private final String algorithmName;
 
 		/**
@@ -66,7 +68,9 @@ public abstract class CryptoException extends RuntimeException {
 		}
 
 		/**
-		 * @return the algorithm name that could not be resolved, never {@literal null}
+		 * Returns the algorithm name that could not be resolved.
+		 *
+		 * @return the algorithm name, never {@literal null}
 		 */
 		public @NonNull String getAlgorithmName() {
 			return algorithmName;
@@ -162,8 +166,9 @@ public abstract class CryptoException extends RuntimeException {
 		}
 
 		/**
-		 * @return name of the {@link KeyEncryptionKeyProvider} for which the exception
-		 * was thrown, never {@literal null}
+		 * Returns the name of the {@link KeyEncryptionKeyProvider} for which the exception was thrown.
+		 *
+		 * @return provider name, never {@literal null}
 		 */
 		public @NonNull String getProvider() {
 			return provider;
@@ -222,8 +227,9 @@ public abstract class CryptoException extends RuntimeException {
 		}
 
 		/**
-		 * @return identifier of the {@link KeyEncryptionKey} for which the exception was
-		 * thrown, never {@literal null}
+		 * Returns the identifier of the {@link KeyEncryptionKey} for which the exception was thrown.
+		 *
+		 * @return key encryption key identifier, never {@literal null}
 		 */
 		public @NonNull String getId() {
 			return this.id;
@@ -285,8 +291,9 @@ public abstract class CryptoException extends RuntimeException {
 		}
 
 		/**
-		 * @return name of the {@link Keyset} for which the exception was thrown, never
-		 * {@literal null}
+		 * Returns the name of the {@link Keyset} for which the exception was thrown.
+		 *
+		 * @return keyset name, never {@literal null}
 		 */
 		public @NonNull String getName() {
 			return name;
@@ -335,7 +342,7 @@ public abstract class CryptoException extends RuntimeException {
 		 * @param encryptedKeyset {@link EncryptedKeyset} for which the exception was thrown, can't be {@literal null}
 		 */
 		public UnsupportedKeysetException(EncryptedKeyset encryptedKeyset) {
-			super(encryptedKeyset.getName(),
+			super(encryptedKeyset.name(),
 					"Could not find any Keyset factory implementation that supports: " + encryptedKeyset
 							+ ". Please register your Keyset factory as a Spring Bean that can unwrap "
 							+ "instances of these Encrypted Keysets.");
@@ -400,8 +407,9 @@ public abstract class CryptoException extends RuntimeException {
 		}
 
 		/**
-		 * @return the {@link KeysetOperation} that was attempted by the {@link Keyset},
-		 * never {@literal null}
+		 * Returns the {@link KeysetOperation} that was attempted upon the {@link Keyset}.
+		 *
+		 * @return the attempted operation, never {@literal null}
 		 */
 		public @NonNull KeysetOperation attemptedOperation() {
 			return attemptedOperation;
@@ -445,8 +453,9 @@ public abstract class CryptoException extends RuntimeException {
 		}
 
 		/**
-		 * @return the {@link KeysetOperation operations} are supported by the
-		 * {@link Keyset}, never {@literal null}
+		 * Returns the {@link KeysetOperation operations} that are supported by the {@link Keyset}.
+		 *
+		 * @return supported operations, never {@literal null}
 		 */
 		public @NonNull Collection<KeysetOperation> supportedOperations() {
 			return supportedOperations;
@@ -516,7 +525,9 @@ public abstract class CryptoException extends RuntimeException {
 		}
 
 		/**
-		 * @return the identifier of the {@link Key} that was not found, never {@literal null}
+		 * Returns the identifier of the {@link Key} that was not found.
+		 *
+		 * @return the key identifier, never {@literal null}
 		 */
 		public @NonNull String getKeyId() {
 			return keyId;
@@ -558,7 +569,7 @@ public abstract class CryptoException extends RuntimeException {
 	 * Call {@code KeysetStore.cancelDestruction} to restore the key to
 	 * {@link KeyStatus#DISABLED} if the destruction was unintended.
 	 */
-	public static class KeysetPendingDestructionException extends KeysetDisabledException {
+	public static class KeysetPendingDestructionException extends KeysetException {
 
 		@Serial
 		private static final long serialVersionUID = SERIAL;
@@ -569,13 +580,8 @@ public abstract class CryptoException extends RuntimeException {
 		 * @param name the name of the {@link Keyset} pending destruction, can't be {@literal null}
 		 */
 		public KeysetPendingDestructionException(String name) {
-			super(name);
-		}
-
-		@Override
-		public String getMessage() {
-			return "Keyset '" + getName() + "' is pending destruction and cannot perform cryptographic "
-					+ "operations. Call cancelDestruction to restore it to a disabled state.";
+			super(name, "Keyset '" + name + "' is pending destruction and cannot perform cryptographic "
+					+ "operations. Call cancelDestruction to restore it to a disabled state.");
 		}
 
 	}
@@ -684,24 +690,28 @@ public abstract class CryptoException extends RuntimeException {
 		}
 
 		/**
-		 * @return the identifier of the {@link Key} for which the transition was attempted,
-		 *         never {@literal null}
+		 * Returns the identifier of the {@link Key} for which the transition was attempted.
+		 *
+		 * @return the key identifier, never {@literal null}
 		 */
 		public @NonNull String getKeyId() {
 			return keyId;
 		}
 
 		/**
-		 * @return the current {@link KeyStatus} of the key when the invalid transition was
-		 *         attempted, never {@literal null}
+		 * Returns the current {@link KeyStatus} of the key when the invalid transition was attempted.
+		 *
+		 * @return the current key status, never {@literal null}
 		 */
 		public @NonNull KeyStatus getCurrentStatus() {
 			return currentStatus;
 		}
 
 		/**
-		 * @return the {@link KeyStatus} that was attempted but is not a valid transition from
-		 *         {@link #getCurrentStatus()}, never {@literal null}
+		 * Returns the {@link KeyStatus} that was attempted but is not a valid transition from
+		 * {@link #getCurrentStatus()}.
+		 *
+		 * @return the attempted key status, never {@literal null}
 		 */
 		public @NonNull KeyStatus getAttemptedStatus() {
 			return attemptedStatus;
@@ -738,7 +748,6 @@ public abstract class CryptoException extends RuntimeException {
 	 * This exception contains both the name of {@link Keyset} and the actual
 	 * {@link KeyEncryptionKey} values for which this exception has been thrown.
 	 */
-	@Getter
 	public static class WrappingException extends KeysetException {
 
 		@Serial
@@ -774,6 +783,15 @@ public abstract class CryptoException extends RuntimeException {
 			this.kek = kek;
 		}
 
+		/**
+		 * Returns the {@link KeyEncryptionKey} that was responsible for the wrapping failure.
+		 *
+		 * @return the key encryption key, never {@literal null}
+		 */
+		public @NonNull KeyEncryptionKey getKek() {
+			return kek;
+		}
+
 	}
 
 	/**
@@ -783,7 +801,6 @@ public abstract class CryptoException extends RuntimeException {
 	 * This exception contains both the name of {@link EncryptedKeyset} and the actual
 	 * {@link KeyEncryptionKey} values for which this exception has been thrown.
 	 */
-	@Getter
 	public static class UnwrappingException extends KeysetException {
 
 		@Serial
@@ -817,6 +834,15 @@ public abstract class CryptoException extends RuntimeException {
 		public UnwrappingException(String key, KeyEncryptionKey kek, String message, Throwable cause) {
 			super(key, message, cause);
 			this.kek = kek;
+		}
+
+		/**
+		 * Returns the {@link KeyEncryptionKey} that was responsible for the unwrapping failure.
+		 *
+		 * @return the key encryption key, never {@literal null}
+		 */
+		public @NonNull KeyEncryptionKey getKek() {
+			return kek;
 		}
 
 	}

@@ -4,7 +4,6 @@ import com.konfigyr.crypto.*;
 import com.konfigyr.crypto.WrappedKeyMaterial;
 import com.konfigyr.io.ByteArray;
 import com.nimbusds.jose.jwk.JWK;
-import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NullMarked;
 
 import java.nio.charset.StandardCharsets;
@@ -35,12 +34,20 @@ import java.util.List;
  * @see JsonWebKeyset
  **/
 @NullMarked
-@RequiredArgsConstructor
 public class JoseKeysetFactory implements KeysetFactory {
 
 	static final String NAME = "jose";
 
 	private final AlgorithmRegistry registry;
+
+	/**
+	 * Creates a new {@link JoseKeysetFactory} that resolves algorithms from the given registry.
+	 *
+	 * @param registry the algorithm registry used to look up {@link JoseAlgorithm} instances, can't be {@literal null}
+	 */
+	public JoseKeysetFactory(AlgorithmRegistry registry) {
+		this.registry = registry;
+	}
 
 	@Override
 	public String getName() {
@@ -87,31 +94,31 @@ public class JoseKeysetFactory implements KeysetFactory {
 			.keyEncryptionKey(kek);
 
 		for (EncryptedKey encrypted : encryptedKeyset) {
-			if (encrypted.getData() == null) {
+			if (encrypted.data() == null) {
 				continue;
 			}
 
 			final JWK key;
 
 			try {
-				final ByteArray unwrapped = kek.unwrap(encrypted.getData());
+				final ByteArray unwrapped = kek.unwrap(encrypted.data());
 				key = JWK.parse(unwrapped.toString(StandardCharsets.UTF_8));
 			} catch (Exception e) {
-				throw new CryptoException.UnwrappingException(encryptedKeyset.getName(), kek, e);
+				throw new CryptoException.UnwrappingException(encryptedKeyset.name(), kek, e);
 			}
 
-			final JoseAlgorithm algorithm = (JoseAlgorithm) registry.resolve(encrypted.getAlgorithm());
+			final JoseAlgorithm algorithm = (JoseAlgorithm) registry.resolve(encrypted.algorithm());
 
 			builder.key(new JsonWebKey.Builder(key)
-				.id(encrypted.getId())
-				.status(encrypted.getStatus())
+				.id(encrypted.id())
+				.status(encrypted.status())
 				.algorithm(algorithm)
-				.primary(encrypted.isPrimary())
-				.createdAt(encrypted.getCreatedAt())
-				.initializedAt(encrypted.getInitializedAt())
-				.expiresAt(encrypted.getExpiresAt())
-				.destructionScheduledAt(encrypted.getDestructionScheduledAt())
-				.destroyedAt(encrypted.getDestroyedAt())
+				.primary(encrypted.primary())
+				.createdAt(encrypted.createdAt())
+				.initializedAt(encrypted.initializedAt())
+				.expiresAt(encrypted.expiresAt())
+				.destructionScheduledAt(encrypted.destructionScheduledAt())
+				.destroyedAt(encrypted.destroyedAt())
 				.build()
 			);
 		}

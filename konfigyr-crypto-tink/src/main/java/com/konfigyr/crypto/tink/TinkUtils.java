@@ -13,16 +13,16 @@ import com.google.crypto.tink.internal.Util;
 import com.google.crypto.tink.signature.SignatureConfig;
 import com.google.crypto.tink.signature.SignaturePrivateKey;
 import com.google.crypto.tink.util.Bytes;
-import lombok.experimental.UtilityClass;
-
 import java.security.GeneralSecurityException;
 
 /**
  * @author Vladimir Spasic
  * @since 1.0.0
  **/
-@UtilityClass
-class TinkUtils {
+final class TinkUtils {
+
+	private TinkUtils() {
+	}
 
 	static void register() {
 		try {

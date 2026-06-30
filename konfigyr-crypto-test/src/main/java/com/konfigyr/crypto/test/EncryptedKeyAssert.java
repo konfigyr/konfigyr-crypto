@@ -81,7 +81,7 @@ public class EncryptedKeyAssert extends AbstractObjectAssert<EncryptedKeyAssert,
 	 */
 	public EncryptedKeyAssert hasId(@Nullable String id) {
 		assertThatKey()
-			.extracting(EncryptedKey::getId, InstanceOfAssertFactories.STRING)
+			.extracting(EncryptedKey::id, InstanceOfAssertFactories.STRING)
 			.as("key identifier")
 			.isEqualTo(id);
 		return myself;
@@ -105,7 +105,7 @@ public class EncryptedKeyAssert extends AbstractObjectAssert<EncryptedKeyAssert,
 	 */
 	public EncryptedKeyAssert hasAlgorithm(@Nullable String algorithm) {
 		assertThatKey()
-			.extracting(EncryptedKey::getAlgorithm, InstanceOfAssertFactories.STRING)
+			.extracting(EncryptedKey::algorithm, InstanceOfAssertFactories.STRING)
 			.as("key algorithm")
 			.isEqualTo(algorithm);
 		return myself;
@@ -119,7 +119,7 @@ public class EncryptedKeyAssert extends AbstractObjectAssert<EncryptedKeyAssert,
 	 */
 	public EncryptedKeyAssert hasType(@Nullable KeyType type) {
 		assertThatKey()
-			.extracting(EncryptedKey::getType)
+			.extracting(EncryptedKey::type)
 			.as("key type")
 			.isEqualTo(type);
 		return myself;
@@ -143,7 +143,7 @@ public class EncryptedKeyAssert extends AbstractObjectAssert<EncryptedKeyAssert,
 	public EncryptedKeyAssert hasStatus(@Nullable KeyStatus status) {
 		isNotNull();
 		assertThatKey()
-			.extracting(EncryptedKey::getStatus)
+			.extracting(EncryptedKey::status)
 			.as("key status")
 			.isEqualTo(status);
 		return myself;
@@ -176,7 +176,7 @@ public class EncryptedKeyAssert extends AbstractObjectAssert<EncryptedKeyAssert,
 	public EncryptedKeyAssert isPrimary(boolean primary) {
 		isNotNull();
 		assertThatKey()
-			.extracting(EncryptedKey::isPrimary, InstanceOfAssertFactories.BOOLEAN)
+			.extracting(EncryptedKey::primary, InstanceOfAssertFactories.BOOLEAN)
 			.as("key primary flag")
 			.isEqualTo(primary);
 		return myself;
@@ -212,7 +212,7 @@ public class EncryptedKeyAssert extends AbstractObjectAssert<EncryptedKeyAssert,
 	public EncryptedKeyAssert hasMaterial(@Nullable WrappedKeyMaterial material) {
 		isNotNull();
 		assertThatKey()
-			.extracting(EncryptedKey::getData)
+			.extracting(EncryptedKey::data)
 			.as("key material")
 			.isEqualTo(material);
 		return myself;
@@ -236,7 +236,7 @@ public class EncryptedKeyAssert extends AbstractObjectAssert<EncryptedKeyAssert,
 	 * @return this assertion for chaining, never {@literal null}
 	 */
 	public EncryptedKeyAssert isCreatedAt(@Nullable Instant createdAt, Duration tolerance) {
-		return assertInstant(EncryptedKey::getCreatedAt, createdAt, tolerance, "key creation timestamp");
+		return assertInstant(EncryptedKey::createdAt, createdAt, tolerance, "key creation timestamp");
 	}
 
 	/**
@@ -257,7 +257,7 @@ public class EncryptedKeyAssert extends AbstractObjectAssert<EncryptedKeyAssert,
 	 * @return this assertion for chaining, never {@literal null}
 	 */
 	public EncryptedKeyAssert isInitializedAt(@Nullable Instant initializedAt, Duration tolerance) {
-		return assertInstant(EncryptedKey::getInitializedAt, initializedAt, tolerance, "key initialization timestamp");
+		return assertInstant(EncryptedKey::initializedAt, initializedAt, tolerance, "key initialization timestamp");
 	}
 
 	/**
@@ -278,7 +278,7 @@ public class EncryptedKeyAssert extends AbstractObjectAssert<EncryptedKeyAssert,
 	 * @return this assertion for chaining, never {@literal null}
 	 */
 	public EncryptedKeyAssert expiresAt(@Nullable Instant expiresAt, Duration tolerance) {
-		return assertInstant(EncryptedKey::getExpiresAt, expiresAt, tolerance, "key expiry timestamp");
+		return assertInstant(EncryptedKey::expiresAt, expiresAt, tolerance, "key expiry timestamp");
 	}
 
 	/**
@@ -299,7 +299,7 @@ public class EncryptedKeyAssert extends AbstractObjectAssert<EncryptedKeyAssert,
 	 * @return this assertion for chaining, never {@literal null}
 	 */
 	public EncryptedKeyAssert destructionScheduledAt(@Nullable Instant destructionScheduledAt, Duration tolerance) {
-		return assertInstant(EncryptedKey::getDestructionScheduledAt, destructionScheduledAt, tolerance,
+		return assertInstant(EncryptedKey::destructionScheduledAt, destructionScheduledAt, tolerance,
 			"key scheduled destruction timestamp");
 	}
 
@@ -321,7 +321,7 @@ public class EncryptedKeyAssert extends AbstractObjectAssert<EncryptedKeyAssert,
 	 * @return this assertion for chaining, never {@literal null}
 	 */
 	public EncryptedKeyAssert isDestroyedAt(@Nullable Instant destroyedAt, Duration tolerance) {
-		return assertInstant(EncryptedKey::getDestroyedAt, destroyedAt, tolerance, "key destruction timestamp");
+		return assertInstant(EncryptedKey::destroyedAt, destroyedAt, tolerance, "key destruction timestamp");
 	}
 
 	private ObjectAssert<EncryptedKey> assertThatKey() {

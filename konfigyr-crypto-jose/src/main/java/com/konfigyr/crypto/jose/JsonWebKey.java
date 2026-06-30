@@ -6,14 +6,16 @@ import com.konfigyr.crypto.KeyDefinition;
 import com.konfigyr.crypto.KeyStatus;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.jwk.JWK;
-import lombok.Getter;
 import org.jspecify.annotations.NullMarked;
 
-@Getter
 @NullMarked
 class JsonWebKey extends AbstractKey<JoseAlgorithm> {
 
 	JWK value;
+
+	JWK getValue() {
+		return value;
+	}
 
 	JsonWebKey(JWK value, Builder builder) {
 		super(builder);

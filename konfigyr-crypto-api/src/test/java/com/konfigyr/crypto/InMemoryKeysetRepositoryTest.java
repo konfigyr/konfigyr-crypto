@@ -26,13 +26,13 @@ class InMemoryKeysetRepositoryTest {
 		final EncryptedKeyset keyset = encryptedKeyset("test-keyset",
 			encryptedKey("key-1", KeyStatus.ENABLED, true, ByteArray.fromString("key-material"), null));
 
-		assertThat(repository.read(keyset.getName())).isEmpty();
+		assertThat(repository.read(keyset.name())).isEmpty();
 
 		assertThatNoException().isThrownBy(() -> repository.write(keyset));
-		assertThat(repository.read(keyset.getName())).hasValue(keyset);
+		assertThat(repository.read(keyset.name())).hasValue(keyset);
 
-		assertThatNoException().isThrownBy(() -> repository.remove(keyset.getName()));
-		assertThat(repository.read(keyset.getName())).isEmpty();
+		assertThatNoException().isThrownBy(() -> repository.remove(keyset.name()));
+		assertThat(repository.read(keyset.name())).isEmpty();
 	}
 
 	@Test
@@ -51,8 +51,8 @@ class InMemoryKeysetRepositoryTest {
 				assertThat(ks.getKey("key-1"))
 					.isPresent()
 					.hasValueSatisfying(k -> {
-						assertThat(k.getStatus()).isEqualTo(KeyStatus.DISABLED);
-						assertThat(k.getData()).isNotNull();
+						assertThat(k.status()).isEqualTo(KeyStatus.DISABLED);
+						assertThat(k.data()).isNotNull();
 					})
 			);
 	}
@@ -75,9 +75,9 @@ class InMemoryKeysetRepositoryTest {
 				assertThat(ks.getKey("key-1"))
 					.isPresent()
 					.hasValueSatisfying(k -> {
-						assertThat(k.getStatus()).isEqualTo(KeyStatus.DESTROYED);
-						assertThat(k.getData()).isNull();
-						assertThat(k.getDestroyedAt()).isEqualTo(destroyedAt);
+						assertThat(k.status()).isEqualTo(KeyStatus.DESTROYED);
+						assertThat(k.data()).isNull();
+						assertThat(k.destroyedAt()).isEqualTo(destroyedAt);
 					})
 			);
 	}
@@ -99,8 +99,8 @@ class InMemoryKeysetRepositoryTest {
 				assertThat(ks.getKey("key-1"))
 					.isPresent()
 					.hasValueSatisfying(k -> {
-						assertThat(k.getStatus()).isEqualTo(KeyStatus.PENDING_DESTRUCTION);
-						assertThat(k.getDestructionScheduledAt()).isEqualTo(scheduledAt);
+						assertThat(k.status()).isEqualTo(KeyStatus.PENDING_DESTRUCTION);
+						assertThat(k.destructionScheduledAt()).isEqualTo(scheduledAt);
 					})
 			);
 	}
@@ -116,9 +116,9 @@ class InMemoryKeysetRepositoryTest {
 		final List<EncryptedKeyset> results = repository.findPendingDestruction();
 
 		assertThat(results).hasSize(1);
-		assertThat(results.getFirst().getName()).isEqualTo("test-keyset");
-		assertThat(results.getFirst().getKeys()).hasSize(1);
-		assertThat(results.getFirst().getKeys().getFirst().getId()).isEqualTo("key-1");
+		assertThat(results.getFirst().name()).isEqualTo("test-keyset");
+		assertThat(results.getFirst().keys()).hasSize(1);
+		assertThat(results.getFirst().keys().getFirst().id()).isEqualTo("key-1");
 	}
 
 	@Test
@@ -169,8 +169,8 @@ class InMemoryKeysetRepositoryTest {
 		assertThat(results)
 			.hasSize(1)
 			.first()
-			.returns("due-for-rotation", EncryptedKeyset::getName)
-			.extracting(EncryptedKeyset::getKeys)
+			.returns("due-for-rotation", EncryptedKeyset::name)
+			.extracting(EncryptedKeyset::keys)
 			.isEqualTo(List.of());
 	}
 
@@ -189,7 +189,7 @@ class InMemoryKeysetRepositoryTest {
 		repository.write(encryptedKeyset("not-due", freshKey));
 
 		assertThat(repository.findPendingRotation())
-			.extracting(EncryptedKeyset::getName)
+			.extracting(EncryptedKeyset::name)
 			.doesNotContain("not-due");
 	}
 
@@ -213,7 +213,7 @@ class InMemoryKeysetRepositoryTest {
 		repository.write(keyset);
 
 		assertThat(repository.findPendingRotation())
-			.extracting(EncryptedKeyset::getName)
+			.extracting(EncryptedKeyset::name)
 			.doesNotContain("no-expiry");
 	}
 

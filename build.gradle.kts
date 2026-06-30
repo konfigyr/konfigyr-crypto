@@ -5,8 +5,6 @@ plugins {
 	id("java-library")
 	id("com.konfigyr.sonatype") apply false
 	id("com.konfigyr.deploy") apply false
-
-    alias(libs.plugins.lombok) apply false
 }
 
 apply(plugin = "com.konfigyr.sonatype")
@@ -17,7 +15,7 @@ repositories {
 
 allprojects {
     group = "com.konfigyr"
-	version = "1.0.0-RC7"
+	version = "1.0.0"
 }
 
 subprojects {
@@ -28,7 +26,6 @@ subprojects {
     apply(plugin = "jacoco")
     apply(plugin = "checkstyle")
     apply(plugin = "java-library")
-    apply(plugin = "io.freefair.lombok")
     apply(plugin = "com.konfigyr.deploy")
 
 	repositories {
