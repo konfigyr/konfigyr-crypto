@@ -97,10 +97,25 @@ public interface KeyDefinition {
 	 */
 	class Builder {
 
+		/**
+		 * Whether the new key should become the primary key in the keyset. Defaults to {@literal true}.
+		 */
 		protected boolean primary = true;
+
+		/**
+		 * The {@link Algorithm} to use when generating the new key material. Must not be {@literal null}.
+		 */
 		protected @Nullable Algorithm algorithm;
+
+		/**
+		 * The duration after which the new key expires and becomes eligible for rotation.
+		 * {@literal null} disables automatic expiry.
+		 */
 		protected @Nullable Duration rotationInterval;
 
+		/**
+		 * Creates a new builder with default values: primary key, no fixed rotation interval.
+		 */
 		protected Builder() {
 		}
 

@@ -10,7 +10,7 @@ import javax.sql.DataSource;
 import java.util.List;
 
 /**
- * {@link DataSourceScriptDatabaseInitializer} for the Konfigyr Keyseet JDBC database. May
+ * {@link DataSourceScriptDatabaseInitializer} for the Konfigyr Keyset JDBC database. May
  * be registered as a bean to override autoconfiguration.
  *
  * @author Vladimir Spasic
@@ -30,17 +30,17 @@ public class JdbcKeysetDataSourceScriptDatabaseInitializer extends DataSourceScr
 	}
 
 	/**
-	 * Adapts {@link JdbcKeysetProperties Konfigyr Keyseet JDBC properties} to
+	 * Adapts {@link JdbcKeysetProperties Konfigyr Keyset JDBC properties} to
 	 * {@link DatabaseInitializationSettings} replacing any <code>@@platform@@}</code>
 	 * placeholders.
 	 * @param dataSource spring data source
-	 * @param properties Konfigyr Keyseet JDBC properties
+	 * @param properties Konfigyr Keyset JDBC properties
 	 * @return a new {@link DatabaseInitializationSettings} instance
 	 */
 	static DatabaseInitializationSettings settings(DataSource dataSource, JdbcKeysetProperties properties) {
 		final DatabaseInitializationSettings settings = new DatabaseInitializationSettings();
 		settings.setSchemaLocations(resolveSchemaLocations(dataSource, properties));
-		settings.setMode(properties.getInitializeSchema());
+		settings.setMode(properties.initializeSchema());
 		settings.setContinueOnError(true);
 		return settings;
 	}
@@ -48,10 +48,10 @@ public class JdbcKeysetDataSourceScriptDatabaseInitializer extends DataSourceScr
 	private static List<String> resolveSchemaLocations(DataSource dataSource, JdbcKeysetProperties properties) {
 		PlatformPlaceholderDatabaseDriverResolver resolver = new PlatformPlaceholderDatabaseDriverResolver();
 		resolver = resolver.withDriverPlatform(DatabaseDriver.MARIADB, "mysql");
-		if (StringUtils.hasText(properties.getPlatform())) {
-			return resolver.resolveAll(properties.getPlatform(), properties.getSchema());
+		if (StringUtils.hasText(properties.platform())) {
+			return resolver.resolveAll(properties.platform(), properties.schema());
 		}
-		return resolver.resolveAll(dataSource, properties.getSchema());
+		return resolver.resolveAll(dataSource, properties.schema());
 	}
 
 }

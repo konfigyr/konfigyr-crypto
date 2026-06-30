@@ -1,7 +1,8 @@
 package com.konfigyr.crypto;
 
-import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -26,11 +27,18 @@ import org.springframework.context.annotation.Bean;
  * @author Vladimir Spasic
  * @since 1.0.0
  **/
-@Slf4j
 @AutoConfiguration
 @ConditionalOnBean(KeysetFactory.class)
 @ConditionalOnMissingBean(KeysetStore.class)
 public class CryptoAutoConfiguration {
+
+	private static final Logger log = LoggerFactory.getLogger(CryptoAutoConfiguration.class);
+
+	/**
+	 * Creates a new instance of {@link CryptoAutoConfiguration}.
+	 */
+	public CryptoAutoConfiguration() {
+	}
 
 	@Bean
 	@ConditionalOnMissingBean(AlgorithmRegistry.class)

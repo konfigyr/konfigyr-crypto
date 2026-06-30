@@ -195,21 +195,43 @@ public interface KeysetDefinition {
 	 */
 	class Builder {
 
+		/**
+		 * Unique name that identifies the {@link Keyset} within the {@link KeysetStore}. Must not be blank.
+		 */
 		@Nullable
 		protected String name;
 
+		/**
+		 * The cryptographic purpose that determines which operations the {@link Keyset} supports.
+		 * Derived from {@link #algorithm} when not set explicitly.
+		 */
 		@Nullable
 		protected KeysetPurpose purpose;
 
+		/**
+		 * The {@link Algorithm} used to generate key material and perform cryptographic operations.
+		 * Must not be {@literal null}.
+		 */
 		@Nullable
 		protected Algorithm algorithm;
 
+		/**
+		 * How often key material should be automatically rotated. Defaults to 90 days.
+		 * {@literal null} disables automatic rotation.
+		 */
 		@Nullable
 		protected Duration rotationInterval = Duration.ofDays(90);
 
+		/**
+		 * Safety window between a deletion request and permanent key destruction. Defaults to 30 days.
+		 * {@literal null} disables the grace period.
+		 */
 		@Nullable
 		protected Duration destructionGracePeriod = Duration.ofDays(30);
 
+		/**
+		 * Creates a new builder with default values: 90-day rotation interval and 30-day destruction grace period.
+		 */
 		protected Builder() {
 		}
 
@@ -325,6 +347,12 @@ public interface KeysetDefinition {
 			return this;
 		}
 
+		/**
+		 * Builds the {@link KeysetDefinition} from the current builder state.
+		 *
+		 * @return keyset definition, never {@literal null}
+		 * @throws IllegalArgumentException when required fields are missing or intervals are out of range
+		 */
 		public KeysetDefinition build() {
 			Assert.hasText(name, "Keyset name can not be blank");
 			Assert.notNull(algorithm, "Keyset algorithm can not be null");

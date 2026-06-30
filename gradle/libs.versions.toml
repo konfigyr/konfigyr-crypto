@@ -13,6 +13,3 @@ spring-starter-jdbc-test = { module = "org.springframework.boot:spring-boot-star
 
 jose-jwt = { module = "com.nimbusds:nimbus-jose-jwt", version = "10.9.1" }
 tink = { module = "com.google.crypto.tink:tink", version = "1.22.0" }
-
-[plugins]
-lombok = { id = "io.freefair.lombok", version = "9.5.0" }

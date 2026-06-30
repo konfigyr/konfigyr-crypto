@@ -31,6 +31,12 @@ public class SimpleAlgorithmRegistry implements AlgorithmRegistry, SmartInitiali
 
 	private volatile boolean sealed = false;
 
+	/**
+	 * Creates a new empty algorithm registry.
+	 */
+	public SimpleAlgorithmRegistry() {
+	}
+
 	@Override
 	public void afterSingletonsInstantiated() {
 		sealed = true;

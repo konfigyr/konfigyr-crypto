@@ -1,8 +1,7 @@
 package com.konfigyr.crypto;
 
-import lombok.AccessLevel;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigureAfter;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -22,7 +21,7 @@ import java.util.List;
  * Two maintenance tasks are registered by default:
  * <ul>
  *     <li><em>keyset-rotation</em> — calls {@link KeysetStore#rotate(String)} for every
- *     keyset whose primary key's {@link EncryptedKey#getExpiresAt() expiry time} has
+ *     keyset whose primary key's {@link EncryptedKey#expiresAt() expiry time} has
  *     elapsed. Controlled via {@code konfigyr.crypto.tasks.keyset-rotation.*}.</li>
  *     <li><em>keyset-destruction</em> — calls
  *     {@link KeysetStore#destroy(String, String)} for every key whose
@@ -49,7 +48,6 @@ import java.util.List;
  * @since 1.0.0
  * @see KeysetTaskRegistration
  **/
-@RequiredArgsConstructor
 @EnableScheduling
 @AutoConfiguration
 @AutoConfigureAfter(CryptoAutoConfiguration.class)
@@ -59,6 +57,12 @@ public class KeysetTaskAutoConfiguration {
 	private final Environment environment;
 	private final KeysetStore keysetStore;
 	private final KeysetRepository keysetRepository;
+
+	KeysetTaskAutoConfiguration(Environment environment, KeysetStore keysetStore, KeysetRepository keysetRepository) {
+		this.environment = environment;
+		this.keysetStore = keysetStore;
+		this.keysetRepository = keysetRepository;
+	}
 
 	/**
 	 * Registers the keyset rotation task, which queries for keysets whose primary key's
@@ -90,12 +94,17 @@ public class KeysetTaskAutoConfiguration {
 	 * elapsed. Failures for individual keysets are caught and logged so that one failure
 	 * does not prevent the remaining keysets from being rotated.
 	 */
-	@Slf4j
-	@RequiredArgsConstructor(access = AccessLevel.PACKAGE)
 	static final class KeysetRotationTask implements Runnable {
+
+		private static final Logger log = LoggerFactory.getLogger(KeysetRotationTask.class);
 
 		private final KeysetStore store;
 		private final KeysetRepository repository;
+
+		KeysetRotationTask(KeysetStore store, KeysetRepository repository) {
+			this.store = store;
+			this.repository = repository;
+		}
 
 		@Override
 		public void run() {
@@ -115,10 +124,10 @@ public class KeysetTaskAutoConfiguration {
 
 			for (EncryptedKeyset keyset : pending) {
 				try {
-					log.debug("Rotating keyset '{}'", keyset.getName());
-					store.rotate(keyset.getName());
+					log.debug("Rotating keyset '{}'", keyset.name());
+					store.rotate(keyset.name());
 				} catch (Exception e) {
-					log.error("Failed to rotate keyset '{}'", keyset.getName(), e);
+					log.error("Failed to rotate keyset '{}'", keyset.name(), e);
 				}
 			}
 		}
@@ -131,12 +140,17 @@ public class KeysetTaskAutoConfiguration {
 	 * elapsed. Failures for individual keys are caught and logged so that one failure
 	 * does not prevent the remaining keys from being destroyed.
 	 */
-	@Slf4j
-	@RequiredArgsConstructor(access = AccessLevel.PACKAGE)
 	static final class KeysetDestructionTask implements Runnable {
+
+		private static final Logger log = LoggerFactory.getLogger(KeysetDestructionTask.class);
 
 		private final KeysetStore store;
 		private final KeysetRepository repository;
+
+		KeysetDestructionTask(KeysetStore store, KeysetRepository repository) {
+			this.store = store;
+			this.repository = repository;
+		}
 
 		@Override
 		public void run() {
@@ -157,10 +171,10 @@ public class KeysetTaskAutoConfiguration {
 			for (EncryptedKeyset keyset : pending) {
 				for (EncryptedKey key : keyset) {
 					try {
-						log.debug("Destroying key '{}' in keyset '{}'", key.getId(), keyset.getName());
-						store.destroy(keyset.getName(), key.getId());
+						log.debug("Destroying key '{}' in keyset '{}'", key.id(), keyset.name());
+						store.destroy(keyset.name(), key.id());
 					} catch (Exception e) {
-						log.error("Failed to destroy key '{}' in keyset '{}'", key.getId(), keyset.getName(), e);
+						log.error("Failed to destroy key '{}' in keyset '{}'", key.id(), keyset.name(), e);
 					}
 				}
 			}

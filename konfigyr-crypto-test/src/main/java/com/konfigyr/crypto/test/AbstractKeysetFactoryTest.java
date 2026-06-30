@@ -47,6 +47,12 @@ import static org.assertj.core.api.Assertions.*;
 public abstract class AbstractKeysetFactoryTest {
 
 	/**
+	 * Creates a new instance of this abstract test class.
+	 */
+	protected AbstractKeysetFactoryTest() {
+	}
+
+	/**
 	 * Returns the {@link KeysetFactory} under test.
 	 *
 	 * @return factory under test, never {@literal null}

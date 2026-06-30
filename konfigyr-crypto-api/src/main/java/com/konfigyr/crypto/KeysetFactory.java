@@ -51,7 +51,7 @@ public interface KeysetFactory {
 	 * @return <code>true</code> if the factory can attempt keyset decryption
 	 */
 	default boolean supports(EncryptedKeyset encryptedKeyset) {
-		return Objects.equals(getName(), encryptedKeyset.getFactory());
+		return Objects.equals(getName(), encryptedKeyset.factory());
 	}
 
 	/**

@@ -59,7 +59,7 @@ public class EncryptedKeysetAssert extends AbstractObjectAssert<EncryptedKeysetA
 	public IterableAssert<EncryptedKey> assertThatKeys() {
 		return assertThatKeyset()
 			.as("encrypted keys")
-			.extracting(EncryptedKeyset::getKeys, InstanceOfAssertFactories.iterable(EncryptedKey.class));
+			.extracting(EncryptedKeyset::keys, InstanceOfAssertFactories.iterable(EncryptedKey.class));
 	}
 
 	/**
@@ -103,7 +103,7 @@ public class EncryptedKeysetAssert extends AbstractObjectAssert<EncryptedKeysetA
 	 */
 	public EncryptedKeysetAssert hasName(@Nullable String name) {
 		assertThatKeyset()
-			.extracting(EncryptedKeyset::getName, InstanceOfAssertFactories.STRING)
+			.extracting(EncryptedKeyset::name, InstanceOfAssertFactories.STRING)
 			.as("keyset name")
 			.isEqualTo(name);
 		return myself;
@@ -117,7 +117,7 @@ public class EncryptedKeysetAssert extends AbstractObjectAssert<EncryptedKeysetA
 	 */
 	public EncryptedKeysetAssert createdByFactory(@Nullable String name) {
 		assertThatKeyset()
-			.extracting(EncryptedKeyset::getFactory, InstanceOfAssertFactories.STRING)
+			.extracting(EncryptedKeyset::factory, InstanceOfAssertFactories.STRING)
 			.as("keyset factory")
 			.isEqualTo(name);
 		return myself;
@@ -141,7 +141,7 @@ public class EncryptedKeysetAssert extends AbstractObjectAssert<EncryptedKeysetA
 	 */
 	public EncryptedKeysetAssert hasPurpose(@Nullable String purpose) {
 		assertThatKeyset()
-			.extracting(EncryptedKeyset::getPurpose, InstanceOfAssertFactories.STRING)
+			.extracting(EncryptedKeyset::purpose, InstanceOfAssertFactories.STRING)
 			.as("keyset purpose")
 			.isEqualTo(purpose);
 		return myself;
@@ -171,11 +171,11 @@ public class EncryptedKeysetAssert extends AbstractObjectAssert<EncryptedKeysetA
 	 */
 	public EncryptedKeysetAssert hasKeyEncryptionKey(@Nullable String provider, @Nullable String id) {
 		assertThatKeyset()
-			.extracting(EncryptedKeyset::getProvider, InstanceOfAssertFactories.STRING)
+			.extracting(EncryptedKeyset::provider, InstanceOfAssertFactories.STRING)
 			.as("KEK provider")
 			.isEqualTo(provider);
 		assertThatKeyset()
-			.extracting(EncryptedKeyset::getKeyEncryptionKey, InstanceOfAssertFactories.STRING)
+			.extracting(EncryptedKeyset::keyEncryptionKey, InstanceOfAssertFactories.STRING)
 			.as("KEK identifier")
 			.isEqualTo(id);
 		return myself;
@@ -204,7 +204,7 @@ public class EncryptedKeysetAssert extends AbstractObjectAssert<EncryptedKeysetA
 	 */
 	public EncryptedKeysetAssert hasRotationInterval(@Nullable Duration interval) {
 		assertThatKeyset()
-			.extracting(EncryptedKeyset::getRotationInterval)
+			.extracting(EncryptedKeyset::rotationInterval)
 			.as("keyset rotation interval")
 			.isEqualTo(interval);
 		return myself;
@@ -219,7 +219,7 @@ public class EncryptedKeysetAssert extends AbstractObjectAssert<EncryptedKeysetA
 	 */
 	public EncryptedKeysetAssert hasDestructionGracePeriod(@Nullable Duration interval) {
 		assertThatKeyset()
-			.extracting(EncryptedKeyset::getDestructionGracePeriod)
+			.extracting(EncryptedKeyset::destructionGracePeriod)
 			.as("keyset destruction grace period")
 			.isEqualTo(interval);
 		return myself;

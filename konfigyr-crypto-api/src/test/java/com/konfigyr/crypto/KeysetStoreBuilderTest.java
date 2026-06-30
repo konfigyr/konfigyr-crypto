@@ -34,7 +34,7 @@ class KeysetStoreBuilderTest {
 
 		assertThat(store)
 			.isNotNull()
-			.isInstanceOf(RepostoryKeysetStore.class);
+			.isInstanceOf(RepositoryKeysetStore.class);
 
 		assertThat(store)
 			.extracting("cache")
@@ -59,7 +59,7 @@ class KeysetStoreBuilderTest {
 
 		assertThat(store)
 			.isNotNull()
-			.isInstanceOf(RepostoryKeysetStore.class);
+			.isInstanceOf(RepositoryKeysetStore.class);
 
 		assertThat(store)
 			.extracting("cache")

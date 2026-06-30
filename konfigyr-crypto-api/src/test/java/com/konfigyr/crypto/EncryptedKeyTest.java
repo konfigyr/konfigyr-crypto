@@ -64,7 +64,7 @@ class EncryptedKeyTest {
 			.destroyedAt(null)
 			.build(data);
 
-		final var copy = EncryptedKey.builder(original).build(original.getData());
+		final var copy = EncryptedKey.builder(original).build(original.data());
 
 		assertThat(copy).isEqualTo(original);
 	}

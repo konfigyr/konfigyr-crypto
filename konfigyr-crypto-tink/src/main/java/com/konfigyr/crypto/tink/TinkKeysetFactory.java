@@ -10,7 +10,6 @@ import com.konfigyr.crypto.*;
 import com.konfigyr.crypto.Key;
 import com.konfigyr.crypto.WrappedKeyMaterial;
 import com.konfigyr.io.ByteArray;
-import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NullMarked;
 import org.springframework.util.Assert;
 
@@ -36,12 +35,20 @@ import java.util.List;
  * @see TinkKeyset
  **/
 @NullMarked
-@RequiredArgsConstructor
 public class TinkKeysetFactory implements KeysetFactory {
 
 	static final String NAME = "tink";
 
 	private final AlgorithmRegistry registry;
+
+	/**
+	 * Creates a new {@link TinkKeysetFactory} that resolves algorithms from the given registry.
+	 *
+	 * @param registry the algorithm registry used to look up {@link TinkAlgorithm} instances, can't be {@literal null}
+	 */
+	public TinkKeysetFactory(AlgorithmRegistry registry) {
+		this.registry = registry;
+	}
 
 	@Override
 	public String getName() {
@@ -99,17 +106,17 @@ public class TinkKeysetFactory implements KeysetFactory {
 			.keyEncryptionKey(kek);
 
 		for (EncryptedKey encrypted : encryptedKeyset) {
-			if (encrypted.getData() == null) {
+			if (encrypted.data() == null) {
 				continue;
 			}
 
-			final ByteArray unwrapped = kek.unwrap(encrypted.getData());
+			final ByteArray unwrapped = kek.unwrap(encrypted.data());
 			final KeyData data;
 
 			try {
 				data = KeyData.parseFrom(unwrapped.array());
 			} catch (InvalidProtocolBufferException ex) {
-				throw new CryptoException.UnwrappingException(encryptedKeyset.getName(), kek, ex);
+				throw new CryptoException.UnwrappingException(encryptedKeyset.name(), kek, ex);
 			}
 
 			final com.google.crypto.tink.Key key;
@@ -120,27 +127,27 @@ public class TinkKeysetFactory implements KeysetFactory {
 					data.getValue(),
 					ProtoConversions.fromProto(data.getKeyMaterialType()),
 					ProtoKeySerialization.OutputPrefixType.TINK,
-					Integer.parseInt(encrypted.getId())
+					Integer.parseInt(encrypted.id())
 				);
 
 				key = MutableSerializationRegistry.globalInstance()
 					.parseKey(serialization, InsecureSecretKeyAccess.get());
 			} catch (Exception e) {
-				throw new CryptoException.UnwrappingException(encryptedKeyset.getName(), kek, e);
+				throw new CryptoException.UnwrappingException(encryptedKeyset.name(), kek, e);
 			}
 
-			final TinkAlgorithm algorithm = (TinkAlgorithm) registry.resolve(encrypted.getAlgorithm());
+			final TinkAlgorithm algorithm = (TinkAlgorithm) registry.resolve(encrypted.algorithm());
 
 			builder.key(new TinkKey.Builder(key)
-				.id(encrypted.getId())
-				.status(encrypted.getStatus())
+				.id(encrypted.id())
+				.status(encrypted.status())
 				.algorithm(algorithm)
-				.primary(encrypted.isPrimary())
-				.createdAt(encrypted.getCreatedAt())
-				.initializedAt(encrypted.getInitializedAt())
-				.expiresAt(encrypted.getExpiresAt())
-				.destructionScheduledAt(encrypted.getDestructionScheduledAt())
-				.destroyedAt(encrypted.getDestroyedAt())
+				.primary(encrypted.primary())
+				.createdAt(encrypted.createdAt())
+				.initializedAt(encrypted.initializedAt())
+				.expiresAt(encrypted.expiresAt())
+				.destructionScheduledAt(encrypted.destructionScheduledAt())
+				.destroyedAt(encrypted.destroyedAt())
 				.build()
 			);
 		}

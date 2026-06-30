@@ -61,7 +61,7 @@ public interface KeyEncryptionKeyProvider {
 	 * not resolve the {@link KeyEncryptionKey} with the given identifier
 	 */
 	default KeyEncryptionKey provide(EncryptedKeyset encryptedKeyset) {
-		return provide(encryptedKeyset.getKeyEncryptionKey());
+		return provide(encryptedKeyset.keyEncryptionKey());
 	}
 
 	/**

@@ -2,7 +2,6 @@ package com.konfigyr.crypto.jdbc;
 
 import com.konfigyr.crypto.CryptoAutoConfiguration;
 import com.konfigyr.crypto.KeysetRepository;
-import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -35,7 +34,6 @@ import javax.sql.DataSource;
  * @author Vladimir Spasic
  * @since 1.0.0
  **/
-@RequiredArgsConstructor
 @AutoConfiguration
 @AutoConfigureAfter({ DataSourceAutoConfiguration.class, TransactionAutoConfiguration.class })
 @AutoConfigureBefore(CryptoAutoConfiguration.class)
@@ -46,13 +44,22 @@ public class JdbcKeysetAutoConfiguration {
 
 	private final JdbcKeysetProperties properties;
 
+	/**
+	 * Creates a new {@link JdbcKeysetAutoConfiguration} instance.
+	 *
+	 * @param properties the JDBC keyset configuration properties, can't be {@literal null}
+	 */
+	public JdbcKeysetAutoConfiguration(JdbcKeysetProperties properties) {
+		this.properties = properties;
+	}
+
 	@Bean
 	KeysetRepository jdbcKeysetRepository(DataSource dataSource, PlatformTransactionManager txManager) {
 		final JdbcKeysetRepository repository = new JdbcKeysetRepository(createJdbcOperations(dataSource),
 				createTransactionOperations(txManager, properties));
 
-		repository.setTableName(properties.getTableName());
-		repository.setKeysTableName(properties.getKeysTableName());
+		repository.setTableName(properties.tableName());
+		repository.setKeysTableName(properties.keysTableName());
 
 		return repository;
 	}
@@ -77,9 +84,9 @@ public class JdbcKeysetAutoConfiguration {
 		@NonNull JdbcKeysetProperties properties
 	) {
 		final TransactionTemplate template = new TransactionTemplate(txManager);
-		template.setPropagationBehavior(properties.getTransactionPropagationBehavior().value());
-		template.setIsolationLevel(properties.getTransactionIsolationLevel().value());
-		template.setTimeout((int) properties.getTransactionTimeout().toSeconds());
+		template.setPropagationBehavior(properties.transactionPropagationBehavior().value());
+		template.setIsolationLevel(properties.transactionIsolationLevel().value());
+		template.setTimeout((int) properties.transactionTimeout().toSeconds());
 		template.setName("jdbc-keyset-repository-transaction-operations");
 		template.setReadOnly(false);
 		template.afterPropertiesSet();

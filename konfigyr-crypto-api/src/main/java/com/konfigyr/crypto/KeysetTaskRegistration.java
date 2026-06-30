@@ -1,10 +1,9 @@
 package com.konfigyr.crypto;
 
-import lombok.AccessLevel;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.context.properties.source.ConfigurationPropertyName;
@@ -34,16 +33,20 @@ import java.time.Duration;
  * @since 1.0.0
  * @see KeysetTaskAutoConfiguration
  **/
-@Slf4j
 @NullMarked
-@RequiredArgsConstructor(access = AccessLevel.PRIVATE)
 final class KeysetTaskRegistration implements SchedulingConfigurer {
 
 	static final ConfigurationPropertyName PREFIX = ConfigurationPropertyName.of("konfigyr.crypto.tasks");
 
 	static final TriggerProperties DEFAULT_PROPERTIES = new TriggerProperties(null, Duration.ofHours(1), true);
 
+	private static final Logger log = LoggerFactory.getLogger(KeysetTaskRegistration.class);
+
 	private final TriggerTask task;
+
+	private KeysetTaskRegistration(TriggerTask task) {
+		this.task = task;
+	}
 
 	/**
 	 * Creates a {@link KeysetTaskRegistration} for the given task name by constructing a

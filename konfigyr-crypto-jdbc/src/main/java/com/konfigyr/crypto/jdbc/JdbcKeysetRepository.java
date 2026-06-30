@@ -3,11 +3,10 @@ package com.konfigyr.crypto.jdbc;
 import com.konfigyr.crypto.*;
 import com.konfigyr.crypto.WrappedKeyMaterial;
 import com.konfigyr.io.ByteArray;
-import lombok.RequiredArgsConstructor;
-import lombok.Setter;
-import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcOperations;
@@ -71,9 +70,6 @@ import java.util.Optional;
  * @author Vladimir Spasic
  * @since 1.0.0
  **/
-@Slf4j
-@Setter
-@RequiredArgsConstructor
 public class JdbcKeysetRepository implements KeysetRepository, InitializingBean {
 
 	/**
@@ -228,6 +224,189 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 
 	private final TransactionOperations transactionOperations;
 
+	private final Logger log = LoggerFactory.getLogger(JdbcKeysetRepository.class);
+
+	/**
+	 * Creates a new {@link JdbcKeysetRepository} backed by the given JDBC and transaction operations.
+	 *
+	 * @param jdbcOperations the JDBC operations used to execute database queries, can't be {@literal null}
+	 * @param transactionOperations the transaction operations used to wrap writes in a transaction, can't be {@literal null}
+	 */
+	public JdbcKeysetRepository(JdbcOperations jdbcOperations, TransactionOperations transactionOperations) {
+		this.jdbcOperations = jdbcOperations;
+		this.transactionOperations = transactionOperations;
+	}
+
+	/**
+	 * Sets the name of the database table used to store keyset metadata.
+	 * Defaults to {@value DEFAULT_TABLE_NAME}.
+	 *
+	 * @param tableName the table name, can't be {@literal null}
+	 */
+	public void setTableName(String tableName) {
+		this.tableName = tableName;
+	}
+
+	/**
+	 * Sets the name of the database table used to store encrypted key entries.
+	 * Defaults to {@value DEFAULT_KEYS_TABLE_NAME}.
+	 *
+	 * @param keysTableName the keys table name, can't be {@literal null}
+	 */
+	public void setKeysTableName(String keysTableName) {
+		this.keysTableName = keysTableName;
+	}
+
+	/**
+	 * Overrides the SQL query used to read a keyset by name.
+	 * When {@literal null}, the built-in default query is used.
+	 *
+	 * @param getKeysetQuery custom SQL query, or {@literal null} to use the default
+	 */
+	public void setGetKeysetQuery(String getKeysetQuery) {
+		this.getKeysetQuery = getKeysetQuery;
+	}
+
+	/**
+	 * Overrides the SQL query used to read the keys belonging to a keyset.
+	 * When {@literal null}, the built-in default query is used.
+	 *
+	 * @param getKeysQuery custom SQL query, or {@literal null} to use the default
+	 */
+	public void setGetKeysQuery(String getKeysQuery) {
+		this.getKeysQuery = getKeysQuery;
+	}
+
+	/**
+	 * Overrides the SQL query used to check whether a keyset exists.
+	 * When {@literal null}, the built-in default query is used.
+	 *
+	 * @param keysetExistsQuery custom SQL query, or {@literal null} to use the default
+	 */
+	public void setKeysetExistsQuery(String keysetExistsQuery) {
+		this.keysetExistsQuery = keysetExistsQuery;
+	}
+
+	/**
+	 * Overrides the SQL statement used to insert a new keyset row.
+	 * When {@literal null}, the built-in default statement is used.
+	 *
+	 * @param createKeysetQuery custom SQL statement, or {@literal null} to use the default
+	 */
+	public void setCreateKeysetQuery(String createKeysetQuery) {
+		this.createKeysetQuery = createKeysetQuery;
+	}
+
+	/**
+	 * Overrides the SQL statement used to update an existing keyset row.
+	 * When {@literal null}, the built-in default statement is used.
+	 *
+	 * @param updateKeysetQuery custom SQL statement, or {@literal null} to use the default
+	 */
+	public void setUpdateKeysetQuery(String updateKeysetQuery) {
+		this.updateKeysetQuery = updateKeysetQuery;
+	}
+
+	/**
+	 * Overrides the SQL statement used to insert a new key row.
+	 * When {@literal null}, the built-in default statement is used.
+	 *
+	 * @param createKeyQuery custom SQL statement, or {@literal null} to use the default
+	 */
+	public void setCreateKeyQuery(String createKeyQuery) {
+		this.createKeyQuery = createKeyQuery;
+	}
+
+	/**
+	 * Overrides the SQL statement used to update an existing key row.
+	 * When {@literal null}, the built-in default statement is used.
+	 *
+	 * @param updateKeyQuery custom SQL statement, or {@literal null} to use the default
+	 */
+	public void setUpdateKeyQuery(String updateKeyQuery) {
+		this.updateKeyQuery = updateKeyQuery;
+	}
+
+	/**
+	 * Overrides the SQL statement used to delete a single key row.
+	 * When {@literal null}, the built-in default statement is used.
+	 *
+	 * @param deleteKeyQuery custom SQL statement, or {@literal null} to use the default
+	 */
+	public void setDeleteKeyQuery(String deleteKeyQuery) {
+		this.deleteKeyQuery = deleteKeyQuery;
+	}
+
+	/**
+	 * Overrides the SQL statement used to delete all key rows for a keyset.
+	 * When {@literal null}, the built-in default statement is used.
+	 *
+	 * @param deleteKeysQuery custom SQL statement, or {@literal null} to use the default
+	 */
+	public void setDeleteKeysQuery(String deleteKeysQuery) {
+		this.deleteKeysQuery = deleteKeysQuery;
+	}
+
+	/**
+	 * Overrides the SQL statement used to delete a keyset row.
+	 * When {@literal null}, the built-in default statement is used.
+	 *
+	 * @param deleteKeysetQuery custom SQL statement, or {@literal null} to use the default
+	 */
+	public void setDeleteKeysetQuery(String deleteKeysetQuery) {
+		this.deleteKeysetQuery = deleteKeysetQuery;
+	}
+
+	/**
+	 * Overrides the SQL statement used to update the lifecycle status of a key.
+	 * When {@literal null}, the built-in default statement is used.
+	 *
+	 * @param updateKeyStatusQuery custom SQL statement, or {@literal null} to use the default
+	 */
+	public void setUpdateKeyStatusQuery(String updateKeyStatusQuery) {
+		this.updateKeyStatusQuery = updateKeyStatusQuery;
+	}
+
+	/**
+	 * Overrides the SQL statement used to permanently destroy a key (clear its material and mark it destroyed).
+	 * When {@literal null}, the built-in default statement is used.
+	 *
+	 * @param destroyKeyQuery custom SQL statement, or {@literal null} to use the default
+	 */
+	public void setDestroyKeyQuery(String destroyKeyQuery) {
+		this.destroyKeyQuery = destroyKeyQuery;
+	}
+
+	/**
+	 * Overrides the SQL query used to find keysets that have keys pending destruction.
+	 * When {@literal null}, the built-in default query is used.
+	 *
+	 * @param findPendingDestructionQuery custom SQL query, or {@literal null} to use the default
+	 */
+	public void setFindPendingDestructionQuery(String findPendingDestructionQuery) {
+		this.findPendingDestructionQuery = findPendingDestructionQuery;
+	}
+
+	/**
+	 * Overrides the SQL query used to find keysets whose primary key has passed its rotation interval.
+	 * When {@literal null}, the built-in default query is used.
+	 *
+	 * @param findPendingRotationQuery custom SQL query, or {@literal null} to use the default
+	 */
+	public void setFindPendingRotationQuery(String findPendingRotationQuery) {
+		this.findPendingRotationQuery = findPendingRotationQuery;
+	}
+
+	/**
+	 * Overrides the SQL statement used to increment the keyset version counter.
+	 * When {@literal null}, the built-in default statement is used.
+	 *
+	 * @param bumpKeysetVersionQuery custom SQL statement, or {@literal null} to use the default
+	 */
+	public void setBumpKeysetVersionQuery(String bumpKeysetVersionQuery) {
+		this.bumpKeysetVersionQuery = bumpKeysetVersionQuery;
+	}
+
 	@Override
 	public void afterPropertiesSet() {
 		Assert.hasText(tableName, "Table name for encrypted keysets can not be blank");
@@ -280,7 +459,7 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 	@Override
 	public EncryptedKeyset write(@NonNull EncryptedKeyset keyset) {
 		return transactionOperations.execute(status -> {
-			if (exists(keyset.getName())) {
+			if (exists(keyset.name())) {
 				return update(keyset);
 			}
 
@@ -300,56 +479,63 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 	}
 
 	private void create(EncryptedKeyset keyset) {
-		log.debug("Creating keyset '{}' with {} key(s)", keyset.getName(), keyset.size());
+		log.debug("Creating keyset '{}' with {} key(s)", keyset.name(), keyset.size());
 
 		jdbcOperations.update(createKeysetQuery, ps -> {
-			ps.setString(1, keyset.getName());
-			ps.setString(2, keyset.getPurpose());
-			ps.setString(3, keyset.getFactory());
-			ps.setString(4, keyset.getProvider());
-			ps.setString(5, keyset.getKeyEncryptionKey());
-			setDuration(ps, 6, keyset.getRotationInterval());
-			setDuration(ps, 7, keyset.getDestructionGracePeriod());
+			ps.setString(1, keyset.name());
+			ps.setString(2, keyset.purpose());
+			ps.setString(3, keyset.factory());
+			ps.setString(4, keyset.provider());
+			ps.setString(5, keyset.keyEncryptionKey());
+			setDuration(ps, 6, keyset.rotationInterval());
+			setDuration(ps, 7, keyset.destructionGracePeriod());
 		});
-		insertKeys(keyset.getName(), keyset.getKeys());
+		insertKeys(keyset.name(), keyset.keys());
 	}
 
 	private EncryptedKeyset update(EncryptedKeyset keyset) {
-		log.debug("Updating keyset '{}'", keyset.getName());
+		log.debug("Updating keyset '{}'", keyset.name());
 
 		final int updated = jdbcOperations.update(updateKeysetQuery, ps -> {
-			ps.setString(1, keyset.getPurpose());
-			ps.setString(2, keyset.getFactory());
-			ps.setString(3, keyset.getProvider());
-			ps.setString(4, keyset.getKeyEncryptionKey());
-			setDuration(ps, 5, keyset.getRotationInterval());
-			setDuration(ps, 6, keyset.getDestructionGracePeriod());
-			ps.setString(7, keyset.getName());
-			ps.setLong(8, keyset.getVersion());
+			ps.setString(1, keyset.purpose());
+			ps.setString(2, keyset.factory());
+			ps.setString(3, keyset.provider());
+			ps.setString(4, keyset.keyEncryptionKey());
+			setDuration(ps, 5, keyset.rotationInterval());
+			setDuration(ps, 6, keyset.destructionGracePeriod());
+			ps.setString(7, keyset.name());
+			ps.setLong(8, keyset.version());
 		});
 
 		if (updated == 0) {
-			throw new CryptoException.KeysetConcurrentModificationException(keyset.getName());
+			throw new CryptoException.KeysetConcurrentModificationException(keyset.name());
 		}
 
-		updateKeys(keyset.getName(), keyset.getKeys());
-		return EncryptedKeyset.builder(keyset).version(keyset.getVersion() + 1).build(keyset.getKeys());
+		updateKeys(keyset.name(), keyset.keys());
+		return EncryptedKeyset.builder(keyset).version(keyset.version() + 1).build(keyset.keys());
 	}
 
-	private void updateKeys(String keysetName, List<EncryptedKey> newKeys) {
+	/**
+	 * Synchronizes the set of {@link EncryptedKey keys} for the given keyset in the database.
+	 * Keys absent from {@code newKeys} are deleted; new entries are inserted; changed entries are updated.
+	 *
+	 * @param keysetName the name of the keyset whose keys are being synchronized, can't be {@literal null}
+	 * @param newKeys the desired list of encrypted keys, can't be {@literal null}
+	 */
+	protected void updateKeys(String keysetName, List<EncryptedKey> newKeys) {
 		final List<EncryptedKey> stored = jdbcOperations.query(
 			getKeysQuery, pss -> pss.setString(1, keysetName), this::extractKeys);
 
 		final Map<String, EncryptedKey> storedById = new HashMap<>(stored.size());
 		for (EncryptedKey key : stored) {
-			storedById.put(key.getId(), key);
+			storedById.put(key.id(), key);
 		}
 
 		final List<EncryptedKey> toInsert = new ArrayList<>();
 		final List<EncryptedKey> toUpdate = new ArrayList<>();
 
 		for (EncryptedKey key : newKeys) {
-			final EncryptedKey existing = storedById.remove(key.getId());
+			final EncryptedKey existing = storedById.remove(key.id());
 			if (existing == null) {
 				toInsert.add(key);
 			}
@@ -359,8 +545,8 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 		}
 
 		final List<String> toDelete = storedById.values().stream()
-			.filter(key -> key.getData() != null)
-			.map(EncryptedKey::getId)
+			.filter(key -> key.data() != null)
+			.map(EncryptedKey::id)
 			.toList();
 
 		if (log.isDebugEnabled()) {
@@ -375,18 +561,18 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 
 		if (!toUpdate.isEmpty()) {
 			jdbcOperations.batchUpdate(updateKeyQuery, toUpdate, toUpdate.size(), (ps, key) -> {
-				ps.setString(1, key.getAlgorithm());
-				ps.setString(2, key.getType().name());
-				ps.setString(3, key.getStatus().name());
-				ps.setBoolean(4, key.isPrimary());
-				setBytes(ps, 5, key.getData());
-				ps.setLong(6, key.getCreatedAt().toEpochMilli());
-				setInstant(ps, 7, key.getInitializedAt());
-				setInstant(ps, 8, key.getExpiresAt());
-				setInstant(ps, 9, key.getDestructionScheduledAt());
-				setInstant(ps, 10, key.getDestroyedAt());
+				ps.setString(1, key.algorithm());
+				ps.setString(2, key.type().name());
+				ps.setString(3, key.status().name());
+				ps.setBoolean(4, key.primary());
+				setBytes(ps, 5, key.data());
+				ps.setLong(6, key.createdAt().toEpochMilli());
+				setInstant(ps, 7, key.initializedAt());
+				setInstant(ps, 8, key.expiresAt());
+				setInstant(ps, 9, key.destructionScheduledAt());
+				setInstant(ps, 10, key.destroyedAt());
 				ps.setString(11, keysetName);
-				ps.setString(12, key.getId());
+				ps.setString(12, key.id());
 			});
 		}
 
@@ -398,51 +584,57 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 		}
 	}
 
-	private void insertKeys(String keysetName, List<EncryptedKey> keys) {
+	/**
+	 * Inserts the given list of {@link EncryptedKey keys} for the specified keyset into the database.
+	 *
+	 * @param keysetName the name of the keyset the keys belong to, can't be {@literal null}
+	 * @param keys the keys to insert, can't be {@literal null}
+	 */
+	protected void insertKeys(String keysetName, List<EncryptedKey> keys) {
 		jdbcOperations.batchUpdate(createKeyQuery, keys, keys.size(), (ps, key) -> {
 			ps.setString(1, keysetName);
-			ps.setString(2, key.getId());
-			ps.setString(3, key.getAlgorithm());
-			ps.setString(4, key.getType().name());
-			ps.setString(5, key.getStatus().name());
-			ps.setBoolean(6, key.isPrimary());
-			setBytes(ps, 7, key.getData());
-			ps.setLong(8, key.getCreatedAt().toEpochMilli());
-			setInstant(ps, 9, key.getInitializedAt());
-			setInstant(ps, 10, key.getExpiresAt());
-			setInstant(ps, 11, key.getDestructionScheduledAt());
-			setInstant(ps, 12, key.getDestroyedAt());
+			ps.setString(2, key.id());
+			ps.setString(3, key.algorithm());
+			ps.setString(4, key.type().name());
+			ps.setString(5, key.status().name());
+			ps.setBoolean(6, key.primary());
+			setBytes(ps, 7, key.data());
+			ps.setLong(8, key.createdAt().toEpochMilli());
+			setInstant(ps, 9, key.initializedAt());
+			setInstant(ps, 10, key.expiresAt());
+			setInstant(ps, 11, key.destructionScheduledAt());
+			setInstant(ps, 12, key.destroyedAt());
 		});
 	}
 
 	@Override
 	public void updateKeyStatus(@NonNull KeyTransition transition) {
 		log.debug("Updating key '{}' in keyset '{}' to status {}",
-				transition.getKeyId(), transition.getKeysetName(), transition.getStatus());
+				transition.keyId(), transition.keysetName(), transition.status());
 
 		transactionOperations.executeWithoutResult(status -> {
-			if (transition.getStatus() == KeyStatus.DESTROYED) {
+			if (transition.status() == KeyStatus.DESTROYED) {
 				jdbcOperations.update(destroyKeyQuery, ps -> {
-					setInstant(ps, 1, transition.getDestroyedAt());
-					ps.setString(2, transition.getKeysetName());
-					ps.setString(3, transition.getKeyId());
+					setInstant(ps, 1, transition.destroyedAt());
+					ps.setString(2, transition.keysetName());
+					ps.setString(3, transition.keyId());
 				});
 			}
 			else {
 				jdbcOperations.update(updateKeyStatusQuery, ps -> {
-					ps.setString(1, transition.getStatus().name());
-					setInstant(ps, 2, transition.getDestructionScheduledAt());
-					setInstant(ps, 3, transition.getDestroyedAt());
-					ps.setString(4, transition.getKeysetName());
-					ps.setString(5, transition.getKeyId());
+					ps.setString(1, transition.status().name());
+					setInstant(ps, 2, transition.destructionScheduledAt());
+					setInstant(ps, 3, transition.destroyedAt());
+					ps.setString(4, transition.keysetName());
+					ps.setString(5, transition.keyId());
 				});
 			}
 			final int bumped = jdbcOperations.update(bumpKeysetVersionQuery, pss -> {
-				pss.setString(1, transition.getKeysetName());
-				pss.setLong(2, transition.getKeysetVersion());
+				pss.setString(1, transition.keysetName());
+				pss.setLong(2, transition.keysetVersion());
 			});
 			if (bumped == 0) {
-				throw new CryptoException.KeysetConcurrentModificationException(transition.getKeysetName());
+				throw new CryptoException.KeysetConcurrentModificationException(transition.keysetName());
 			}
 		});
 	}

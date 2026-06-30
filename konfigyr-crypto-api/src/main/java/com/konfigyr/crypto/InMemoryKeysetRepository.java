@@ -21,6 +21,12 @@ public class InMemoryKeysetRepository implements KeysetRepository {
 
 	private final Map<String, EncryptedKeyset> store = new ConcurrentHashMap<>();
 
+	/**
+	 * Creates a new empty in-memory keyset repository.
+	 */
+	public InMemoryKeysetRepository() {
+	}
+
 	@Override
 	public Optional<EncryptedKeyset> read(String name) {
 		return Optional.ofNullable(store.get(name));
@@ -28,14 +34,14 @@ public class InMemoryKeysetRepository implements KeysetRepository {
 
 	@Override
 	public EncryptedKeyset write(EncryptedKeyset keyset) {
-		return store.compute(keyset.getName(), (name, existing) -> {
-			if (existing != null && existing.getVersion() != keyset.getVersion()) {
+		return store.compute(keyset.name(), (name, existing) -> {
+			if (existing != null && existing.version() != keyset.version()) {
 				throw new CryptoException.KeysetConcurrentModificationException(name);
 			}
 
 			return EncryptedKeyset.builder(keyset)
-				.version(existing == null ? 0L : keyset.getVersion() + 1)
-				.build(keyset.getKeys());
+				.version(existing == null ? 0L : keyset.version() + 1)
+				.build(keyset.keys());
 		});
 	}
 
@@ -57,10 +63,10 @@ public class InMemoryKeysetRepository implements KeysetRepository {
 		final List<EncryptedKeyset> result = new ArrayList<>();
 		for (EncryptedKeyset keyset : store.values()) {
 			final List<EncryptedKey> pending = new ArrayList<>();
-			for (EncryptedKey key : keyset.getKeys()) {
-				if (key.getStatus() == KeyStatus.PENDING_DESTRUCTION
-						&& key.getDestructionScheduledAt() != null
-						&& !key.getDestructionScheduledAt().isAfter(now)) {
+			for (EncryptedKey key : keyset.keys()) {
+				if (key.status() == KeyStatus.PENDING_DESTRUCTION
+						&& key.destructionScheduledAt() != null
+						&& !key.destructionScheduledAt().isAfter(now)) {
 					pending.add(key);
 				}
 			}
@@ -76,16 +82,16 @@ public class InMemoryKeysetRepository implements KeysetRepository {
 	 * <p>
 	 * Scans all stored keysets and returns metadata-only {@link EncryptedKeyset} views (empty
 	 * key list) for keysets whose primary {@link KeyStatus#ENABLED} key's
-	 * {@link EncryptedKey#getExpiresAt() expiry time} is in the past.
+	 * {@link EncryptedKey#expiresAt() expiry time} is in the past.
 	 */
 	@Override
 	public List<EncryptedKeyset> findPendingRotation() {
 		final Instant now = Instant.now();
 		final List<EncryptedKeyset> result = new ArrayList<>();
 		for (EncryptedKeyset keyset : store.values()) {
-			for (EncryptedKey key : keyset.getKeys()) {
-				if (key.getStatus() == KeyStatus.ENABLED && key.isPrimary()) {
-					if (key.getExpiresAt() != null && !key.getExpiresAt().isAfter(now)) {
+			for (EncryptedKey key : keyset.keys()) {
+				if (key.status() == KeyStatus.ENABLED && key.primary()) {
+					if (key.expiresAt() != null && !key.expiresAt().isAfter(now)) {
 						result.add(EncryptedKeyset.builder(keyset).build(List.of()));
 					}
 					break;

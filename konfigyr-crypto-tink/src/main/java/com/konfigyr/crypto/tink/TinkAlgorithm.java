@@ -13,12 +13,12 @@ import com.google.crypto.tink.signature.RsaSsaPssSignKeyManager;
 import com.konfigyr.crypto.Algorithm;
 import com.konfigyr.crypto.KeyType;
 import com.konfigyr.crypto.KeysetPurpose;
-import lombok.EqualsAndHashCode;
 import org.jspecify.annotations.NullMarked;
 import org.springframework.util.Assert;
 
 import java.security.GeneralSecurityException;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Collection of {@link Algorithm algorithms} supported by the
@@ -36,7 +36,6 @@ import java.util.List;
  * @see <a href="https://developers.google.com/tink/supported-key-types">Tink - Supported Key Types</a>
  **/
 @NullMarked
-@EqualsAndHashCode(of = "name")
 public final class TinkAlgorithm implements Algorithm {
 
 	/* -------------------------------------------------------------------------
@@ -194,9 +193,16 @@ public final class TinkAlgorithm implements Algorithm {
 		RSA_SSA_PKCS1_3072_SHA256_F4, RSA_SSA_PKCS1_4096_SHA512_F4
 	);
 
+	/** Stable unique algorithm name with {@code "tink:"} prefix. */
 	private final String name;
+
+	/** Intended cryptographic purpose (signing or encryption). */
 	private final KeysetPurpose purpose;
+
+	/** Key material type produced by this algorithm. */
 	private final KeyType type;
+
+	/** Tink key template defining the key parameters for this algorithm. */
 	private final KeyTemplate template;
 
 	/**
@@ -257,6 +263,18 @@ public final class TinkAlgorithm implements Algorithm {
 
 	KeyTemplate template() {
 		return template;
+	}
+
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (!(o instanceof TinkAlgorithm that)) return false;
+		return Objects.equals(name, that.name);
+	}
+
+	@Override
+	public int hashCode() {
+		return Objects.hash(name);
 	}
 
 	@Override

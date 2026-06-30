@@ -148,7 +148,7 @@ class RepositoryKeysetStoreTest {
 		doReturn(true).when(factory).supports(encryptedKeyset);
 		doReturn(keyset).when(factory).create(kek, encryptedKeyset);
 
-		cache.put(encryptedKeyset.getName(), encryptedKeyset);
+		cache.put(encryptedKeyset.name(), encryptedKeyset);
 
 		assertThat(store.read(definition.getName())).isEqualTo(keyset);
 
@@ -184,7 +184,7 @@ class RepositoryKeysetStoreTest {
 		doReturn(true).when(factory).supports(any(EncryptedKeyset.class));
 		doReturn(keyset).when(factory).create(kek, encryptedKeyset);
 		doReturn(rotatedEncryptedKeyset).when(factory).create(rotated);
-		doReturn(definition.getName()).when(rotatedEncryptedKeyset).getName();
+		doReturn(definition.getName()).when(rotatedEncryptedKeyset).name();
 		doReturn(rotatedEncryptedKeyset).when(repository).write(rotatedEncryptedKeyset);
 
 		repository.write(encryptedKeyset);
@@ -286,7 +286,7 @@ class RepositoryKeysetStoreTest {
 		doThrow(IOException.class).when(factory).create(kek, definition);
 
 		assertThatExceptionOfType(CryptoException.KeysetException.class)
-			.isThrownBy(() -> store.create(encryptedKeyset.getProvider(), encryptedKeyset.getKeyEncryptionKey(), definition))
+			.isThrownBy(() -> store.create(encryptedKeyset.provider(), encryptedKeyset.keyEncryptionKey(), definition))
 			.returns(definition.getName(), CryptoException.KeysetException::getName)
 			.withCauseInstanceOf(IOException.class);
 
@@ -533,11 +533,11 @@ class RepositoryKeysetStoreTest {
 			() -> store.scheduleDestruction(definition.getName(), "disabled-key"));
 
 		verify(repository).updateKeyStatus(assertArg(t -> {
-			assertThat(t.getKeysetName()).isEqualTo(definition.getName());
-			assertThat(t.getKeyId()).isEqualTo("disabled-key");
-			assertThat(t.getStatus()).isEqualTo(KeyStatus.PENDING_DESTRUCTION);
-			assertThat(t.getDestructionScheduledAt()).isNotNull();
-			assertThat(t.getDestroyedAt()).isNull();
+			assertThat(t.keysetName()).isEqualTo(definition.getName());
+			assertThat(t.keyId()).isEqualTo("disabled-key");
+			assertThat(t.status()).isEqualTo(KeyStatus.PENDING_DESTRUCTION);
+			assertThat(t.destructionScheduledAt()).isNotNull();
+			assertThat(t.destroyedAt()).isNull();
 		}));
 		verify(cache).evict(definition.getName());
 	}
@@ -558,11 +558,11 @@ class RepositoryKeysetStoreTest {
 			() -> store.scheduleDestruction(definition.getName(), "disabled-key"));
 
 		verify(repository).updateKeyStatus(assertArg(t -> {
-			assertThat(t.getKeysetName()).isEqualTo(definition.getName());
-			assertThat(t.getKeyId()).isEqualTo("disabled-key");
-			assertThat(t.getStatus()).isEqualTo(KeyStatus.DESTROYED);
-			assertThat(t.getDestructionScheduledAt()).isNull();
-			assertThat(t.getDestroyedAt()).isNotNull();
+			assertThat(t.keysetName()).isEqualTo(definition.getName());
+			assertThat(t.keyId()).isEqualTo("disabled-key");
+			assertThat(t.status()).isEqualTo(KeyStatus.DESTROYED);
+			assertThat(t.destructionScheduledAt()).isNull();
+			assertThat(t.destroyedAt()).isNotNull();
 		}));
 	}
 
@@ -586,10 +586,10 @@ class RepositoryKeysetStoreTest {
 		assertThatNoException().isThrownBy(() -> store.destroy(definition.getName(), "pending-key"));
 
 		verify(repository).updateKeyStatus(assertArg(t -> {
-			assertThat(t.getKeysetName()).isEqualTo(definition.getName());
-			assertThat(t.getKeyId()).isEqualTo("pending-key");
-			assertThat(t.getStatus()).isEqualTo(KeyStatus.DESTROYED);
-			assertThat(t.getDestroyedAt()).isNotNull();
+			assertThat(t.keysetName()).isEqualTo(definition.getName());
+			assertThat(t.keyId()).isEqualTo("pending-key");
+			assertThat(t.status()).isEqualTo(KeyStatus.DESTROYED);
+			assertThat(t.destroyedAt()).isNotNull();
 		}));
 		verify(cache).evict(definition.getName());
 	}

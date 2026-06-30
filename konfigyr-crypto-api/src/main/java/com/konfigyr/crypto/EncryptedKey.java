@@ -1,9 +1,6 @@
 package com.konfigyr.crypto;
 
 import com.konfigyr.io.ByteArray;
-import lombok.AccessLevel;
-import lombok.RequiredArgsConstructor;
-import lombok.Value;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.NullUnmarked;
 import org.jspecify.annotations.Nullable;
@@ -18,84 +15,46 @@ import java.time.Instant;
  * derived from the {@link Key} that is part of the {@link Keyset}
  * <p>
  * Each {@link EncryptedKey} stores the per-key lifecycle metadata alongside the
- * encrypted key material ({@link #getData()}). The metadata fields (status, timestamps)
+ * encrypted key material ({@link #data ()}). The metadata fields (status, timestamps)
  * are stored in plaintext because they are not sensitive; only the cryptographic key
  * bytes are encrypted by the {@link KeyEncryptionKey}.
  * <p>
  * When a key is in {@link KeyStatus#DESTROYED} or {@link KeyStatus#INITIALIZING} state,
- * {@link #getData()} will be {@literal null} because the key material either has not yet
+ * {@link #data ()} will be {@literal null} because the key material either has not yet
  * been generated or has been permanently erased.
  *
+ * @param id                     Unique identifier of this key within the encrypted keyset.
+ * @param algorithm              The name of the {@link Algorithm} that defines the usage, or supported operations, of the encrypted key.
+ * @param type                   Defines the {@link KeyType} of the encrypted key.
+ * @param status                 Returns the status of the encrypted key.
+ * @param primary                Returns {@literal true} if this key is the primary key within the keyset.
+ * @param data                   Wrapped cryptographic key material produced by {@link KeyEncryptionKey#wrap}. Is
+ *                               {@literal null} when the key is in {@link KeyStatus#INITIALIZING} or
+ *                               {@link KeyStatus#DESTROYED} state.
+ * @param createdAt              Timestamp that tells the time when this key was created.
+ * @param initializedAt          Timestamp when cryptographic material was initialized for this key.
+ * @param expiresAt              The time when this key should expire and be rotated.
+ * @param destructionScheduledAt The time when the cryptographic material should be destroyed for this key.
+ * @param destroyedAt            The time when the cryptographic material was destroyed for this key.
  * @author Vladimir Spasic
- * @since 1.0.0
  * @see EncryptedKeyset
  * @see Key
- **/
-@Value
+ * @since 1.0.0
+ */
 @NullMarked
-public class EncryptedKey implements Comparable<EncryptedKey>, InputStreamSource {
-
-	/**
-	 * Unique identifier of this key within the encrypted keyset.
-	 */
-	String id;
-
-	/**
-	 * The name of the {@link Algorithm} that defines the usage, or supported operations, of the encrypted key.
-	 */
-	String algorithm;
-
-	/**
-	 * Defines the {@link KeyType} of the encrypted key.
-	 */
-	KeyType type;
-
-	/**
-	 * Returns the status of the encrypted key.
-	 */
-	KeyStatus status;
-
-	/**
-	 * Returns {@literal true} if this key is the primary key within the keyset.
-	 */
-	boolean primary;
-
-	/**
-	 * Wrapped cryptographic key material produced by {@link KeyEncryptionKey#wrap}. Is
-	 * {@literal null} when the key is in {@link KeyStatus#INITIALIZING} or
-	 * {@link KeyStatus#DESTROYED} state.
-	 */
-	@Nullable
-	WrappedKeyMaterial data;
-
-	/**
-	 * Timestamp that tells the time when this key was created.
-	 */
-	Instant createdAt;
-
-	/**
-	 * Timestamp when cryptographic material was initialized for this key.
-	 */
-	@Nullable
-	Instant initializedAt;
-
-	/**
-	 * The time when this key should expire and be rotated.
-	 */
-	@Nullable
-	Instant expiresAt;
-
-	/**
-	 * The time when the cryptographic material should be destroyed for this key.
-	 */
-	@Nullable
-	Instant destructionScheduledAt;
-
-	/**
-	 * The time when the cryptographic material was destroyed for this key.
-	 */
-	@Nullable
-	Instant destroyedAt;
+public record EncryptedKey(
+	String id,
+	String algorithm,
+	KeyType type,
+	KeyStatus status,
+	boolean primary,
+	@Nullable WrappedKeyMaterial data,
+	Instant createdAt,
+	@Nullable Instant initializedAt,
+	@Nullable Instant expiresAt,
+	@Nullable Instant destructionScheduledAt,
+	@Nullable Instant destroyedAt
+) implements Comparable<EncryptedKey>, InputStreamSource {
 
 	@Override
 	public InputStream getInputStream() {
@@ -127,23 +86,23 @@ public class EncryptedKey implements Comparable<EncryptedKey>, InputStreamSource
 	 */
 	public static Builder builder(EncryptedKey existing) {
 		return builder()
-			.id(existing.getId())
-			.algorithm(existing.getAlgorithm())
-			.type(existing.getType())
-			.status(existing.getStatus())
-			.primary(existing.isPrimary())
-			.createdAt(existing.getCreatedAt())
-			.initializedAt(existing.getInitializedAt())
-			.expiresAt(existing.getExpiresAt())
-			.destructionScheduledAt(existing.getDestructionScheduledAt())
-			.destroyedAt(existing.getDestroyedAt());
+			.id(existing.id())
+			.algorithm(existing.algorithm())
+			.type(existing.type())
+			.status(existing.status())
+			.primary(existing.primary())
+			.createdAt(existing.createdAt())
+			.initializedAt(existing.initializedAt())
+			.expiresAt(existing.expiresAt())
+			.destructionScheduledAt(existing.destructionScheduledAt())
+			.destroyedAt(existing.destroyedAt());
 	}
 
 	/**
 	 * Creates a new instance of the {@link EncryptedKey} from the given {@link Key} and wrapped
 	 * key material produced by {@link KeyEncryptionKey#wrap}.
 	 *
-	 * @param key key that is encrypted by the {@link KeyEncryptionKey}, can't be {@literal null}
+	 * @param key  key that is encrypted by the {@link KeyEncryptionKey}, can't be {@literal null}
 	 * @param data wrapped key material, {@literal null} when the key material is not yet initialized
 	 * @return encrypted key, never {@literal  null}
 	 */
@@ -166,8 +125,10 @@ public class EncryptedKey implements Comparable<EncryptedKey>, InputStreamSource
 	 * Builder class used to create new instances of the {@link EncryptedKey}.
 	 */
 	@NullUnmarked
-	@RequiredArgsConstructor(access = AccessLevel.PRIVATE)
 	public static final class Builder {
+
+		private Builder() {
+		}
 
 		private String id;
 		private String algorithm;

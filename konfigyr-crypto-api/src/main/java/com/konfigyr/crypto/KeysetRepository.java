@@ -32,7 +32,7 @@ public interface KeysetRepository {
 	 * Writes the data of the {@link EncryptedKeyset} to the repository and returns the
 	 * persisted form with a version that reflects the committed state.
 	 * <p>
-	 * Implementations should use the {@link EncryptedKeyset#getVersion() keyset version} for
+	 * Implementations should use the {@link EncryptedKeyset#version() keyset version} for
 	 * optimistic locking: persist only when the stored version matches the version on the
 	 * incoming keyset, and return the keyset with the version advanced to the newly committed
 	 * value. If a concurrent modification is detected, throw
@@ -63,11 +63,11 @@ public interface KeysetRepository {
 	 * <p>
 	 * When the transition targets {@link KeyStatus#DESTROYED}, implementations
 	 * <strong>must</strong> erase the encrypted key material
-	 * ({@link EncryptedKey#getData()} becomes {@literal null}).
+	 * ({@link EncryptedKey#data()} becomes {@literal null}).
 	 * The row itself is kept for audit purposes.
 	 * <p>
 	 * Implementations that apply the transition via a targeted SQL {@code UPDATE} (rather than
-	 * a full read-modify-write cycle) should use {@link KeyTransition#getKeysetVersion()} as an
+	 * a full read-modify-write cycle) should use {@link KeyTransition#keysetVersion()} as an
 	 * optimistic-locking guard: bump {@code KEYSET_VERSION} only when the stored version matches
 	 * the transition's version, and throw
 	 * {@link CryptoException.KeysetConcurrentModificationException} when no rows are affected.
@@ -75,7 +75,7 @@ public interface KeysetRepository {
 	 * The default implementation uses a read-modify-write cycle via {@link #read(String)} and
 	 * {@link #write(EncryptedKeyset)}, which inherits version checking from {@link #write}.
 	 * <p>
-	 * If no keyset exists under {@link KeyTransition#getKeysetName()}, this method returns
+	 * If no keyset exists under {@link KeyTransition#keysetName()}, this method returns
 	 * silently without error.
 	 *
 	 * @param transition the lifecycle transition to apply, can't be {@literal null}
@@ -84,19 +84,19 @@ public interface KeysetRepository {
 	 * @throws IOException if there is an issue while updating the key status
 	 */
 	default void updateKeyStatus(KeyTransition transition) throws IOException {
-		final Optional<EncryptedKeyset> existing = read(transition.getKeysetName());
+		final Optional<EncryptedKeyset> existing = read(transition.keysetName());
 		if (existing.isEmpty()) {
 			return;
 		}
 		final EncryptedKeyset keyset = existing.get();
 		final List<EncryptedKey> updatedKeys = new ArrayList<>(keyset.size());
 		for (EncryptedKey key : keyset) {
-			if (key.getId().equals(transition.getKeyId())) {
-				final WrappedKeyMaterial data = transition.getStatus() == KeyStatus.DESTROYED ? null : key.getData();
+			if (key.id().equals(transition.keyId())) {
+				final WrappedKeyMaterial data = transition.status() == KeyStatus.DESTROYED ? null : key.data();
 				updatedKeys.add(EncryptedKey.builder(key)
-					.status(transition.getStatus())
-					.destructionScheduledAt(transition.getDestructionScheduledAt())
-					.destroyedAt(transition.getDestroyedAt())
+					.status(transition.status())
+					.destructionScheduledAt(transition.destructionScheduledAt())
+					.destroyedAt(transition.destroyedAt())
 					.build(data));
 			} else {
 				updatedKeys.add(key);
@@ -109,7 +109,7 @@ public interface KeysetRepository {
 	 * Returns a list of partial {@link EncryptedKeyset} objects where each contains only
 	 * the {@link EncryptedKey keys} whose {@link KeyStatus} is
 	 * {@link KeyStatus#PENDING_DESTRUCTION} and whose
-	 * {@link EncryptedKey#getDestructionScheduledAt() scheduled destruction time} is in the
+	 * {@link EncryptedKey#destructionScheduledAt() scheduled destruction time} is in the
 	 * past (i.e., the grace period has elapsed).
 	 * <p>
 	 * Each returned {@link EncryptedKeyset} is a <em>partial view</em> — it carries the
@@ -139,7 +139,7 @@ public interface KeysetRepository {
 	/**
 	 * Returns a list of partial {@link EncryptedKeyset} objects for keysets whose rotation
 	 * interval has elapsed. A keyset is eligible for rotation when its primary
-	 * {@link KeyStatus#ENABLED} key's {@link EncryptedKey#getExpiresAt() expiry time} is in
+	 * {@link KeyStatus#ENABLED} key's {@link EncryptedKey#expiresAt() expiry time} is in
 	 * the past, i.e.:
 	 * <pre>
 	 *     primaryKey.expiresAt &lt;= now

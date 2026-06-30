@@ -1,9 +1,5 @@
 package com.konfigyr.crypto;
 
-import lombok.AccessLevel;
-import lombok.EqualsAndHashCode;
-import lombok.RequiredArgsConstructor;
-import lombok.Value;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.NullUnmarked;
 import org.jspecify.annotations.Nullable;
@@ -27,68 +23,37 @@ import java.util.*;
  * Each individual {@link Key} has its own encrypted material stored as an {@link EncryptedKey},
  * which also carries the per-key lifecycle metadata (status, timestamps).
  *
+ * @param name                   Unique keyset name.
+ * @param purpose                The purpose of the key material in this keyset, stored as the enum name.
+ * @param factory                The name of the {@link KeysetFactory} that manages this keyset.
+ * @param provider               {@link KeyEncryptionKeyProvider} name that supplied the {@link KeyEncryptionKey} to encrypt this keyset.
+ * @param keyEncryptionKey       The identifier of the {@link KeyEncryptionKey} used to wrap and unwrap this keyset.
+ * @param keys                   Per-key encrypted material with lifecycle metadata.
+ * @param rotationInterval       Rotation frequency for the keyset. {@literal null} when automatic rotation is disabled.
+ * @param destructionGracePeriod Grace period between scheduling key destruction and the actual removal of key material.
+ *                               {@literal null} when the destruction grace period is disabled.
+ * @param version                Optimistic-locking version counter. Zero for keysets not yet persisted; incremented
+ *                               by the {@link KeysetRepository} on every successful write operation.
+ *                               <p>
+ *                               Excluded from equality checks: two {@link EncryptedKeyset}s with identical cryptographic
+ *                               content but different persistence versions are considered equal.
  * @author Vladimir Spasic
- * @since 1.0.0
  * @see KeysetFactory
  * @see KeysetRepository
- **/
-@Value
+ * @since 1.0.0
+ */
 @NullMarked
-@RequiredArgsConstructor(access = AccessLevel.PRIVATE)
-public class EncryptedKeyset implements Iterable<EncryptedKey> {
-
-	/**
-	 * Unique keyset name.
-	 */
-	String name;
-
-	/**
-	 * The purpose of the key material in this keyset, stored as the enum name.
-	 */
-	String purpose;
-
-	/**
-	 * The name of the {@link KeysetFactory} that manages this keyset.
-	 */
-	String factory;
-
-	/**
-	 * {@link KeyEncryptionKeyProvider} name that supplied the {@link KeyEncryptionKey} to encrypt this keyset.
-	 */
-	String provider;
-
-	/**
-	 * The identifier of the {@link KeyEncryptionKey} used to wrap and unwrap this keyset.
-	 */
-	String keyEncryptionKey;
-
-	/**
-	 * Per-key encrypted material with lifecycle metadata.
-	 */
-	List<EncryptedKey> keys;
-
-	/**
-	 * Rotation frequency for the keyset. {@literal null} when automatic rotation is disabled.
-	 */
-	@Nullable
-	Duration rotationInterval;
-
-	/**
-	 * Grace period between scheduling key destruction and the actual removal of key material.
-	 * {@literal null} when the destruction grace period is disabled.
-	 */
-	@Nullable
-	Duration destructionGracePeriod;
-
-	/**
-	 * Optimistic-locking version counter. Zero for keysets not yet persisted; incremented
-	 * by the {@link KeysetRepository} on every successful write operation.
-	 * <p>
-	 * Excluded from equality checks: two {@link EncryptedKeyset}s with identical cryptographic
-	 * content but different persistence versions are considered equal.
-	 */
-	@EqualsAndHashCode.Exclude
-	long version;
+public record EncryptedKeyset(
+	String name,
+	String purpose,
+	String factory,
+	String provider,
+	String keyEncryptionKey,
+	List<EncryptedKey> keys,
+	@Nullable Duration rotationInterval,
+	@Nullable Duration destructionGracePeriod,
+	long version
+) implements Iterable<EncryptedKey> {
 
 	/**
 	 * Attempts to find the {@link EncryptedKey} with the given identifier.
@@ -98,7 +63,7 @@ public class EncryptedKeyset implements Iterable<EncryptedKey> {
 	 */
 	public Optional<EncryptedKey> getKey(String id) {
 		return keys.stream()
-			.filter(key -> Objects.equals(key.getId(), id))
+			.filter(key -> Objects.equals(key.id(), id))
 			.findFirst();
 	}
 
@@ -116,8 +81,28 @@ public class EncryptedKeyset implements Iterable<EncryptedKey> {
 		return keys.iterator();
 	}
 
+	@Override
+	public boolean equals(Object o) {
+		if (!(o instanceof EncryptedKeyset that)) return false;
+		return Objects.equals(name, that.name)
+			&& Objects.equals(purpose, that.purpose)
+			&& Objects.equals(factory, that.factory)
+			&& Objects.equals(provider, that.provider)
+			&& Objects.equals(keyEncryptionKey, that.keyEncryptionKey)
+			&& Objects.equals(keys, that.keys)
+			&& Objects.equals(rotationInterval, that.rotationInterval)
+			&& Objects.equals(destructionGracePeriod, that.destructionGracePeriod);
+	}
+
+	@Override
+	public int hashCode() {
+		return Objects.hash(name, purpose, factory, provider, keyEncryptionKey, keys,
+			rotationInterval, destructionGracePeriod);
+	}
+
 	/**
-	 * Creates a new empty instance of the {@link EncryptedKeyset.Builder}.
+	 * Creates a new empty instance of the {@link Builder}.
+	 *
 	 * @return encrypted keyset builder, never {@literal  null}
 	 */
 	public static Builder builder() {
@@ -125,7 +110,7 @@ public class EncryptedKeyset implements Iterable<EncryptedKey> {
 	}
 
 	/**
-	 * Creates a new instance of the {@link EncryptedKeyset.Builder} populated from the given
+	 * Creates a new instance of the {@link Builder} populated from the given
 	 * {@link KeysetDefinition}.
 	 *
 	 * @param definition definition from which the builder would be populated, can't be {@literal null}
@@ -141,7 +126,7 @@ public class EncryptedKeyset implements Iterable<EncryptedKey> {
 	}
 
 	/**
-	 * Creates a new instance of the {@link EncryptedKeyset.Builder} pre-populated from an existing
+	 * Creates a new instance of the {@link Builder} pre-populated from an existing
 	 * {@link EncryptedKeyset}. All metadata fields are copied; the key list is left empty and must
 	 * be provided via {@link Builder#build(List)} or {@link Builder#build(EncryptedKey...)}.
 	 * <p>
@@ -153,14 +138,14 @@ public class EncryptedKeyset implements Iterable<EncryptedKey> {
 	 */
 	public static Builder builder(EncryptedKeyset existing) {
 		return builder()
-			.name(existing.getName())
-			.purpose(KeysetPurpose.valueOf(existing.getPurpose()))
-			.factory(existing.getFactory())
-			.provider(existing.getProvider())
-			.keyEncryptionKey(existing.getKeyEncryptionKey())
-			.rotationInterval(existing.getRotationInterval())
-			.destructionGracePeriod(existing.getDestructionGracePeriod())
-			.version(existing.getVersion());
+			.name(existing.name())
+			.purpose(KeysetPurpose.valueOf(existing.purpose()))
+			.factory(existing.factory())
+			.provider(existing.provider())
+			.keyEncryptionKey(existing.keyEncryptionKey())
+			.rotationInterval(existing.rotationInterval())
+			.destructionGracePeriod(existing.destructionGracePeriod())
+			.version(existing.version());
 	}
 
 	/**
@@ -168,7 +153,7 @@ public class EncryptedKeyset implements Iterable<EncryptedKey> {
 	 * {@link EncryptedKey encrypted keys}.
 	 *
 	 * @param keyset keyset that is encrypted by the {@link KeyEncryptionKey}, can't be {@literal null}
-	 * @param keys per-key encrypted material, can't be {@literal null}
+	 * @param keys   per-key encrypted material, can't be {@literal null}
 	 * @return encrypted keyset, never {@literal  null}
 	 */
 	public static EncryptedKeyset from(Keyset keyset, List<EncryptedKey> keys) {
@@ -189,8 +174,10 @@ public class EncryptedKeyset implements Iterable<EncryptedKey> {
 	 * Builder class used to create new instances of the {@link EncryptedKeyset}.
 	 */
 	@NullUnmarked
-	@RequiredArgsConstructor(access = AccessLevel.PRIVATE)
 	public static final class Builder {
+
+		private Builder() {
+		}
 
 		private String name;
 		private String purpose;

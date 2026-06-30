@@ -41,7 +41,7 @@ class CryptoAutoConfigurationTest {
 		new ApplicationContextRunner().withConfiguration(configurations).run(ctx -> assertThat(ctx)
 			.hasNotFailed()
 			.doesNotHaveBean(CryptoAutoConfiguration.class)
-			.doesNotHaveBean(RepostoryKeysetStore.class)
+			.doesNotHaveBean(RepositoryKeysetStore.class)
 			.doesNotHaveBean(InMemoryKeysetRepository.class)
 		);
 	}
@@ -54,7 +54,7 @@ class CryptoAutoConfigurationTest {
 		runner.withBean(KeysetStore.class, () -> store).run(ctx -> assertThat(ctx)
 			.hasNotFailed()
 			.doesNotHaveBean(CryptoAutoConfiguration.class)
-			.doesNotHaveBean(RepostoryKeysetStore.class)
+			.doesNotHaveBean(RepositoryKeysetStore.class)
 			.doesNotHaveBean(InMemoryKeysetRepository.class)
 			.getBean(KeysetStore.class)
 			.isEqualTo(store)
@@ -79,7 +79,7 @@ class CryptoAutoConfigurationTest {
 		runner.withBean(KeyEncryptionKeyProvider.class, () -> provider).run(ctx -> assertThat(ctx)
 			.hasNotFailed()
 			.hasSingleBean(CryptoAutoConfiguration.class)
-			.hasSingleBean(RepostoryKeysetStore.class)
+			.hasSingleBean(RepositoryKeysetStore.class)
 			.hasSingleBean(InMemoryKeysetRepository.class)
 		);
 	}
@@ -94,7 +94,7 @@ class CryptoAutoConfigurationTest {
 			.run(ctx -> assertThat(ctx)
 				.hasNotFailed()
 				.hasSingleBean(CryptoAutoConfiguration.class)
-				.hasSingleBean(RepostoryKeysetStore.class)
+				.hasSingleBean(RepositoryKeysetStore.class)
 				.doesNotHaveBean(InMemoryKeysetRepository.class)
 				.getBean(KeysetRepository.class)
 				.isEqualTo(repository)
