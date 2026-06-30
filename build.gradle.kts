@@ -11,6 +11,10 @@ plugins {
 
 apply(plugin = "com.konfigyr.sonatype")
 
+repositories {
+    mavenCentral()
+}
+
 allprojects {
     group = "com.konfigyr"
 	version = "1.0.0-RC7"
@@ -42,7 +46,7 @@ subprojects {
     }
 
     checkstyle {
-        toolVersion = "13.5.0"
+        toolVersion = "13.7.0"
     }
 
 	dependencies {
