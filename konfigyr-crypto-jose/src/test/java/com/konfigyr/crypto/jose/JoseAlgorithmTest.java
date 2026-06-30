@@ -15,7 +15,7 @@ class JoseAlgorithmTest {
 	@Test
 	@DisplayName("should fail to create algorithm without a valid `jose:` prefix")
 	void shouldAssertJosePrefix() {
-		assertThatIllegalArgumentException().isThrownBy(() ->new JoseAlgorithm(
+		assertThatIllegalArgumentException().isThrownBy(() -> new JoseAlgorithm(
 			"RS256", KeyType.RSA, KeysetPurpose.SIGNING, JWSAlgorithm.RS256,
 			() -> new RSAKeyGenerator(RSAKeyGenerator.MIN_KEY_SIZE_BITS)
 		)).withMessage("JOSE algorithm names must start with 'jose:' prefix");
