@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.util.Assert;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
@@ -186,14 +187,14 @@ public class RepositoryKeysetStore implements KeysetStore {
 		Assert.hasText(keyId, "Key ID must not be blank");
 
 		final EncryptedKeyset keyset = lookupKeyset(keysetName);
-		final Instant destructionScheduledAt = keyset.destructionGracePeriod() == null ?
-			Instant.now() : Instant.now().plus(keyset.destructionGracePeriod());
+		final Duration gracePeriod = keyset.destructionGracePeriod();
+		final Instant destructionScheduledAt = gracePeriod == null ? Instant.now() : Instant.now().plus(gracePeriod);
 
 		// schedule the destruction of the key in the repository...
 		performKeyTransition(KeyTransition.scheduleDestruction(keyset, keyId, destructionScheduledAt));
 
 		// the grace period is not set, so the key should be immediately destroyed...
-		if (keyset.destructionGracePeriod() == null) {
+		if (gracePeriod == null) {
 			performKeyTransition(keysetName, scheduledForDestruction ->
 				KeyTransition.destroy(scheduledForDestruction, keyId, Instant.now()));
 		}
@@ -226,40 +227,38 @@ public class RepositoryKeysetStore implements KeysetStore {
 	}
 
 	/**
-	 * Looks up the keyset, creates the {@link KeyTransition} using the given factory, delegates to
-	 * the repository, and evicts the cache entry.
+	 * Looks up the current state of the keyset, creates the {@link KeyTransition} using the given
+	 * factory, and applies it.
 	 * <p>
 	 * The {@link KeyTransition} factories validate the transition against the {@link KeyStatus}
 	 * state machine and throw {@link InvalidKeyStatusTransitionException} when the lifecycle
 	 * operation is not permitted from the current status of the key.
 	 */
-	private void performKeyTransition(String keysetName, Function<EncryptedKeyset, KeyTransition> transitionFactory) {
+	private void performKeyTransition(String keysetName,
+			Function<EncryptedKeyset, KeyTransition> transitionFactory) {
 		performKeyTransition(transitionFactory.apply(lookupKeyset(keysetName)));
 	}
 
 	/**
-	 * Performs the {@link KeyTransition} for the {@link EncryptedKeyset} in the repository,
-	 * and evicts the cache entry.
-	 * <p>
-	 * The {@link KeyTransition} factories validate the transition against the {@link KeyStatus}
-	 * state machine and throw {@link InvalidKeyStatusTransitionException} when the lifecycle
-	 * operation is not permitted from the current status of the key.
+	 * Applies the already validated {@link KeyTransition} in the repository and evicts the
+	 * cache entry of the affected keyset.
 	 */
 	private void performKeyTransition(KeyTransition transition) {
+		final String keysetName = transition.keysetName();
 		final String keyId = transition.keyId();
 
 		if (logger.isDebugEnabled()) {
-			logger.debug("Transitioning key '{}' in keyset '{}' to {}", keyId, transition.keysetName(), transition.status());
+			logger.debug("Transitioning key '{}' in keyset '{}' to {}", keyId, keysetName, transition.status());
 		}
 
 		try {
 			repository.updateKeyStatus(transition);
 		} catch (IOException e) {
-			throw new KeysetException(transition.keysetName(),
-				"Could not update status of key '" + keyId + "' in keyset '" + transition.keysetName() + "'.", e);
+			throw new KeysetException(keysetName,
+				"Could not update status of key '" + keyId + "' in keyset '" + keysetName + "'.", e);
 		}
 
-		cache.evict(transition.keysetName());
+		cache.evict(keysetName);
 	}
 
 	/**
