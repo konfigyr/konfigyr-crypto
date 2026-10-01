@@ -613,7 +613,7 @@ public abstract class CryptoException extends RuntimeException {
 
 	/**
 	 * Exception thrown when a {@link Keyset} is accessed but its primary {@link Key} is
-	 * in {@link KeyStatus#COMPROMISED} state.
+	 * in {@link KeyStatus#COMPROMISED} or {@link KeyStatus#COMPROMISED_PENDING_DESTRUCTION} state.
 	 * <p>
 	 * A compromised key's material is suspected or confirmed to have been exposed. All
 	 * cryptographic operations are permanently hard-blocked regardless of any other key state.
@@ -641,15 +641,62 @@ public abstract class CryptoException extends RuntimeException {
 	}
 
 	/**
+	 * Exception thrown when a {@link Keyset} is accessed but its primary {@link Key} is in a
+	 * {@link KeyStatus} that does not have a dedicated exception and is not usable for
+	 * cryptographic operations, such as {@link KeyStatus#INITIALIZING},
+	 * {@link KeyStatus#INITIALIZATION_FAILED} or {@link KeyStatus#DESTRUCTION_FAILED}.
+	 * <p>
+	 * This exception is thrown by the keyset construction path (e.g. {@link AbstractKeyset})
+	 * before any key material is unwrapped, ensuring no sensitive data is touched for
+	 * unavailable keysets.
+	 */
+	public static class KeysetUnavailableException extends KeysetException {
+
+		@Serial
+		private static final long serialVersionUID = SERIAL;
+
+		/**
+		 * The {@link KeyStatus} of the primary {@link Key} that made the keyset unavailable.
+		 */
+		private final KeyStatus status;
+
+		/**
+		 * Creates a new {@link KeysetUnavailableException} for the given keyset name and
+		 * primary key status.
+		 *
+		 * @param name   the name of the unavailable {@link Keyset}, can't be {@literal null}
+		 * @param status the status of the primary key, can't be {@literal null}
+		 */
+		public KeysetUnavailableException(String name, KeyStatus status) {
+			super(name, "Keyset '" + name + "' cannot perform cryptographic operations as its primary key is in "
+					+ status + " state.");
+			this.status = status;
+		}
+
+		/**
+		 * Returns the {@link KeyStatus} of the primary {@link Key} that made the keyset unavailable.
+		 *
+		 * @return the primary key status, never {@literal null}
+		 */
+		public @NonNull KeyStatus getStatus() {
+			return status;
+		}
+
+	}
+
+	/**
 	 * Exception thrown when an attempt is made to transition a {@link Key} to an invalid
 	 * {@link KeyStatus} from its current state.
 	 * <p>
 	 * For example, calling {@code scheduleDestruction} on a key that is still
 	 * {@link KeyStatus#ENABLED} (rather than {@link KeyStatus#DISABLED}) will throw this
-	 * exception because the required deactivation step was skipped.
+	 * exception because the required deactivation step was skipped. It is also thrown when the
+	 * lifecycle operation does not accept the current status of the key, even if the resulting
+	 * status change would be valid for a different operation, for example calling
+	 * {@code cancelDestruction} on a key that is not pending destruction.
 	 * <p>
-	 * This exception carries the keyset name, the key identifier, the current status,
-	 * and the attempted (target) status for diagnostic purposes.
+	 * This exception carries the keyset name, the key identifier, the attempted lifecycle
+	 * {@link KeyStatus.Operation} and the current status for diagnostic purposes.
 	 */
 	public static class InvalidKeyStatusTransitionException extends KeysetException {
 
@@ -667,26 +714,27 @@ public abstract class CryptoException extends RuntimeException {
 		private final KeyStatus currentStatus;
 
 		/**
-		 * The {@link KeyStatus} that the caller attempted to transition the key into.
+		 * The lifecycle {@link KeyStatus.Operation} that was attempted on the {@link Key}.
 		 */
-		private final KeyStatus attemptedStatus;
+		private final KeyStatus.Operation operation;
 
 		/**
-		 * Creates a new {@link InvalidKeyStatusTransitionException}.
+		 * Creates a new {@link InvalidKeyStatusTransitionException} for a lifecycle operation that
+		 * is not permitted from the current status of the key.
 		 *
 		 * @param keysetName    the name of the keyset containing the key, can't be {@literal null}
 		 * @param keyId         the identifier of the key, can't be {@literal null}
+		 * @param operation     the attempted lifecycle operation, can't be {@literal null}
 		 * @param currentStatus the current status of the key, can't be {@literal null}
-		 * @param attemptedStatus the status the caller tried to set, can't be {@literal null}
 		 */
 		public InvalidKeyStatusTransitionException(
 				String keysetName, String keyId,
-				KeyStatus currentStatus, KeyStatus attemptedStatus) {
+				KeyStatus.Operation operation, KeyStatus currentStatus) {
 			super(keysetName, "Invalid key status transition for key '" + keyId + "' in keyset '"
-					+ keysetName + "': cannot transition from " + currentStatus + " to " + attemptedStatus + ".");
+					+ keysetName + "': cannot apply " + operation + " to a key in " + currentStatus + " state.");
 			this.keyId = keyId;
+			this.operation = operation;
 			this.currentStatus = currentStatus;
-			this.attemptedStatus = attemptedStatus;
 		}
 
 		/**
@@ -708,13 +756,12 @@ public abstract class CryptoException extends RuntimeException {
 		}
 
 		/**
-		 * Returns the {@link KeyStatus} that was attempted but is not a valid transition from
-		 * {@link #getCurrentStatus()}.
+		 * Returns the lifecycle {@link KeyStatus.Operation} that was attempted on the key.
 		 *
-		 * @return the attempted key status, never {@literal null}
+		 * @return the attempted operation, never {@literal null}
 		 */
-		public @NonNull KeyStatus getAttemptedStatus() {
-			return attemptedStatus;
+		public KeyStatus.@NonNull Operation getOperation() {
+			return operation;
 		}
 
 	}

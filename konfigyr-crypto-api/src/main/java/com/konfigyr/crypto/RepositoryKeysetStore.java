@@ -6,7 +6,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.util.Assert;
 
 import java.io.IOException;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
@@ -186,15 +185,18 @@ public class RepositoryKeysetStore implements KeysetStore {
 		Assert.hasText(keysetName, "Keyset name must not be blank");
 		Assert.hasText(keyId, "Key ID must not be blank");
 
-		performKeyTransition(keysetName, keyset -> {
-			final Duration gracePeriod = keyset.destructionGracePeriod();
+		final EncryptedKeyset keyset = lookupKeyset(keysetName);
+		final Instant destructionScheduledAt = keyset.destructionGracePeriod() == null ?
+			Instant.now() : Instant.now().plus(keyset.destructionGracePeriod());
 
-			if (gracePeriod != null) {
-				return KeyTransition.scheduleDestruction(keyset, keyId, Instant.now().plus(gracePeriod));
-			}
+		// schedule the destruction of the key in the repository...
+		performKeyTransition(KeyTransition.scheduleDestruction(keyset, keyId, destructionScheduledAt));
 
-			return KeyTransition.destroy(keyset, keyId, Instant.now());
-		});
+		// the grace period is not set, so the key should be immediately destroyed...
+		if (keyset.destructionGracePeriod() == null) {
+			performKeyTransition(keysetName, scheduledForDestruction ->
+				KeyTransition.destroy(scheduledForDestruction, keyId, Instant.now()));
+		}
 	}
 
 	@Override
@@ -203,7 +205,8 @@ public class RepositoryKeysetStore implements KeysetStore {
 		Assert.hasText(keyId, "Key ID must not be blank");
 		Assert.isTrue(destructionTime.isAfter(Instant.now()), "Destruction time must be in the future");
 
-		performKeyTransition(keysetName, keyset -> KeyTransition.scheduleDestruction(keyset, keyId, destructionTime));
+		performKeyTransition(keysetName,
+			keyset -> KeyTransition.scheduleDestruction(keyset, keyId, destructionTime));
 	}
 
 	@Override
@@ -223,37 +226,40 @@ public class RepositoryKeysetStore implements KeysetStore {
 	}
 
 	/**
-	 * Looks up the key within the keyset, validates the status transition using
-	 * {@link KeyStatus#canTransitionTo(KeyStatus)}, delegates to the repository, and evicts
-	 * the cache entry.
+	 * Looks up the keyset, creates the {@link KeyTransition} using the given factory, delegates to
+	 * the repository, and evicts the cache entry.
+	 * <p>
+	 * The {@link KeyTransition} factories validate the transition against the {@link KeyStatus}
+	 * state machine and throw {@link InvalidKeyStatusTransitionException} when the lifecycle
+	 * operation is not permitted from the current status of the key.
 	 */
 	private void performKeyTransition(String keysetName, Function<EncryptedKeyset, KeyTransition> transitionFactory) {
-		final EncryptedKeyset encryptedKeyset = lookupKeyset(keysetName);
-		final KeyTransition transition = transitionFactory.apply(encryptedKeyset);
+		performKeyTransition(transitionFactory.apply(lookupKeyset(keysetName)));
+	}
+
+	/**
+	 * Performs the {@link KeyTransition} for the {@link EncryptedKeyset} in the repository,
+	 * and evicts the cache entry.
+	 * <p>
+	 * The {@link KeyTransition} factories validate the transition against the {@link KeyStatus}
+	 * state machine and throw {@link InvalidKeyStatusTransitionException} when the lifecycle
+	 * operation is not permitted from the current status of the key.
+	 */
+	private void performKeyTransition(KeyTransition transition) {
 		final String keyId = transition.keyId();
 
-		final EncryptedKey key = encryptedKeyset.getKey(keyId).orElseThrow(
-			() -> new KeyNotFoundException(keysetName, keyId)
-		);
-
-		if (!key.status().canTransitionTo(transition.status())) {
-			throw new InvalidKeyStatusTransitionException(keysetName, keyId, key.status(),
-				transition.status());
-		}
-
 		if (logger.isDebugEnabled()) {
-			logger.debug("Transitioning key '{}' in keyset '{}' from {} to {}", keyId, keysetName,
-				key.status(), transition.status());
+			logger.debug("Transitioning key '{}' in keyset '{}' to {}", keyId, transition.keysetName(), transition.status());
 		}
 
 		try {
 			repository.updateKeyStatus(transition);
 		} catch (IOException e) {
-			throw new KeysetException(keysetName,
-				"Could not update status of key '" + keyId + "' in keyset '" + keysetName + "'.", e);
+			throw new KeysetException(transition.keysetName(),
+				"Could not update status of key '" + keyId + "' in keyset '" + transition.keysetName() + "'.", e);
 		}
 
-		cache.evict(keysetName);
+		cache.evict(transition.keysetName());
 	}
 
 	/**

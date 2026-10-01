@@ -1,16 +1,66 @@
 package com.konfigyr.crypto;
 
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.ArrayDeque;
+import java.util.Arrays;
+import java.util.Deque;
+import java.util.EnumSet;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.konfigyr.crypto.KeyStatus.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class KeyStatusSanityTest {
+
+	@MethodSource("supportedOperations")
+	@ParameterizedTest(name = "{0} + {1} → {2}")
+	@DisplayName("should resolve the resulting status of every permitted lifecycle operation")
+	void shouldResolveSupportedOperation(KeyStatus from, KeyStatus.Operation operation, KeyStatus to) {
+		assertThat(from.next(operation))
+			.as("Expected %s applied to %s to result in %s", operation, from, to)
+			.hasValue(to);
+	}
+
+	@Test
+	@DisplayName("should reject every lifecycle operation that is not explicitly permitted")
+	void shouldRejectUnsupportedOperations() {
+		final Set<String> supported = supportedOperations()
+			.map(Arguments::get)
+			.map(args -> args[0] + ":" + args[1])
+			.collect(Collectors.toSet());
+
+		for (KeyStatus status : KeyStatus.values()) {
+			for (KeyStatus.Operation operation : KeyStatus.Operation.values()) {
+				if (!supported.contains(status + ":" + operation)) {
+					assertThat(status.next(operation))
+						.as("Expected %s to be rejected from %s", operation, status)
+						.isEmpty();
+				}
+			}
+		}
+	}
+
+	@Test
+	@DisplayName("should derive the status transitions from the lifecycle operations")
+	void shouldDeriveTransitionsFromOperations() {
+		for (KeyStatus from : KeyStatus.values()) {
+			for (KeyStatus to : KeyStatus.values()) {
+				final boolean viaOperation = Arrays.stream(KeyStatus.Operation.values())
+					.anyMatch(operation -> from.next(operation).filter(to::equals).isPresent());
+
+				assertThat(from.canTransitionTo(to))
+					.as("Expected %s → %s to match the lifecycle operations", from, to)
+					.isEqualTo(viaOperation);
+			}
+		}
+	}
 
 	@MethodSource("supportedTransitions")
 	@ParameterizedTest(name = "{0} → {1}")
@@ -30,24 +80,79 @@ class KeyStatusSanityTest {
 			.isFalse();
 	}
 
+	@MethodSource("compromisedStatuses")
+	@ParameterizedTest(name = "{0}")
+	@DisplayName("should never reach an usable or non-compromised status once a key is compromised")
+	void shouldNeverLeaveCompromisedStatuses(KeyStatus compromised) {
+		assertThat(reachableFrom(compromised))
+			.as("Statuses reachable from %s", compromised)
+			.containsOnly(COMPROMISED, COMPROMISED_PENDING_DESTRUCTION, DESTROYED, DESTRUCTION_FAILED);
+	}
+
+	@Test
+	@DisplayName("should only allow destruction from one of the pending destruction statuses")
+	void shouldOnlyDestroyFromPendingDestruction() {
+		assertThat(EnumSet.allOf(KeyStatus.class))
+			.filteredOn(status -> status.canTransitionTo(DESTROYED))
+			.containsExactlyInAnyOrder(PENDING_DESTRUCTION, COMPROMISED_PENDING_DESTRUCTION);
+	}
+
+	@Test
+	@DisplayName("should only schedule destruction of keys that have been deactivated")
+	void shouldOnlyScheduleDestructionOfDeactivatedKeys() {
+		assertThat(EnumSet.allOf(KeyStatus.class))
+			.filteredOn(status -> status.canTransitionTo(PENDING_DESTRUCTION))
+			.containsExactly(DISABLED);
+
+		assertThat(EnumSet.allOf(KeyStatus.class))
+			.filteredOn(status -> status.canTransitionTo(COMPROMISED_PENDING_DESTRUCTION))
+			.containsExactlyInAnyOrder(COMPROMISED, PENDING_DESTRUCTION);
+	}
+
+	static Stream<Arguments> supportedOperations() {
+		return Stream.of(
+			Arguments.of(INITIALIZING, KeyStatus.Operation.ACTIVATE, ENABLED),
+			Arguments.of(INITIALIZING, KeyStatus.Operation.FAIL_INITIALIZATION, INITIALIZATION_FAILED),
+			Arguments.of(ENABLED, KeyStatus.Operation.DISABLE, DISABLED),
+			Arguments.of(ENABLED, KeyStatus.Operation.COMPROMISE, COMPROMISED),
+			Arguments.of(DISABLED, KeyStatus.Operation.ENABLE, ENABLED),
+			Arguments.of(DISABLED, KeyStatus.Operation.COMPROMISE, COMPROMISED),
+			Arguments.of(DISABLED, KeyStatus.Operation.SCHEDULE_DESTRUCTION, PENDING_DESTRUCTION),
+			Arguments.of(PENDING_DESTRUCTION, KeyStatus.Operation.CANCEL_DESTRUCTION, DISABLED),
+			Arguments.of(PENDING_DESTRUCTION, KeyStatus.Operation.COMPROMISE, COMPROMISED_PENDING_DESTRUCTION),
+			Arguments.of(PENDING_DESTRUCTION, KeyStatus.Operation.DESTROY, DESTROYED),
+			Arguments.of(PENDING_DESTRUCTION, KeyStatus.Operation.FAIL_DESTRUCTION, DESTRUCTION_FAILED),
+			Arguments.of(COMPROMISED, KeyStatus.Operation.SCHEDULE_DESTRUCTION, COMPROMISED_PENDING_DESTRUCTION),
+			Arguments.of(COMPROMISED_PENDING_DESTRUCTION, KeyStatus.Operation.CANCEL_DESTRUCTION, COMPROMISED),
+			Arguments.of(COMPROMISED_PENDING_DESTRUCTION, KeyStatus.Operation.DESTROY, DESTROYED),
+			Arguments.of(COMPROMISED_PENDING_DESTRUCTION, KeyStatus.Operation.FAIL_DESTRUCTION, DESTRUCTION_FAILED)
+		);
+	}
+
+	static Stream<Arguments> compromisedStatuses() {
+		return Stream.of(
+			Arguments.of(COMPROMISED),
+			Arguments.of(COMPROMISED_PENDING_DESTRUCTION)
+		);
+	}
+
 	static Stream<Arguments> supportedTransitions() {
 		return Stream.of(
 			Arguments.of(INITIALIZING, ENABLED),
 			Arguments.of(INITIALIZING, INITIALIZATION_FAILED),
 			Arguments.of(ENABLED, COMPROMISED),
 			Arguments.of(ENABLED, DISABLED),
-			Arguments.of(ENABLED, PENDING_DESTRUCTION),
-			Arguments.of(ENABLED, DESTROYED),
-			Arguments.of(COMPROMISED, DISABLED),
-			Arguments.of(COMPROMISED, PENDING_DESTRUCTION),
-			Arguments.of(COMPROMISED, DESTROYED),
 			Arguments.of(DISABLED, ENABLED),
 			Arguments.of(DISABLED, COMPROMISED),
 			Arguments.of(DISABLED, PENDING_DESTRUCTION),
-			Arguments.of(DISABLED, DESTROYED),
 			Arguments.of(PENDING_DESTRUCTION, DISABLED),
+			Arguments.of(PENDING_DESTRUCTION, COMPROMISED_PENDING_DESTRUCTION),
 			Arguments.of(PENDING_DESTRUCTION, DESTROYED),
-			Arguments.of(PENDING_DESTRUCTION, DESTRUCTION_FAILED)
+			Arguments.of(PENDING_DESTRUCTION, DESTRUCTION_FAILED),
+			Arguments.of(COMPROMISED, COMPROMISED_PENDING_DESTRUCTION),
+			Arguments.of(COMPROMISED_PENDING_DESTRUCTION, COMPROMISED),
+			Arguments.of(COMPROMISED_PENDING_DESTRUCTION, DESTROYED),
+			Arguments.of(COMPROMISED_PENDING_DESTRUCTION, DESTRUCTION_FAILED)
 		);
 	}
 
@@ -61,15 +166,48 @@ class KeyStatusSanityTest {
 			Arguments.of(INITIALIZATION_FAILED, INITIALIZING),
 			Arguments.of(DESTRUCTION_FAILED, DESTROYED),
 			Arguments.of(DESTRUCTION_FAILED, PENDING_DESTRUCTION),
-			// PENDING_DESTRUCTION may only move to DISABLED (cancel), DESTROYED, or DESTRUCTION_FAILED
+			// PENDING_DESTRUCTION may only move to DISABLED (cancel), COMPROMISED_PENDING_DESTRUCTION,
+			// DESTROYED, or DESTRUCTION_FAILED
 			Arguments.of(PENDING_DESTRUCTION, ENABLED),
 			Arguments.of(PENDING_DESTRUCTION, COMPROMISED),
-			// COMPROMISED cannot be re-enabled
+			// ENABLED keys must be deactivated before their destruction can be scheduled
+			Arguments.of(ENABLED, PENDING_DESTRUCTION),
+			Arguments.of(ENABLED, COMPROMISED_PENDING_DESTRUCTION),
+			// Key material may only be destroyed from one of the pending destruction statuses
+			Arguments.of(ENABLED, DESTROYED),
+			Arguments.of(DISABLED, DESTROYED),
+			Arguments.of(COMPROMISED, DESTROYED),
+			// COMPROMISED can never be disabled, re-enabled or lose its compromised marker
 			Arguments.of(COMPROMISED, ENABLED),
+			Arguments.of(COMPROMISED, DISABLED),
+			Arguments.of(COMPROMISED, PENDING_DESTRUCTION),
+			Arguments.of(COMPROMISED_PENDING_DESTRUCTION, ENABLED),
+			Arguments.of(COMPROMISED_PENDING_DESTRUCTION, DISABLED),
+			Arguments.of(COMPROMISED_PENDING_DESTRUCTION, PENDING_DESTRUCTION),
 			// No self-loops
 			Arguments.of(ENABLED, ENABLED),
-			Arguments.of(DISABLED, DISABLED)
+			Arguments.of(DISABLED, DISABLED),
+			Arguments.of(COMPROMISED, COMPROMISED),
+			Arguments.of(PENDING_DESTRUCTION, PENDING_DESTRUCTION),
+			Arguments.of(COMPROMISED_PENDING_DESTRUCTION, COMPROMISED_PENDING_DESTRUCTION)
 		);
+	}
+
+	private static Set<KeyStatus> reachableFrom(KeyStatus start) {
+		final Set<KeyStatus> visited = EnumSet.of(start);
+		final Deque<KeyStatus> queue = new ArrayDeque<>(visited);
+
+		while (!queue.isEmpty()) {
+			final KeyStatus current = queue.poll();
+
+			for (KeyStatus target : KeyStatus.values()) {
+				if (current.canTransitionTo(target) && visited.add(target)) {
+					queue.add(target);
+				}
+			}
+		}
+
+		return visited;
 	}
 
 }

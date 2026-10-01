@@ -262,8 +262,8 @@ public interface Keyset extends Iterable<Key> {
 	 * Retrieves the grace period duration that will be applied if the {@link Key} is scheduled for destruction.
 	 * <p>
 	 * This represents the safety buffer or cooling-off period. Once a key is marked for deletion, it will remain
-	 * in a {@link KeyStatus#PENDING_DESTRUCTION} state for this duration before the key material is permanently
-	 * purged from the system.
+	 * in a {@link KeyStatus#PENDING_DESTRUCTION} (or {@link KeyStatus#COMPROMISED_PENDING_DESTRUCTION}, when the
+	 * key was compromised) state for this duration before the key material is permanently purged from the system.
 	 * <p>
 	 * <b>Audit Requirement:</b> Security auditors use this value to verify that the organization has enough
 	 * time to recover from accidental or unauthorized deletion requests. A value of 30 days is the recommended
@@ -276,6 +276,7 @@ public interface Keyset extends Iterable<Key> {
 	 * @return destruction grace period, may be an {@link Optional#empty()} if cryptograhic key material should
 	 * be destroyed immediately when the key is marked for deletion.
 	 * @see KeyStatus#PENDING_DESTRUCTION
+	 * @see KeyStatus#COMPROMISED_PENDING_DESTRUCTION
 	 */
 	Optional<Duration> getDestructionGracePeriod();
 
