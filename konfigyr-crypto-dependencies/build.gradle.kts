@@ -12,5 +12,6 @@ dependencies {
 		api(project(":konfigyr-crypto-jose"))
 		api(project(":konfigyr-crypto-test"))
 		api(project(":konfigyr-crypto-tink"))
+        api(project(":konfigyr-crypto-x509"))
 	}
 }
