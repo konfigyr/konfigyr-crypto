@@ -43,7 +43,7 @@ subprojects {
     }
 
     checkstyle {
-        toolVersion = "13.7.0"
+        toolVersion = "14.3.0"
     }
 
 	dependencies {
