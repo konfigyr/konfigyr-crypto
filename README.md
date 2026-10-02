@@ -255,37 +255,63 @@ class TinkExample {
 }
 ```
 
-### Rotation lead time
+### Key rotation
 
-Rotating a keyset replaces its primary key at once. That is a problem when third parties cache your public keys, like the consumers of a JSON Web Key Set or of SAML metadata: until they refresh their copy, they reject everything signed or encrypted with the new primary key.
+Rotating a keyset replaces its primary key: the new key starts to sign and encrypt, and the previous one only verifies signatures and decrypts data it produced. Two optional settings control both sides of that switch, and are designed to be used together:
 
-A rotation lead time solves this. The next key is created ahead of the rotation as a non-primary key, so it can be shared with third parties while the current primary key keeps signing. Once the current primary key expires, the next key, which they already know, takes over. Configure it on the keyset definition:
+- the [rotation lead time](#rotation-lead-time) creates the next key ahead of the rotation, so third parties that cache your public keys, like the consumers of a JSON Web Key Set or of SAML metadata, already know it when it takes over;
+- the [retirement policy](#retirement-policy) defines how long the previous key remains available after the rotation, and whether it is destroyed afterwards.
 
 ```java
 store.create("my-kek-provider", "my-kek", KeysetDefinition.builder()
         .name("my-jwks")
         .algorithm(JoseAlgorithm.ES256)
-        .rotationInterval(Duration.ofDays(90)) // each primary key signs for 90 days
-        .rotationLeadTime(Duration.ofDays(30)) // its successor is created 30 days before it takes over
+        .rotationInterval(Duration.ofDays(90))        // each primary key signs for 90 days
+        .rotationLeadTime(Duration.ofDays(30))        // its successor is created 30 days before it takes over
+        .retirementPolicy(RetirementPolicy.DESTROY)   // the previous key is destroyed after the grace period
+        .destructionGracePeriod(Duration.ofDays(30))  // the previous key keeps verifying for 30 days
         .build());
 ```
 
-The [scheduled `keyset-rotation` task](#scheduled-maintenance-rotation-and-destruction) then takes care of the rest. For a keyset created on day 0:
+The [scheduled maintenance tasks](#scheduled-maintenance-rotation-and-destruction) take care of the rest. For a keyset created on day 0:
 
-| Day | What the task does | Primary key (signs) | Next key (does not sign yet) |
-|---|---|---|---|
-| 0 | — | key 1 | — |
-| 60 | key 1 expires within 30 days: creates key 2 | key 1 | key 2 |
-| 90 | key 1 expired: promotes key 2, demotes key 1 | key 2 | — |
-| 150 | key 2 expires within 30 days: creates key 3 | key 2 | key 3 |
-| 180 | key 2 expired: promotes key 3, demotes key 2 | key 3 | — |
+| Day | What the tasks do | Primary key (signs) | Next key (does not sign yet) | Retired key (verifies only) |
+|---|---|---|---|---|
+| 0   | — | key 1 | — | — |
+| 60  | key 1 expires within 30 days: creates key 2 | key 1 | key 2 | — |
+| 90  | key 1 expired: promotes key 2, retires key 1 | key 2 | — | key 1 |
+| 120 | key 1 grace period elapsed: destroys key 1 | key 2 | — | — |
+| 150 | key 2 expires within 30 days: creates key 3 | key 2 | key 3 | — |
+| 180 | key 2 expired: promotes key 3, retires key 2 | key 3 | — | key 2 |
+| 210 | key 2 grace period elapsed: destroys key 2 | key 3 | — | — |
 
-A few things to keep in mind:
+With this configuration, the keyset contains at most three usable keys at any time: the next, the primary and the retired one. All of them are returned by `Keyset.getKeys()` and exposed by the JOSE keyset through its `JWKSource`, so a JSON Web Key Set built from the keyset contains them. The retired key only advertises its verification and decryption operations.
 
-- **The next key is visible like any other key.** `Keyset.getKeys()` returns it, and the JOSE keyset exposes it through its `JWKSource`, so a JSON Web Key Set built from the keyset contains it. Use `Keyset.getNextKey()` when you need it explicitly, for instance to list the upcoming certificate in SAML metadata.
-- **Demoted keys are not retired.** A previous primary key stays `ENABLED`, so data and signatures it produced remain readable, until you [disable or destroy it](#key-lifecycle-management).
-- **Choose a lead time longer than the refresh interval of your third parties.** If a consumer caches your JSON Web Key Set for a day, a lead time of a few days leaves plenty of margin. The task itself runs every hour by default, which must be well within the lead time.
+#### Rotation lead time
+
+The next key is created as a non-primary key once the primary key expires within the lead time, and becomes the primary key when the primary key expires. Use `Keyset.getNextKey()` when you need it explicitly, for instance to list the upcoming certificate in SAML metadata.
+
+- **Choose a lead time longer than the refresh interval of your third parties.** If a consumer caches your JSON Web Key Set for a day, a lead time of a few days leaves plenty of margin. The rotation task runs every hour by default, which must be well within the lead time.
 - **The lead time is validated when the definition is built.** It must be positive, requires a rotation interval and must be shorter than it, otherwise an `IllegalArgumentException` is thrown.
+
+#### Retirement policy
+
+The retirement policy defines what happens to the previous primary key once it is demoted:
+
+| Policy | After the rotation | After the destruction grace period |
+|---|---|---|
+| `RETAIN` (default) | stays `ENABLED` | nothing, the key is kept until you disable or destroy it |
+| `DESTROY` | `RETIRED`: verifies and decrypts, never signs or encrypts | `DESTROYED` |
+| `SCHEDULE_DESTRUCTION` | `RETIRED` | `PENDING_DESTRUCTION` for another grace period, then `DESTROYED` |
+
+> **Warning:** never use `DESTROY` or `SCHEDULE_DESTRUCTION` for keysets that encrypt data at rest. Data encrypted by a previous key becomes permanently unreadable once that key is destroyed. These policies are meant for keysets whose output is short-lived, like signed tokens or SAML assertions.
+
+- **The destruction grace period is the time a retired key keeps verifying and decrypting.** Choose it longer than the lifetime of the tokens or assertions the keyset signs. Both policies require a grace period, otherwise an `IllegalArgumentException` is thrown when the definition is built.
+- **`SCHEDULE_DESTRUCTION` gives you more time to cancel.** After the grace period the key is no longer usable, but its destruction can still be cancelled for another grace period, see [Key lifecycle management](#key-lifecycle-management).
+- **A retired key can be restored** with `store.enable(keysetName, keyId)`, which also cancels its scheduled destruction.
+- **Only keys demoted while the policy is active are retired.** Keys demoted before the policy was changed keep their status. When a keyset is switched back to `RETAIN`, its retired keys are left untouched until you enable or destroy them.
+
+#### Rotating manually
 
 You can also prepare and promote the next key yourself, for instance when the scheduled tasks are disabled:
 
@@ -297,7 +323,7 @@ store.rotate("my-jwks", KeyDefinition.builder()
         .primary(false)
         .build());
 
-// promote the next key to be the primary key
+// promote the next key to be the primary key, the previous one is retired
 store.rotate("my-jwks");
 ```
 
@@ -307,6 +333,8 @@ When a keyset is rotated, its next key becomes the primary key. A new primary ke
 - the current primary key is not `ENABLED`, for instance after it was [compromised](#key-lifecycle-management). The next key may have been exposed as well, so it is not trusted to take over. Compromise it too if that is the case.
 - you rotate to a different algorithm than the one of the next key.
 
+The previous primary key is retired according to the retirement policy, unless it is no longer `ENABLED`: a compromised primary key keeps its status.
+
 ### Key lifecycle management
 
 Each `EncryptedKey` within a keyset carries a `KeyStatus` that describes its position in the lifecycle state machine:
@@ -315,6 +343,7 @@ Each `EncryptedKey` within a keyset carries a `KeyStatus` that describes its pos
 |---|---|
 | `ENABLED` | Active; participates in cryptographic operations |
 | `DISABLED` | Administratively deactivated; no cryptographic operations permitted |
+| `RETIRED` | Former primary key demoted by a rotation; only verifies and decrypts, during the destruction grace period |
 | `COMPROMISED` | Key material suspected or confirmed exposed; permanently blocked |
 | `PENDING_DESTRUCTION` | Scheduled for erasure; currently in its grace period |
 | `COMPROMISED_PENDING_DESTRUCTION` | Compromised key scheduled for erasure; permanently blocked, currently in its grace period |
@@ -323,14 +352,14 @@ Each `EncryptedKey` within a keyset carries a `KeyStatus` that describes its pos
 `KeysetStore` exposes methods to drive each transition:
 
 - `disable(keysetName, keyId)` — `ENABLED` → `DISABLED`
-- `enable(keysetName, keyId)` — `DISABLED` → `ENABLED`
-- `compromise(keysetName, keyId)` — `ENABLED` or `DISABLED` → `COMPROMISED`, `PENDING_DESTRUCTION` → `COMPROMISED_PENDING_DESTRUCTION` (keeps the scheduled destruction time); emergency transition that permanently blocks the key for all cryptographic operations
-- `scheduleDestruction(keysetName, keyId)` — `DISABLED` → `PENDING_DESTRUCTION` or `COMPROMISED` → `COMPROMISED_PENDING_DESTRUCTION`, using the keyset's configured grace period (destroys immediately when no grace period is set)
+- `enable(keysetName, keyId)` — `DISABLED` or `RETIRED` → `ENABLED`; cancels the scheduled destruction of a retired key
+- `compromise(keysetName, keyId)` — `ENABLED` or `DISABLED` → `COMPROMISED`, `RETIRED` or `PENDING_DESTRUCTION` → `COMPROMISED_PENDING_DESTRUCTION` (keeps the scheduled destruction time); emergency transition that permanently blocks the key for all cryptographic operations
+- `scheduleDestruction(keysetName, keyId)` — `DISABLED` or `RETIRED` → `PENDING_DESTRUCTION` or `COMPROMISED` → `COMPROMISED_PENDING_DESTRUCTION`, using the keyset's configured grace period (destroys immediately when no grace period is set)
 - `scheduleDestruction(keysetName, keyId, Instant)` — same, with an explicit destruction time
 - `cancelDestruction(keysetName, keyId)` — `PENDING_DESTRUCTION` → `DISABLED` or `COMPROMISED_PENDING_DESTRUCTION` → `COMPROMISED`
-- `destroy(keysetName, keyId)` — `PENDING_DESTRUCTION` or `COMPROMISED_PENDING_DESTRUCTION` → `DESTROYED`; erases key material but retains the row for audit
+- `destroy(keysetName, keyId)` — `RETIRED`, `PENDING_DESTRUCTION` or `COMPROMISED_PENDING_DESTRUCTION` → `DESTROYED`; erases key material but retains the row for audit
 
-An `ENABLED` key can never be scheduled for destruction or destroyed directly, it must first be disabled or marked as compromised. Once a key is compromised it can never be disabled or re-enabled again.
+Keys only become `RETIRED` when a rotation demotes the primary key, as defined by the [retirement policy](#retirement-policy). An `ENABLED` key can never be scheduled for destruction or destroyed directly, it must first be disabled, retired or marked as compromised. Once a key is compromised it can never be disabled or re-enabled again.
 
 > **Warning:** `compromise` updates the repository and evicts the keyset only from the `KeysetCache` of the instance that performed the call. Other application instances with their own, non-shared cache, as well as any `Keyset` obtained before the call, keep using the compromised key until their cached entry expires or is evicted. Make sure the keyset is evicted on every instance as part of your incident response.
 
@@ -365,7 +394,7 @@ for (EncryptedKeyset keyset : repository.findPendingRotation()) {
 }
 ```
 
-`findPendingDestruction()` returns partial keysets (metadata and only the eligible pending-destruction keys) where `destructionScheduledAt` is in the past. Call `store.destroy(name, keyId)` for each key:
+`findPendingDestruction()` returns partial keysets (metadata and only the eligible retired and pending-destruction keys) where `destructionScheduledAt` is in the past. Call `store.destroy(name, keyId)` for each key pending destruction, and destroy or schedule the destruction of retired keys according to the [retirement policy](#retirement-policy) of their keyset:
 
 ```java
 for (EncryptedKeyset keyset : repository.findPendingDestruction()) {
@@ -386,7 +415,9 @@ The `keyset-rotation` task runs in two steps:
 
 When a keyset misses its whole lead time, for instance because the application was down, both steps run for it in the same run. Its next key then takes over before third parties could obtain it, and the task logs a warning.
 
-When the task runs on several application instances, they may try to prepare or rotate the same keyset at the same time. Only one of them succeeds, the others detect the concurrent modification, skip the keyset and log it at debug level.
+The `keyset-destruction` task destroys every key returned by `findPendingDestruction()` that is pending destruction. Retired keys are destroyed when their keyset uses the `DESTROY` policy, scheduled for destruction when it uses the `SCHEDULE_DESTRUCTION` policy, and left untouched when the keyset was switched back to `RETAIN`.
+
+When the tasks run on several application instances, they may try to modify the same keyset at the same time. Only one of them succeeds, the others detect the concurrent modification, skip the keyset and log it at debug level.
 
 Tasks are configured under the `konfigyr.crypto.tasks` prefix. Each task name is a key in the map (`keyset-rotation` or `keyset-destruction`) and supports three properties:
 
