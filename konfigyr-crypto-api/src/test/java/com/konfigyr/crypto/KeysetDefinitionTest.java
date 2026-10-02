@@ -3,6 +3,8 @@ package com.konfigyr.crypto;
 import com.konfigyr.crypto.test.TestAlgorithm;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Answers;
 
 import java.time.Duration;
@@ -26,7 +28,72 @@ class KeysetDefinitionTest {
 			.returns(algorithm, KeysetDefinition::getAlgorithm)
 			.returns(Optional.of(Duration.ofDays(90)), KeysetDefinition::getRotationInterval)
 			.returns(Optional.empty(), KeysetDefinition::getRotationLeadTime)
+			.returns(Optional.of(Duration.ofDays(30)), KeysetDefinition::getDestructionGracePeriod)
+			.returns(RetirementPolicy.RETAIN, KeysetDefinition::getRetirementPolicy);
+	}
+
+	@EnumSource(RetirementPolicy.class)
+	@ParameterizedTest(name = "retirement policy: {0}")
+	@DisplayName("should create keyset definition with retirement policy")
+	void shouldCreateKeysetDefinitionWithRetirementPolicy(RetirementPolicy policy) {
+		final var definition = KeysetDefinition.builder()
+			.name("test-keyset")
+			.algorithm(algorithm)
+			.retirementPolicy(policy)
+			.build();
+
+		assertThat(definition)
+			.returns(policy, KeysetDefinition::getRetirementPolicy)
 			.returns(Optional.of(Duration.ofDays(30)), KeysetDefinition::getDestructionGracePeriod);
+
+		assertThat(definition.equals(KeysetDefinition.of("test-keyset", algorithm)))
+			.as("definitions must only be equal when their retirement policies are equal")
+			.isEqualTo(policy == RetirementPolicy.RETAIN);
+	}
+
+	@EnumSource(value = RetirementPolicy.class, names = "RETAIN", mode = EnumSource.Mode.EXCLUDE)
+	@ParameterizedTest(name = "retirement policy: {0}")
+	@DisplayName("should require a destruction grace period for retirement policies that destroy keys")
+	void shouldRequireGracePeriodForRetirementPolicy(RetirementPolicy policy) {
+		final var builder = KeysetDefinition.builder()
+			.name("test-keyset")
+			.algorithm(algorithm)
+			.retirementPolicy(policy)
+			.disableDestructionGracePeriod();
+
+		assertThatIllegalArgumentException()
+			.isThrownBy(builder::build)
+			.withMessage("Keyset retirement policy %s requires a destruction grace period, during which demoted "
+				+ "keys can still be used", policy);
+	}
+
+	@Test
+	@DisplayName("should retain demoted keys without a destruction grace period")
+	void shouldRetainKeysWithoutGracePeriod() {
+		final var definition = KeysetDefinition.builder()
+			.name("test-keyset")
+			.algorithm(algorithm)
+			.retirementPolicy(RetirementPolicy.RETAIN)
+			.disableDestructionGracePeriod()
+			.build();
+
+		assertThat(definition)
+			.returns(RetirementPolicy.RETAIN, KeysetDefinition::getRetirementPolicy)
+			.returns(Optional.empty(), KeysetDefinition::getDestructionGracePeriod);
+	}
+
+	@Test
+	@DisplayName("should reject a null retirement policy")
+	@SuppressWarnings("DataFlowIssue")
+	void shouldRejectNullRetirementPolicy() {
+		final var builder = KeysetDefinition.builder()
+			.name("test-keyset")
+			.algorithm(algorithm)
+			.retirementPolicy(null);
+
+		assertThatIllegalArgumentException()
+			.isThrownBy(builder::build)
+			.withMessage("Keyset retirement policy can not be null");
 	}
 
 	@Test
@@ -103,6 +170,9 @@ class KeysetDefinitionTest {
 
 		assertThat(definition.getRotationLeadTime())
 			.isEmpty();
+
+		assertThat(definition.getRetirementPolicy())
+			.isEqualTo(RetirementPolicy.RETAIN);
 	}
 
 	@Test

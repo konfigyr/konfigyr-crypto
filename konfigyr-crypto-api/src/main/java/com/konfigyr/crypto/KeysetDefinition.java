@@ -37,6 +37,9 @@ import java.util.Optional;
  * 		    Destruction grace duration - the "grace period" between a deletion request and the
  * 		    permanent destruction of the key material.
  * 		</li>
+ * 		<li>
+ * 		    Retirement policy - what happens to the primary key once it is demoted by a rotation.
+ * 		</li>
  * </ul>
  *
  * @author Vladimir Spasic
@@ -141,6 +144,23 @@ public interface KeysetDefinition {
 	Optional<@Nullable Duration> getDestructionGracePeriod();
 
 	/**
+	 * Policy that defines what happens to the primary {@link Key} of the {@link Keyset} once it is demoted by
+	 * a rotation. Defaults to {@link RetirementPolicy#RETAIN}, which keeps the demoted key enabled until it is
+	 * disabled or destroyed manually.
+	 * <p>
+	 * Policies that destroy the demoted key use the {@link #getDestructionGracePeriod() destruction grace period}
+	 * as the time during which the demoted key can still verify signatures and decrypt data it produced, and
+	 * therefore require a destruction grace period.
+	 *
+	 * @return the retirement policy, never {@literal null}.
+	 * @see RetirementPolicy
+	 * @since 1.1.0
+	 */
+	default RetirementPolicy getRetirementPolicy() {
+		return RetirementPolicy.RETAIN;
+	}
+
+	/**
 	 * Creates a new builder used to create a {@link KeysetDefinition}.
 	 *
 	 * @return the keyset definition builder, never {@literal null}
@@ -156,6 +176,7 @@ public interface KeysetDefinition {
 	 *     <li>Purpose is extracted from the algorithm</li>
 	 *     <li>Key rotation interval - 90 days</li>
 	 *     <li>Destruction grace period - 30 days</li>
+	 *     <li>Retirement policy - {@link RetirementPolicy#RETAIN}</li>
 	 *  </ul>
 	 *
 	 * @param name      name of the keyset, can't be {@literal null}
@@ -172,6 +193,7 @@ public interface KeysetDefinition {
 	 * <ul>
 	 *     <li>Key rotation interval - 90 days</li>
 	 *     <li>Destruction grace period - 30 days</li>
+	 *     <li>Retirement policy - {@link RetirementPolicy#RETAIN}</li>
 	 * </ul>
 	 *
 	 * @param name      name of the keyset, can't be {@literal null}
@@ -264,6 +286,12 @@ public interface KeysetDefinition {
 		 */
 		@Nullable
 		protected Duration destructionGracePeriod = Duration.ofDays(30);
+
+		/**
+		 * What happens to the primary key once it is demoted by a rotation. Defaults to
+		 * {@link RetirementPolicy#RETAIN}.
+		 */
+		protected RetirementPolicy retirementPolicy = RetirementPolicy.RETAIN;
 
 		/**
 		 * Creates a new builder with default values: 90-day rotation interval and 30-day destruction grace period.
@@ -424,6 +452,29 @@ public interface KeysetDefinition {
 		}
 
 		/**
+		 * Sets the policy that defines what happens to the primary key of the {@link Keyset} once it is demoted
+		 * by a rotation.
+		 * <p>
+		 * The default {@link RetirementPolicy#RETAIN} policy keeps the demoted key enabled until it is disabled or
+		 * destroyed manually. The {@link RetirementPolicy#DESTROY} and {@link RetirementPolicy#SCHEDULE_DESTRUCTION}
+		 * policies keep the demoted key available to verify signatures and decrypt data for the
+		 * {@link #destructionGracePeriod(Duration) destruction grace period} and destroy it afterwards, they
+		 * therefore require a destruction grace period.
+		 * <p>
+		 * <strong>Warning:</strong> never destroy demoted keys of keysets that encrypt data at rest, data
+		 * encrypted by a destroyed key becomes permanently unreadable.
+		 *
+		 * @param retirementPolicy the retirement policy, can't be {@literal null}
+		 * @return the definition builder
+		 * @see RetirementPolicy
+		 * @since 1.1.0
+		 */
+		public Builder retirementPolicy(RetirementPolicy retirementPolicy) {
+			this.retirementPolicy = retirementPolicy;
+			return this;
+		}
+
+		/**
 		 * Builds the {@link KeysetDefinition} from the current builder state.
 		 *
 		 * @return keyset definition, never {@literal null}
@@ -479,8 +530,15 @@ public interface KeysetDefinition {
 				}
 			}
 
+			Assert.notNull(retirementPolicy, "Keyset retirement policy can not be null");
+
+			if (retirementPolicy != RetirementPolicy.RETAIN && destructionGracePeriod == null) {
+				throw new IllegalArgumentException("Keyset retirement policy " + retirementPolicy
+					+ " requires a destruction grace period, during which demoted keys can still be used");
+			}
+
 			return new SimpleKeysetDefinition(name, purpose, algorithm, rotationInterval, rotationLeadTime,
-				destructionGracePeriod);
+				destructionGracePeriod, retirementPolicy);
 		}
 
 	}

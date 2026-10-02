@@ -38,15 +38,18 @@ final class SimpleKeysetDefinition implements KeysetDefinition, Serializable {
 	@Nullable
 	private final Duration destructionGracePeriod;
 
+	private final RetirementPolicy retirementPolicy;
+
 	SimpleKeysetDefinition(String name, KeysetPurpose purpose, Algorithm algorithm,
 			@Nullable Duration rotationInterval, @Nullable Duration rotationLeadTime,
-			@Nullable Duration destructionGracePeriod) {
+			@Nullable Duration destructionGracePeriod, RetirementPolicy retirementPolicy) {
 		this.name = name;
 		this.purpose = purpose;
 		this.algorithm = algorithm;
 		this.rotationInterval = rotationInterval;
 		this.rotationLeadTime = rotationLeadTime;
 		this.destructionGracePeriod = destructionGracePeriod;
+		this.retirementPolicy = retirementPolicy;
 	}
 
 	@Override
@@ -80,6 +83,11 @@ final class SimpleKeysetDefinition implements KeysetDefinition, Serializable {
 	}
 
 	@Override
+	public RetirementPolicy getRetirementPolicy() {
+		return retirementPolicy;
+	}
+
+	@Override
 	public boolean equals(Object o) {
 		if (this == o) return true;
 		if (!(o instanceof SimpleKeysetDefinition that)) return false;
@@ -88,12 +96,14 @@ final class SimpleKeysetDefinition implements KeysetDefinition, Serializable {
 			&& Objects.equals(algorithm, that.algorithm)
 			&& Objects.equals(rotationInterval, that.rotationInterval)
 			&& Objects.equals(rotationLeadTime, that.rotationLeadTime)
-			&& Objects.equals(destructionGracePeriod, that.destructionGracePeriod);
+			&& Objects.equals(destructionGracePeriod, that.destructionGracePeriod)
+			&& retirementPolicy == that.retirementPolicy;
 	}
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(name, purpose, algorithm, rotationInterval, rotationLeadTime, destructionGracePeriod);
+		return Objects.hash(name, purpose, algorithm, rotationInterval, rotationLeadTime, destructionGracePeriod,
+			retirementPolicy);
 	}
 
 	@Override
@@ -103,7 +113,8 @@ final class SimpleKeysetDefinition implements KeysetDefinition, Serializable {
 			+ ", algorithm=" + algorithm
 			+ ", rotationInterval=" + rotationInterval
 			+ ", rotationLeadTime=" + rotationLeadTime
-			+ ", destructionGracePeriod=" + destructionGracePeriod + "]";
+			+ ", destructionGracePeriod=" + destructionGracePeriod
+			+ ", retirementPolicy=" + retirementPolicy + "]";
 	}
 
 }
