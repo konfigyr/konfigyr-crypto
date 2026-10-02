@@ -94,30 +94,17 @@ final class X509Key extends AbstractKey<X509Algorithm> implements X509Material {
 	@Override
 	public <T extends @Nullable Object> T convert(Converter<PrivateKey, T> converter) {
 		Assert.notNull(converter, "Private key converter can't be null");
-		assertUsable();
-		return converter.convert(privateKey);
+
+		if (isEnabled()) {
+			return converter.convert(privateKey);
+		}
+
+		throw new CryptoException.KeysetException(id, "X509 key '" + id + "' is " + status
+			+ " and its private key material can not be used.");
 	}
 
 	PrivateKey privateKey() {
 		return privateKey;
-	}
-
-	/**
-	 * Key material of compromised or destroyed keys must never be handed over.
-	 */
-	boolean isUsable() {
-		return switch (status) {
-			case COMPROMISED, COMPROMISED_PENDING_DESTRUCTION, DESTROYED -> false;
-			case INITIALIZING, INITIALIZATION_FAILED, ENABLED, DISABLED, PENDING_DESTRUCTION,
-				DESTRUCTION_FAILED -> true;
-		};
-	}
-
-	private void assertUsable() {
-		if (!isUsable()) {
-			throw new CryptoException.KeysetException(id, "X509 key '" + id + "' is " + status
-				+ " and its private key material can not be used.");
-		}
 	}
 
 	/**

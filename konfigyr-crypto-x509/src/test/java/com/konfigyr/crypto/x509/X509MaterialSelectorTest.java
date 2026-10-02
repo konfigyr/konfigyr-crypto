@@ -94,18 +94,8 @@ class X509MaterialSelectorTest {
 	}
 
 	@Test
-	@DisplayName("should select keys by status and certificate validity")
-	void shouldSelectByStatusAndValidity() {
-		final X509Keyset disabled = withStatus(keyset, retired, KeyStatus.DISABLED);
-
-		assertThat(disabled.select(X509Matcher.builder().statuses(KeyStatus.ENABLED).build()))
-			.extracting(X509Material::getId)
-			.containsExactly(primary.getId(), next.getId());
-
-		assertThat(disabled.select(X509Matcher.builder().statuses(KeyStatus.DISABLED).build()))
-			.extracting(X509Material::getId)
-			.containsExactly(retired.getId());
-
+	@DisplayName("should select keys by certificate validity")
+	void shouldSelectByValidity() {
 		assertThat(keyset.select(X509Matcher.builder().validAt(Instant.now()).build()))
 			.hasSize(3);
 
@@ -114,19 +104,21 @@ class X509MaterialSelectorTest {
 			.isEmpty();
 	}
 
-	@Test
-	@DisplayName("should never select compromised or destroyed keys, even when the matcher asks for them")
-	void shouldNeverSelectUnusableKeys() {
-		final X509Keyset unusable = withStatus(withStatus(keyset, retired, KeyStatus.COMPROMISED),
-			next, KeyStatus.DESTROYED);
+	@EnumSource(value = KeyStatus.class, names = "ENABLED", mode = EnumSource.Mode.EXCLUDE)
+	@ParameterizedTest(name = "status: {0}")
+	@DisplayName("should never select keys that are not enabled, even when the matcher matches them")
+	void shouldNeverSelectBlockedKeys(KeyStatus status) {
+		final X509Keyset blocked = withStatus(withStatus(keyset, retired, status), next, status);
 
-		assertThat(unusable.select(X509Matcher.any()))
+		assertThat(blocked.select(X509Matcher.any()))
 			.extracting(X509Material::getId)
 			.containsExactly(primary.getId());
 
-		assertThat(unusable.select(X509Matcher.builder()
-				.statuses(KeyStatus.COMPROMISED, KeyStatus.DESTROYED)
-				.build()))
+		assertThat(blocked.select(X509Matcher.builder().keyIds(retired.getId(), next.getId()).build()))
+			.isEmpty();
+
+		assertThat(withStatus(blocked, primary, status).select(X509Matcher.any()))
+			.as("a primary key that is not enabled must not be selected either")
 			.isEmpty();
 	}
 
@@ -147,9 +139,9 @@ class X509MaterialSelectorTest {
 			.isTrue();
 	}
 
-	@EnumSource(value = KeyStatus.class, names = { "COMPROMISED", "COMPROMISED_PENDING_DESTRUCTION", "DESTROYED" })
+	@EnumSource(value = KeyStatus.class, names = "ENABLED", mode = EnumSource.Mode.EXCLUDE)
 	@ParameterizedTest(name = "status: {0}")
-	@DisplayName("should not hand over the private key of compromised or destroyed keys")
+	@DisplayName("should not hand over the private key of keys that are not enabled")
 	void shouldNotConvertUnusableKeys(KeyStatus status) {
 		final X509Material material = new X509Key.Builder(retired).status(status).build();
 
@@ -166,7 +158,7 @@ class X509MaterialSelectorTest {
 	}
 
 	@Test
-	@DisplayName("should select X509 credentials from a keyset read from the keyset store, as documented in the README")
+	@DisplayName("should select X509 credentials from a keyset read from the keyset store, as documented in the X509MaterialSelector")
 	void shouldSelectFromKeysetStore() {
 		final KeyEncryptionKey kek = TestKeyEncryptionKey.INSTANCE;
 		final KeysetStore store = KeysetStore.builder()
@@ -185,8 +177,8 @@ class X509MaterialSelectorTest {
 
 		final X509MaterialSelector selector = (X509MaterialSelector) keyset;
 
-		// mirrors the README example, using a credential record instead of the Spring Security type
-		final List<Credential> credentials = selector.select(X509Matcher.builder().statuses(KeyStatus.ENABLED).build())
+		// mirrors the X509MaterialSelector example, using a credential record instead of the Spring Security type
+		final List<Credential> credentials = selector.select(X509Matcher.builder().validAt(Instant.now()).build())
 			.stream()
 			.map(material -> material.convert(
 				privateKey -> new Credential(privateKey, material.getCertificate())

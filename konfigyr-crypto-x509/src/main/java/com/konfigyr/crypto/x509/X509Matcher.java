@@ -16,19 +16,18 @@ import java.util.StringJoiner;
 
 /**
  * Matcher used by the {@link X509MaterialSelector} to select {@link X509Material keys} based on
- * their lifecycle state and their certificate validity.
+ * their attributes and their certificate validity.
  * <p>
  * Every criterion is optional, a criterion that is not specified matches any key. All the specified
  * criteria must match for a key to be selected:
  * <pre>{@code
  * X509Matcher matcher = X509Matcher.builder()
  *     .primary(true)
- *     .statuses(KeyStatus.ENABLED)
  *     .validAt(Instant.now())
  *     .build();
  * }</pre>
- * Matchers can only narrow down the selection. Keys that are {@link KeyStatus#COMPROMISED compromised}
- * or {@link KeyStatus#DESTROYED destroyed} are never selected, even when the matcher would match them.
+ * Matchers can only narrow down the selection. Keys that are not {@link KeyStatus#ENABLED enabled} are
+ * never selected, even when the matcher would match them.
  *
  * @author Vladimir Spasic
  * @since 1.0.0
@@ -40,7 +39,6 @@ public final class X509Matcher {
 	private static final X509Matcher ANY = new Builder().build();
 
 	private final @Nullable Boolean primary;
-	private final @Nullable Set<KeyStatus> statuses;
 	private final @Nullable Set<String> keyIds;
 	private final @Nullable Set<KeyType> keyTypes;
 	private final @Nullable Set<X509Algorithm> algorithms;
@@ -48,7 +46,6 @@ public final class X509Matcher {
 
 	private X509Matcher(Builder builder) {
 		this.primary = builder.primary;
-		this.statuses = builder.statuses;
 		this.keyIds = builder.keyIds;
 		this.keyTypes = builder.keyTypes;
 		this.algorithms = builder.algorithms;
@@ -83,9 +80,6 @@ public final class X509Matcher {
 		if (primary != null && primary != key.isPrimary()) {
 			return false;
 		}
-		if (statuses != null && !statuses.contains(key.getStatus())) {
-			return false;
-		}
 		if (keyIds != null && !keyIds.contains(key.getId())) {
 			return false;
 		}
@@ -111,7 +105,6 @@ public final class X509Matcher {
 	public String toString() {
 		return new StringJoiner(", ", "X509Matcher(", ")")
 			.add("primary=" + primary)
-			.add("statuses=" + statuses)
 			.add("keyIds=" + keyIds)
 			.add("keyTypes=" + keyTypes)
 			.add("algorithms=" + algorithms)
@@ -129,7 +122,6 @@ public final class X509Matcher {
 	public static final class Builder {
 
 		private @Nullable Boolean primary;
-		private @Nullable Set<KeyStatus> statuses;
 		private @Nullable Set<String> keyIds;
 		private @Nullable Set<KeyType> keyTypes;
 		private @Nullable Set<X509Algorithm> algorithms;
@@ -147,27 +139,6 @@ public final class X509Matcher {
 		 */
 		public Builder primary(@Nullable Boolean primary) {
 			this.primary = primary;
-			return this;
-		}
-
-		/**
-		 * Matches keys with one of the given statuses.
-		 *
-		 * @param statuses the key statuses to match, can't be {@literal null}
-		 * @return the matcher builder, never {@literal null}
-		 */
-		public Builder statuses(KeyStatus... statuses) {
-			return statuses(Arrays.asList(statuses));
-		}
-
-		/**
-		 * Matches keys with one of the given statuses.
-		 *
-		 * @param statuses the key statuses to match, can't be {@literal null}
-		 * @return the matcher builder, never {@literal null}
-		 */
-		public Builder statuses(Collection<KeyStatus> statuses) {
-			this.statuses = copyOf(statuses, "Key statuses");
 			return this;
 		}
 
