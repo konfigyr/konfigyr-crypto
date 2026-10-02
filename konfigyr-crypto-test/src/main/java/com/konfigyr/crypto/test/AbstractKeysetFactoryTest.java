@@ -565,6 +565,36 @@ public abstract class AbstractKeysetFactoryTest {
 		}
 	}
 
+	@ParameterizedTest(name = "algorithm: {0}")
+	@MethodSource("definitions")
+	@DisplayName("should verify signatures and decrypt data using a retired key")
+	void shouldUseRetiredKeyForReadOperations(String label, KeysetDefinition definition) throws IOException {
+		final ByteArray data = ByteArray.fromString("konfigyr-crypto-test-data");
+		final KeysetPurpose purpose = definition.getPurpose();
+
+		final Keyset keyset = createKeyset(definition);
+		final Key original = keyset.getPrimary();
+		final ByteArray produced = produce(purpose, keyset, data);
+
+		final EncryptedKeyset encrypted = encryptKeyset(keyset.rotate());
+		final Keyset retired = decryptKeyset(EncryptedKeyset.builder(encrypted)
+			.build(encrypted.keys().stream()
+				.map(key -> key.id().equals(original.getId())
+					? EncryptedKey.builder(key).status(KeyStatus.RETIRED).build(key.data())
+					: key)
+				.toList()));
+
+		KeyAssert.assertThat(retired.getKey(original.getId()).orElseThrow())
+			.hasStatus(KeyStatus.RETIRED)
+			.isNotPrimary();
+
+		assertCryptoAccess(purpose, retired, produced, data,
+			label + ": retired key must still verify signatures and decrypt data it produced");
+
+		assertCryptoAccess(purpose, retired, produce(purpose, retired, data), data,
+			label + ": primary key must not be affected by the retired key");
+	}
+
 	@Test
 	@DisplayName("should generate a new primary key instead of promoting the next key when the primary is compromised")
 	void shouldNotPromoteNextKeyWhenPrimaryIsCompromised() throws IOException {

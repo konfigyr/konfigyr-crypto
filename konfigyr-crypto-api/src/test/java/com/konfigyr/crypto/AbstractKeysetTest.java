@@ -262,7 +262,7 @@ class AbstractKeysetTest {
 	void shouldReturnEnabledKeyById() {
 		final var keyset = createKeyset(createKey("primary-key", true), createKey("other-key", false));
 
-		KeyAssert.assertThat(keyset.requireUsableKey("other-key"))
+		KeyAssert.assertThat(keyset.requireReadableKey("other-key"))
 			.hasId("other-key")
 			.isNotPrimary()
 			.isEnabled();
@@ -276,7 +276,7 @@ class AbstractKeysetTest {
 		final var keyset = createKeyset(createKey("primary-key", true), blocked);
 
 		assertThatExceptionOfType(CryptoException.KeysetException.class)
-			.isThrownBy(() -> keyset.requireUsableKey("other-key"))
+			.isThrownBy(() -> keyset.requireReadableKey("other-key"))
 			.isExactlyInstanceOf(type)
 			.withMessageStartingWith("Key 'other-key' in keyset 'test-keyset'")
 			.returns("test-keyset", CryptoException.KeysetException::getName);
@@ -293,30 +293,69 @@ class AbstractKeysetTest {
 	}
 
 	@Test
+	@DisplayName("should allow retired keys to verify and decrypt but not to sign or encrypt")
+	void shouldOnlyAllowReadOperationsForRetiredKeys() {
+		final var retired = createKey("other-key", false, KeyStatus.RETIRED);
+		final var keyset = createKeyset(createKey("primary-key", true), retired);
+
+		KeyAssert.assertThat(keyset.requireReadableKey("other-key"))
+			.hasId("other-key")
+			.hasStatus(KeyStatus.RETIRED);
+
+		assertThat(keyset.requireReadableKey(retired))
+			.isSameAs(retired);
+
+		assertThatExceptionOfType(CryptoException.KeysetRetiredException.class)
+			.isThrownBy(() -> keyset.requireUsableKey(retired))
+			.withMessage("Key 'other-key' in keyset 'test-keyset' is retired and can only verify signatures "
+				+ "or decrypt data. Call enable to restore it.")
+			.returns("test-keyset", CryptoException.KeysetException::getName)
+			.returns("other-key", CryptoException.KeysetRetiredException::getKeyId);
+	}
+
+	@Test
+	@DisplayName("should not allow a retired primary key to sign or encrypt")
+	void shouldThrowWhenPrimaryKeyIsRetired() {
+		final var keyset = createKeyset(createKey("primary-key", true, KeyStatus.RETIRED));
+
+		assertThatExceptionOfType(CryptoException.KeysetRetiredException.class)
+			.isThrownBy(keyset::requireActivePrimary)
+			.returns("primary-key", CryptoException.KeysetRetiredException::getKeyId);
+	}
+
+	@EnumSource(KeyStatus.class)
+	@ParameterizedTest(name = "status: {0}")
+	@DisplayName("should only consider enabled and retired keys readable")
+	void shouldCheckIfKeyIsReadable(KeyStatus status) {
+		assertThat(AbstractKeyset.isReadable(createKey("key", false, status)))
+			.isEqualTo(status == KeyStatus.ENABLED || status == KeyStatus.RETIRED);
+	}
+
+	@Test
 	@DisplayName("should expose the identifier of the key that is not usable")
 	void shouldExposeKeyIdentifier() {
 		assertThatExceptionOfType(CryptoException.KeysetCompromisedException.class)
-			.isThrownBy(() -> keysetWithKeyInStatus(KeyStatus.COMPROMISED).requireUsableKey("other-key"))
+			.isThrownBy(() -> keysetWithKeyInStatus(KeyStatus.COMPROMISED).requireReadableKey("other-key"))
 			.withMessageStartingWith("Key 'other-key' in keyset 'test-keyset' is compromised")
 			.returns("other-key", CryptoException.KeysetCompromisedException::getKeyId);
 
 		assertThatExceptionOfType(CryptoException.KeysetCompromisedException.class)
-			.isThrownBy(() -> keysetWithKeyInStatus(KeyStatus.COMPROMISED_PENDING_DESTRUCTION).requireUsableKey("other-key"))
+			.isThrownBy(() -> keysetWithKeyInStatus(KeyStatus.COMPROMISED_PENDING_DESTRUCTION).requireReadableKey("other-key"))
 			.withMessageStartingWith("Key 'other-key' in keyset 'test-keyset' is compromised")
 			.returns("other-key", CryptoException.KeysetCompromisedException::getKeyId);
 
 		assertThatExceptionOfType(CryptoException.KeysetDisabledException.class)
-			.isThrownBy(() -> keysetWithKeyInStatus(KeyStatus.DISABLED).requireUsableKey("other-key"))
+			.isThrownBy(() -> keysetWithKeyInStatus(KeyStatus.DISABLED).requireReadableKey("other-key"))
 			.withMessageStartingWith("Key 'other-key' in keyset 'test-keyset' is disabled")
 			.returns("other-key", CryptoException.KeysetDisabledException::getKeyId);
 
 		assertThatExceptionOfType(CryptoException.KeysetPendingDestructionException.class)
-			.isThrownBy(() -> keysetWithKeyInStatus(KeyStatus.PENDING_DESTRUCTION).requireUsableKey("other-key"))
+			.isThrownBy(() -> keysetWithKeyInStatus(KeyStatus.PENDING_DESTRUCTION).requireReadableKey("other-key"))
 			.withMessageStartingWith("Key 'other-key' in keyset 'test-keyset' is pending destruction")
 			.returns("other-key", CryptoException.KeysetPendingDestructionException::getKeyId);
 
 		assertThatExceptionOfType(CryptoException.KeysetDestroyedException.class)
-			.isThrownBy(() -> keysetWithKeyInStatus(KeyStatus.DESTROYED).requireUsableKey("other-key"))
+			.isThrownBy(() -> keysetWithKeyInStatus(KeyStatus.DESTROYED).requireReadableKey("other-key"))
 			.withMessageStartingWith("Key 'other-key' in keyset 'test-keyset' has been permanently destroyed")
 			.returns("other-key", CryptoException.KeysetDestroyedException::getKeyId);
 	}
@@ -333,7 +372,7 @@ class AbstractKeysetTest {
 			.returns(status, CryptoException.KeysetUnavailableException::getStatus);
 
 		assertThatExceptionOfType(CryptoException.KeysetUnavailableException.class)
-			.isThrownBy(() -> keyset.requireUsableKey("other-key"))
+			.isThrownBy(() -> keyset.requireReadableKey("other-key"))
 			.returns(status, CryptoException.KeysetUnavailableException::getStatus);
 	}
 
@@ -343,7 +382,7 @@ class AbstractKeysetTest {
 		final var keyset = createKeyset(createKey("primary-key", true));
 
 		assertThatExceptionOfType(CryptoException.KeyNotFoundException.class)
-			.isThrownBy(() -> keyset.requireUsableKey("missing"))
+			.isThrownBy(() -> keyset.requireReadableKey("missing"))
 			.returns("test-keyset", CryptoException.KeysetException::getName)
 			.returns("missing", CryptoException.KeyNotFoundException::getKeyId);
 	}

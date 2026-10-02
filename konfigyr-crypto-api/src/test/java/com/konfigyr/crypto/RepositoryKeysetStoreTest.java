@@ -649,12 +649,14 @@ class RepositoryKeysetStoreTest {
 
 		final Map<KeyStatus.Operation, Set<KeyStatus>> accepted = new LinkedHashMap<>();
 		accepted.put(KeyStatus.Operation.DISABLE, Set.of(KeyStatus.ENABLED));
-		accepted.put(KeyStatus.Operation.ENABLE, Set.of(KeyStatus.DISABLED));
+		accepted.put(KeyStatus.Operation.ENABLE, Set.of(KeyStatus.DISABLED, KeyStatus.RETIRED));
 		accepted.put(KeyStatus.Operation.COMPROMISE,
-			Set.of(KeyStatus.ENABLED, KeyStatus.DISABLED, KeyStatus.PENDING_DESTRUCTION));
-		accepted.put(KeyStatus.Operation.SCHEDULE_DESTRUCTION, Set.of(KeyStatus.DISABLED, KeyStatus.COMPROMISED));
+			Set.of(KeyStatus.ENABLED, KeyStatus.DISABLED, KeyStatus.RETIRED, KeyStatus.PENDING_DESTRUCTION));
+		accepted.put(KeyStatus.Operation.SCHEDULE_DESTRUCTION,
+			Set.of(KeyStatus.DISABLED, KeyStatus.RETIRED, KeyStatus.COMPROMISED));
 		accepted.put(KeyStatus.Operation.CANCEL_DESTRUCTION, pendingDestruction);
-		accepted.put(KeyStatus.Operation.DESTROY, pendingDestruction);
+		accepted.put(KeyStatus.Operation.DESTROY, Set.of(KeyStatus.RETIRED, KeyStatus.PENDING_DESTRUCTION,
+			KeyStatus.COMPROMISED_PENDING_DESTRUCTION));
 
 		final Map<KeyStatus.Operation, ThrowingCallable> operations = Map.of(
 			KeyStatus.Operation.DISABLE, () -> store.disable(definition.getName(), "key"),

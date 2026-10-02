@@ -95,7 +95,7 @@ final class X509Key extends AbstractKey<X509Algorithm> implements X509Material {
 	public <T extends @Nullable Object> T convert(Converter<PrivateKey, T> converter) {
 		Assert.notNull(converter, "Private key converter can't be null");
 
-		if (isEnabled()) {
+		if (status == KeyStatus.ENABLED || status == KeyStatus.RETIRED) {
 			return converter.convert(privateKey);
 		}
 

@@ -77,7 +77,7 @@ class TinkKeyset extends AbstractKeyset<TinkKey> {
 			TinkKey blocked = null;
 
 			for (TinkKey key : prefixMap.getAllWithMatchingPrefix(bytes)) {
-				if (!key.isEnabled()) {
+				if (!isReadable(key)) {
 					blocked = blocked == null ? key : blocked;
 					continue;
 				}
@@ -94,7 +94,7 @@ class TinkKeyset extends AbstractKeyset<TinkKey> {
 			}
 
 			if (blocked != null) {
-				requireUsableKey(blocked);
+				requireReadableKey(blocked);
 			}
 
 			if (lastException != null) {
@@ -133,7 +133,7 @@ class TinkKeyset extends AbstractKeyset<TinkKey> {
 		TinkKey blocked = null;
 
 		for (TinkKey key : prefixMap.getAllWithMatchingPrefix(bytes)) {
-			if (!key.isEnabled()) {
+			if (!isReadable(key)) {
 				blocked = blocked == null ? key : blocked;
 				continue;
 			}
@@ -147,7 +147,7 @@ class TinkKeyset extends AbstractKeyset<TinkKey> {
 		}
 
 		if (blocked != null) {
-			requireUsableKey(blocked);
+			requireReadableKey(blocked);
 		}
 
 		return false;

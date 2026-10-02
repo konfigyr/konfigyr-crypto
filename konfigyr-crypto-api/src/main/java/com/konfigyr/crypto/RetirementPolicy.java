@@ -12,9 +12,9 @@ import org.jspecify.annotations.NullMarked;
  * <ul>
  *     <li>{@link #RETAIN}: the demoted key remains {@link KeyStatus#ENABLED} until it is disabled or destroyed
  *     manually.</li>
- *     <li>{@link #DESTROY}: the demoted key is retired ({@code RETIRED}) for the
+ *     <li>{@link #DESTROY}: the demoted key is {@link KeyStatus#RETIRED retired} for the
  *     {@link KeysetDefinition#getDestructionGracePeriod() destruction grace period}, and destroyed afterwards.</li>
- *     <li>{@link #SCHEDULE_DESTRUCTION}: the demoted key is retired ({@code RETIRED}) for the
+ *     <li>{@link #SCHEDULE_DESTRUCTION}: the demoted key is {@link KeyStatus#RETIRED retired} for the
  *     destruction grace period, and then {@link KeyStatus#PENDING_DESTRUCTION scheduled for destruction} for
  *     another destruction grace period, during which the destruction can still be cancelled.</li>
  * </ul>

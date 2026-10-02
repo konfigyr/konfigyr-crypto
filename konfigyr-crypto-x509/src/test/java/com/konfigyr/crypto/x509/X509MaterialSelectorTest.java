@@ -104,9 +104,9 @@ class X509MaterialSelectorTest {
 			.isEmpty();
 	}
 
-	@EnumSource(value = KeyStatus.class, names = "ENABLED", mode = EnumSource.Mode.EXCLUDE)
+	@EnumSource(value = KeyStatus.class, names = { "ENABLED", "RETIRED" }, mode = EnumSource.Mode.EXCLUDE)
 	@ParameterizedTest(name = "status: {0}")
-	@DisplayName("should never select keys that are not enabled, even when the matcher matches them")
+	@DisplayName("should never select keys that are not enabled or retired, even when the matcher matches them")
 	void shouldNeverSelectBlockedKeys(KeyStatus status) {
 		final X509Keyset blocked = withStatus(withStatus(keyset, retired, status), next, status);
 
@@ -120,6 +120,21 @@ class X509MaterialSelectorTest {
 		assertThat(withStatus(blocked, primary, status).select(X509Matcher.any()))
 			.as("a primary key that is not enabled must not be selected either")
 			.isEmpty();
+	}
+
+	@Test
+	@DisplayName("should select retired keys after the primary key")
+	void shouldSelectRetiredKeys() {
+		final X509Keyset withRetired = withStatus(keyset, retired, KeyStatus.RETIRED);
+
+		assertThat(withRetired.select(X509Matcher.any()))
+			.extracting(X509Material::getId)
+			.first()
+			.isEqualTo(primary.getId());
+
+		assertThat(withRetired.select(X509Matcher.builder().keyIds(retired.getId()).build()))
+			.singleElement()
+			.returns(KeyStatus.RETIRED, X509Material::getStatus);
 	}
 
 	@Test
@@ -139,15 +154,24 @@ class X509MaterialSelectorTest {
 			.isTrue();
 	}
 
-	@EnumSource(value = KeyStatus.class, names = "ENABLED", mode = EnumSource.Mode.EXCLUDE)
+	@EnumSource(value = KeyStatus.class, names = { "ENABLED", "RETIRED" }, mode = EnumSource.Mode.EXCLUDE)
 	@ParameterizedTest(name = "status: {0}")
-	@DisplayName("should not hand over the private key of keys that are not enabled")
+	@DisplayName("should not hand over the private key of keys that are not enabled or retired")
 	void shouldNotConvertUnusableKeys(KeyStatus status) {
 		final X509Material material = new X509Key.Builder(retired).status(status).build();
 
 		assertThatExceptionOfType(CryptoException.KeysetException.class)
 			.isThrownBy(() -> material.convert(PrivateKey::getAlgorithm))
 			.withMessage("X509 key '%s' is %s and its private key material can not be used.", retired.getId(), status);
+	}
+
+	@Test
+	@DisplayName("should hand over the private key of retired keys")
+	void shouldConvertRetiredKeys() {
+		final X509Material material = new X509Key.Builder(retired).status(KeyStatus.RETIRED).build();
+
+		assertThat(material.<String>convert(PrivateKey::getAlgorithm))
+			.isEqualTo(material.getPublicKey().getAlgorithm());
 	}
 
 	@Test
