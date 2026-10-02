@@ -1,13 +1,24 @@
 package com.konfigyr.crypto.jose;
 
 import com.konfigyr.crypto.*;
+import com.konfigyr.crypto.test.KeyAssert;
 import com.konfigyr.crypto.test.KeysetAssert;
 import com.konfigyr.io.ByteArray;
+import com.nimbusds.jose.KeySourceException;
+import com.nimbusds.jose.jwk.JWK;
+import com.nimbusds.jose.jwk.JWKMatcher;
+import com.nimbusds.jose.jwk.JWKSelector;
 import com.nimbusds.jose.jwk.gen.OctetSequenceKeyGenerator;
+import com.nimbusds.jose.jwk.source.JWKSource;
+import com.nimbusds.jose.proc.SecurityContext;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.scheduling.annotation.SchedulingConfigurer;
+import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -25,6 +36,13 @@ public class JoseIntegrationTest {
 
 	@Autowired
 	KeysetStore store;
+
+	@Autowired
+	KeysetRepository repository;
+
+	@Autowired
+	@Qualifier("keysetRotationTaskRegistration")
+	SchedulingConfigurer keysetRotationTask;
 
 	@Test
 	@Order(1)
@@ -236,6 +254,153 @@ public class JoseIntegrationTest {
 			.isTrue();
 
 		store.remove(definition.getName());
+	}
+
+	@Test
+	@Order(5)
+	@DisplayName("should publish the next key ahead of the rotation and promote it when rotating the keyset")
+	void shouldPrepareAndPromoteNextKey() throws Exception {
+		final ByteArray data = ByteArray.fromString("konfigyr-crypto-test-data");
+
+		// create the keyset with a rotation lead time, as shown in the README
+		final Keyset keyset = store.create(KEK_PROVIDER, KEK_IDENTIFIER, KeysetDefinition.builder()
+			.name("jose-lead-time-keyset")
+			.algorithm(JoseAlgorithm.ES256)
+			.rotationInterval(Duration.ofDays(90))
+			.rotationLeadTime(Duration.ofDays(30))
+			.build());
+
+		final Key original = keyset.getPrimary();
+		final ByteArray signature = keyset.sign(data);
+
+		KeysetAssert.assertThat(store.read("jose-lead-time-keyset"))
+			.hasRotationLeadTime(Duration.ofDays(30));
+
+		// prepare the next key, as shown in the README
+		store.rotate("jose-lead-time-keyset", KeyDefinition.builder()
+			.algorithm(JoseAlgorithm.ES256)
+			.rotationInterval(Duration.ofDays(90))
+			.primary(false)
+			.build());
+
+		final Keyset prepared = store.read("jose-lead-time-keyset");
+		final Key next = prepared.getNextKey().orElseThrow(() -> new AssertionError("next key must be prepared"));
+
+		KeyAssert.assertThat(prepared.getPrimary())
+			.as("preparing the next key must not change the primary key")
+			.hasId(original.getId());
+
+		assertThat(publishedKeyIds(prepared))
+			.as("next key must be published before it becomes the primary key")
+			.containsExactlyInAnyOrder(original.getId(), next.getId());
+
+		// promote the next key, as shown in the README
+		store.rotate("jose-lead-time-keyset");
+
+		final Keyset promoted = store.read("jose-lead-time-keyset");
+
+		KeysetAssert.assertThat(promoted)
+			.hasSize(2);
+
+		KeyAssert.assertThat(promoted.getPrimary())
+			.hasId(next.getId());
+
+		assertThat(promoted.getNextKey())
+			.isEmpty();
+
+		assertThat(promoted.verify(signature, data))
+			.as("signatures of the previous primary key must still verify")
+			.isTrue();
+
+		assertThat(promoted.verify(promoted.sign(data), data))
+			.as("promoted key must sign")
+			.isTrue();
+
+		store.remove("jose-lead-time-keyset");
+	}
+
+	@Test
+	@Order(5)
+	@DisplayName("should prepare and promote the next key using the scheduled keyset rotation task")
+	void shouldPrepareAndPromoteNextKeyUsingRotationTask() throws Exception {
+		final String name = "jose-scheduled-lead-time-keyset";
+		final Keyset keyset = store.create(KEK_PROVIDER, KEK_IDENTIFIER, KeysetDefinition.builder()
+			.name(name)
+			.algorithm(JoseAlgorithm.ES256)
+			.rotationInterval(Duration.ofDays(90))
+			.rotationLeadTime(Duration.ofDays(30))
+			.build());
+
+		final Key original = keyset.getPrimary();
+
+		// the primary key expires after its lead time: nothing to prepare
+		runRotationTask();
+
+		KeysetAssert.assertThat(store.read(name))
+			.hasSize(1);
+
+		// the primary key expires within its lead time: the next key is prepared
+		expirePrimaryKey(name, Instant.now().plus(Duration.ofDays(10)));
+		runRotationTask();
+
+		final Keyset prepared = store.read(name);
+		final Key next = prepared.getNextKey().orElseThrow(() -> new AssertionError("next key must be prepared"));
+
+		KeysetAssert.assertThat(prepared)
+			.hasSize(2);
+
+		KeyAssert.assertThat(prepared.getPrimary())
+			.hasId(original.getId());
+
+		// running the task again does not prepare another next key
+		runRotationTask();
+
+		KeysetAssert.assertThat(store.read(name))
+			.hasSize(2);
+
+		// the primary key expired: the next key is promoted
+		expirePrimaryKey(name, Instant.now().minus(Duration.ofMinutes(1)));
+		runRotationTask();
+
+		final Keyset promoted = store.read(name);
+
+		KeysetAssert.assertThat(promoted)
+			.hasSize(2);
+
+		KeyAssert.assertThat(promoted.getPrimary())
+			.hasId(next.getId());
+
+		assertThat(promoted.getPrimary().getExpiresAt())
+			.as("promoted key must expire one rotation interval after its promotion")
+			.isCloseTo(Instant.now().plus(Duration.ofDays(90)), within(Duration.ofMinutes(1)));
+
+		store.remove(name);
+	}
+
+	private void runRotationTask() {
+		final ScheduledTaskRegistrar registrar = new ScheduledTaskRegistrar();
+		keysetRotationTask.configureTasks(registrar);
+
+		assertThat(registrar.getTriggerTaskList())
+			.singleElement()
+			.satisfies(task -> task.getRunnable().run());
+	}
+
+	private void expirePrimaryKey(String name, Instant expiresAt) throws IOException {
+		final EncryptedKeyset stored = repository.read(name).orElseThrow();
+
+		repository.write(EncryptedKeyset.builder(stored)
+			.build(stored.keys().stream()
+				.map(key -> key.primary() ? EncryptedKey.builder(key).expiresAt(expiresAt).build(key.data()) : key)
+				.toList()));
+	}
+
+	@SuppressWarnings("unchecked")
+	private static List<String> publishedKeyIds(Keyset keyset) throws KeySourceException {
+		return ((JWKSource<SecurityContext>) keyset).get(new JWKSelector(new JWKMatcher.Builder().build()), null)
+			.stream()
+			.map(JWK::getKeyID)
+			.toList();
 	}
 
 	@Test
