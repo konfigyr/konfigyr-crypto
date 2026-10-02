@@ -33,14 +33,19 @@ final class SimpleKeysetDefinition implements KeysetDefinition, Serializable {
 	private final Duration rotationInterval;
 
 	@Nullable
+	private final Duration rotationLeadTime;
+
+	@Nullable
 	private final Duration destructionGracePeriod;
 
 	SimpleKeysetDefinition(String name, KeysetPurpose purpose, Algorithm algorithm,
-			@Nullable Duration rotationInterval, @Nullable Duration destructionGracePeriod) {
+			@Nullable Duration rotationInterval, @Nullable Duration rotationLeadTime,
+			@Nullable Duration destructionGracePeriod) {
 		this.name = name;
 		this.purpose = purpose;
 		this.algorithm = algorithm;
 		this.rotationInterval = rotationInterval;
+		this.rotationLeadTime = rotationLeadTime;
 		this.destructionGracePeriod = destructionGracePeriod;
 	}
 
@@ -65,6 +70,11 @@ final class SimpleKeysetDefinition implements KeysetDefinition, Serializable {
 	}
 
 	@Override
+	public Optional<@Nullable Duration> getRotationLeadTime() {
+		return Optional.ofNullable(rotationLeadTime);
+	}
+
+	@Override
 	public Optional<@Nullable Duration> getDestructionGracePeriod() {
 		return Optional.ofNullable(destructionGracePeriod);
 	}
@@ -77,12 +87,13 @@ final class SimpleKeysetDefinition implements KeysetDefinition, Serializable {
 			&& Objects.equals(purpose, that.purpose)
 			&& Objects.equals(algorithm, that.algorithm)
 			&& Objects.equals(rotationInterval, that.rotationInterval)
+			&& Objects.equals(rotationLeadTime, that.rotationLeadTime)
 			&& Objects.equals(destructionGracePeriod, that.destructionGracePeriod);
 	}
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(name, purpose, algorithm, rotationInterval, destructionGracePeriod);
+		return Objects.hash(name, purpose, algorithm, rotationInterval, rotationLeadTime, destructionGracePeriod);
 	}
 
 	@Override
@@ -91,6 +102,7 @@ final class SimpleKeysetDefinition implements KeysetDefinition, Serializable {
 			+ ", purpose=" + purpose
 			+ ", algorithm=" + algorithm
 			+ ", rotationInterval=" + rotationInterval
+			+ ", rotationLeadTime=" + rotationLeadTime
 			+ ", destructionGracePeriod=" + destructionGracePeriod + "]";
 	}
 
