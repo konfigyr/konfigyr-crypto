@@ -2,6 +2,7 @@ package com.konfigyr.crypto.jose;
 
 import com.konfigyr.crypto.*;
 import com.konfigyr.crypto.test.KeysetAssert;
+import com.konfigyr.io.ByteArray;
 import com.nimbusds.jose.jwk.gen.OctetSequenceKeyGenerator;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -161,6 +162,78 @@ public class JoseIntegrationTest {
 		assertThatObject(store.read(jwsDefinition.getName()))
 			.isNotEqualTo(keyset)
 			.returns(2, Keyset::size);
+	}
+
+	@Test
+	@Order(5)
+	@DisplayName("should not decrypt data with a disabled key after rotation")
+	void shouldNotDecryptWithDisabledKey() {
+		final var definition = KeysetDefinition.of("disabled-encryption-keyset", JoseAlgorithm.A128KW);
+		final var data = ByteArray.fromString("konfigyr-crypto-test-data");
+
+		final var keyset = store.create(KEK_PROVIDER, KEK_IDENTIFIER, definition);
+		final var previous = keyset.getPrimary().getId();
+		final var cipher = keyset.encrypt(data);
+
+		store.rotate(definition.getName());
+
+		assertThat(store.read(definition.getName()).decrypt(cipher))
+			.as("data encrypted by the previous primary key must still decrypt after rotation")
+			.isEqualTo(data);
+
+		store.disable(definition.getName(), previous);
+
+		final var current = store.read(definition.getName());
+
+		assertThatExceptionOfType(CryptoException.KeysetDisabledException.class)
+			.isThrownBy(() -> current.decrypt(cipher))
+			.withMessageStartingWith("Key '%s' in keyset '%s'", previous, definition.getName())
+			.returns(definition.getName(), CryptoException.KeysetException::getName);
+
+		KeysetAssert.assertThat(current)
+			.hasSize(2);
+
+		assertThat(current.decrypt(current.encrypt(data)))
+			.as("the new primary key must not be affected by the disabled key")
+			.isEqualTo(data);
+
+		store.remove(definition.getName());
+	}
+
+	@Test
+	@Order(5)
+	@DisplayName("should not verify signatures with a compromised key after rotation")
+	void shouldNotVerifyWithCompromisedKey() {
+		final var definition = KeysetDefinition.of("compromised-signing-keyset", JoseAlgorithm.ES256);
+		final var data = ByteArray.fromString("konfigyr-crypto-test-data");
+
+		final var keyset = store.create(KEK_PROVIDER, KEK_IDENTIFIER, definition);
+		final var previous = keyset.getPrimary().getId();
+		final var signature = keyset.sign(data);
+
+		store.rotate(definition.getName());
+
+		assertThat(store.read(definition.getName()).verify(signature, data))
+			.as("signature produced by the previous primary key must still verify after rotation")
+			.isTrue();
+
+		store.compromise(definition.getName(), previous);
+
+		final var current = store.read(definition.getName());
+
+		assertThatExceptionOfType(CryptoException.KeysetCompromisedException.class)
+			.isThrownBy(() -> current.verify(signature, data))
+			.withMessageStartingWith("Key '%s' in keyset '%s'", previous, definition.getName())
+			.returns(definition.getName(), CryptoException.KeysetException::getName);
+
+		KeysetAssert.assertThat(current)
+			.hasSize(2);
+
+		assertThat(current.verify(current.sign(data), data))
+			.as("the new primary key must not be affected by the compromised key")
+			.isTrue();
+
+		store.remove(definition.getName());
 	}
 
 	@Test
