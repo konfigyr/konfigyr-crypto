@@ -102,6 +102,66 @@ class JdbcKeysetRepositoryTest {
 	}
 
 	@Test
+	@DisplayName("should store, update and clear the keyset rotation lead time")
+	void shouldPersistRotationLeadTime() throws IOException {
+		final Instant t0 = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+		final String name = "rotation-lead-time";
+
+		final EncryptedKey primary = expiringKey("primary", true, KeyStatus.ENABLED, t0.minus(Duration.ofDays(1)));
+		final EncryptedKey retired = EncryptedKey.builder()
+			.id("retired")
+			.algorithm(TestAlgorithm.INSTANCE)
+			.status(KeyStatus.PENDING_DESTRUCTION)
+			.primary(false)
+			.createdAt(t0)
+			.destructionScheduledAt(t0.minus(Duration.ofDays(1)))
+			.build(ByteArray.fromString("secret"));
+
+		final EncryptedKeyset keyset = EncryptedKeyset.builder(encryptedKeyset(name))
+			.rotationLeadTime(Duration.ofDays(30))
+			.build(primary, retired);
+
+		try {
+			final EncryptedKeyset written = repository.write(keyset);
+
+			assertThat(repository.read(name))
+				.get()
+				.returns(Duration.ofDays(30), EncryptedKeyset::rotationLeadTime)
+				.isEqualTo(written);
+
+			assertThat(repository.findPendingRotation())
+				.filteredOn(it -> name.equals(it.name()))
+				.singleElement()
+				.returns(Duration.ofDays(30), EncryptedKeyset::rotationLeadTime);
+
+			assertThat(repository.findPendingDestruction())
+				.filteredOn(it -> name.equals(it.name()))
+				.singleElement()
+				.returns(Duration.ofDays(30), EncryptedKeyset::rotationLeadTime);
+
+			repository.write(EncryptedKeyset.builder(written)
+				.rotationLeadTime(Duration.ofDays(60))
+				.build(written.keys()));
+
+			assertThat(repository.read(name))
+				.get()
+				.returns(Duration.ofDays(60), EncryptedKeyset::rotationLeadTime);
+
+			final EncryptedKeyset updated = repository.read(name).orElseThrow();
+
+			repository.write(EncryptedKeyset.builder(updated)
+				.rotationLeadTime((Duration) null)
+				.build(updated.keys()));
+
+			assertThat(repository.read(name))
+				.get()
+				.returns(null, EncryptedKeyset::rotationLeadTime);
+		} finally {
+			repository.remove(name);
+		}
+	}
+
+	@Test
 	@DisplayName("should update key status without altering key data")
 	void shouldUpdateKeyStatus() throws IOException {
 		final Instant t0 = Instant.now().truncatedTo(ChronoUnit.MILLIS);
@@ -364,7 +424,7 @@ class JdbcKeysetRepositoryTest {
 		final var repo = new JdbcKeysetRepository(jdbcOperations, transactionOperations);
 		repo.setFindPendingRotationQuery("""
 				SELECT DISTINCT K.KEYSET_NAME, K.KEYSET_PURPOSE, K.KEYSET_FACTORY, K.KEYSET_PROVIDER, K.KEYSET_KEK,
-					K.ROTATION_INTERVAL, K.DESTRUCTION_GRACE_PERIOD, K.KEYSET_VERSION
+					K.ROTATION_INTERVAL, K.ROTATION_LEAD_TIME, K.DESTRUCTION_GRACE_PERIOD, K.KEYSET_VERSION
 				FROM %KEYSETS_TABLE_NAME% K
 				INNER JOIN %KEYS_TABLE_NAME% E ON E.KEYSET_NAME = K.KEYSET_NAME
 				WHERE E.EXPIRES_AT <= ? AND E.KEY_PRIMARY <> ?
@@ -667,7 +727,7 @@ class JdbcKeysetRepositoryTest {
 		final var repo = new JdbcKeysetRepository(jdbcOperations, transactionOperations);
 		repo.setGetKeysetQuery("""
 				SELECT K.KEYSET_NAME, K.KEYSET_PURPOSE, K.KEYSET_FACTORY, K.KEYSET_PROVIDER, K.KEYSET_KEK,
-					K.ROTATION_INTERVAL, K.DESTRUCTION_GRACE_PERIOD, K.KEYSET_VERSION
+					K.ROTATION_INTERVAL, K.ROTATION_LEAD_TIME, K.DESTRUCTION_GRACE_PERIOD, K.KEYSET_VERSION
 				FROM %s K
 				WHERE K.KEYSET_NAME = ?
 				""".formatted(placeholder));

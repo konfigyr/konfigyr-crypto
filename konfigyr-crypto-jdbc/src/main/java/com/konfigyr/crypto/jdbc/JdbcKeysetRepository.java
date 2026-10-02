@@ -51,6 +51,7 @@ import java.util.regex.Pattern;
  *     KEYSET_PROVIDER VARCHAR(120) NOT NULL,
  *     KEYSET_KEK VARCHAR(255) NOT NULL,
  *     ROTATION_INTERVAL BIGINT,
+ *     ROTATION_LEAD_TIME BIGINT,
  *     DESTRUCTION_GRACE_PERIOD BIGINT,
  *     CONSTRAINT KEYSETS_PK PRIMARY KEY (KEYSET_NAME)
  * );
@@ -119,7 +120,8 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 	private static final String LEGACY_TABLE_NAME_PLACEHOLDER = "%TABLE_NAME%";
 
 	private static final String GET_KEYSET_QUERY = """
-			SELECT K.KEYSET_NAME, K.KEYSET_PURPOSE, K.KEYSET_FACTORY, K.KEYSET_PROVIDER, K.KEYSET_KEK, K.ROTATION_INTERVAL, K.DESTRUCTION_GRACE_PERIOD, K.KEYSET_VERSION
+			SELECT K.KEYSET_NAME, K.KEYSET_PURPOSE, K.KEYSET_FACTORY, K.KEYSET_PROVIDER, K.KEYSET_KEK,
+				K.ROTATION_INTERVAL, K.ROTATION_LEAD_TIME, K.DESTRUCTION_GRACE_PERIOD, K.KEYSET_VERSION
 			FROM %KEYSETS_TABLE_NAME% K
 			WHERE K.KEYSET_NAME = ?
 			""";
@@ -139,14 +141,15 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 			""";
 
 	private static final String CREATE_KEYSET_QUERY = """
-			INSERT INTO %KEYSETS_TABLE_NAME% (KEYSET_NAME, KEYSET_PURPOSE, KEYSET_FACTORY, KEYSET_PROVIDER, KEYSET_KEK, ROTATION_INTERVAL, DESTRUCTION_GRACE_PERIOD, KEYSET_VERSION)
-			VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+			INSERT INTO %KEYSETS_TABLE_NAME% (KEYSET_NAME, KEYSET_PURPOSE, KEYSET_FACTORY, KEYSET_PROVIDER, KEYSET_KEK,
+				ROTATION_INTERVAL, DESTRUCTION_GRACE_PERIOD, ROTATION_LEAD_TIME, KEYSET_VERSION)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
 			""";
 
 	private static final String UPDATE_KEYSET_QUERY = """
 			UPDATE %KEYSETS_TABLE_NAME%
 			SET KEYSET_PURPOSE = ?, KEYSET_FACTORY = ?, KEYSET_PROVIDER = ?, KEYSET_KEK = ?, ROTATION_INTERVAL = ?, DESTRUCTION_GRACE_PERIOD = ?,
-				KEYSET_VERSION = KEYSET_VERSION + 1
+				ROTATION_LEAD_TIME = ?, KEYSET_VERSION = KEYSET_VERSION + 1
 			WHERE KEYSET_NAME = ? AND KEYSET_VERSION = ?
 			""";
 
@@ -197,7 +200,7 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 
 	private static final String FIND_PENDING_DESTRUCTION_QUERY = """
 			SELECT K.KEYSET_NAME, K.KEYSET_PURPOSE, K.KEYSET_FACTORY, K.KEYSET_PROVIDER, K.KEYSET_KEK,
-				K.ROTATION_INTERVAL, K.DESTRUCTION_GRACE_PERIOD, K.KEYSET_VERSION,
+				K.ROTATION_INTERVAL, K.ROTATION_LEAD_TIME, K.DESTRUCTION_GRACE_PERIOD, K.KEYSET_VERSION,
 				E.KEY_ID, E.KEY_ALGORITHM, E.KEY_TYPE, E.KEY_STATUS, E.KEY_PRIMARY, E.KEY_DATA,
 				E.CREATED_AT, E.INITIALIZED_AT, E.EXPIRES_AT, E.DESTRUCTION_SCHEDULED_AT, E.DESTROYED_AT
 			FROM %KEYSETS_TABLE_NAME% K
@@ -210,7 +213,7 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 
 	private static final String FIND_PENDING_ROTATION_QUERY = """
 			SELECT K.KEYSET_NAME, K.KEYSET_PURPOSE, K.KEYSET_FACTORY, K.KEYSET_PROVIDER, K.KEYSET_KEK,
-				K.ROTATION_INTERVAL, K.DESTRUCTION_GRACE_PERIOD, K.KEYSET_VERSION
+				K.ROTATION_INTERVAL, K.ROTATION_LEAD_TIME, K.DESTRUCTION_GRACE_PERIOD, K.KEYSET_VERSION
 			FROM %KEYSETS_TABLE_NAME% K
 			INNER JOIN %KEYS_TABLE_NAME% E ON E.KEYSET_NAME = K.KEYSET_NAME
 			WHERE E.EXPIRES_AT IS NOT NULL
@@ -346,6 +349,12 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 	/**
 	 * Overrides the SQL statement used to insert a new keyset row.
 	 * When {@literal null}, the built-in default statement is used.
+	 * <p>
+	 * The statement is executed with eight bound parameters: the keyset
+	 * name, purpose, factory, KEK provider, KEK identifier, rotation
+	 * interval, destruction grace period, and rotation lead time.
+	 * <p>
+	 * Durations are bound in milliseconds, or as {@code NULL} when not set.
 	 *
 	 * @param createKeysetQuery custom SQL statement, or {@literal null} to use the default
 	 */
@@ -356,6 +365,13 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 	/**
 	 * Overrides the SQL statement used to update an existing keyset row.
 	 * When {@literal null}, the built-in default statement is used.
+	 * <p>
+	 * The statement is executed with nine bound parameters: the keyset
+	 * purpose factory, KEK provider, KEK identifier, rotation interval,
+	 * destruction grace period, rotation lead time, followed by the
+	 * keyset name and the expected keyset version.
+	 * <p>
+	 * Durations are bound in milliseconds, or as {@code NULL} when not set.
 	 *
 	 * @param updateKeysetQuery custom SQL statement, or {@literal null} to use the default
 	 */
@@ -555,6 +571,7 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 			ps.setString(5, keyset.keyEncryptionKey());
 			setDuration(ps, 6, keyset.rotationInterval());
 			setDuration(ps, 7, keyset.destructionGracePeriod());
+			setDuration(ps, 8, keyset.rotationLeadTime());
 		});
 		insertKeys(keyset.name(), keyset.keys());
 	}
@@ -569,8 +586,9 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 			ps.setString(4, keyset.keyEncryptionKey());
 			setDuration(ps, 5, keyset.rotationInterval());
 			setDuration(ps, 6, keyset.destructionGracePeriod());
-			ps.setString(7, keyset.name());
-			ps.setLong(8, keyset.version());
+			setDuration(ps, 7, keyset.rotationLeadTime());
+			ps.setString(8, keyset.name());
+			ps.setLong(9, keyset.version());
 		});
 
 		if (updated == 0) {
@@ -774,6 +792,11 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 		final long rotationInterval = rs.getLong("ROTATION_INTERVAL");
 		if (!rs.wasNull()) {
 			builder.rotationInterval(rotationInterval);
+		}
+
+		final long rotationLeadTime = rs.getLong("ROTATION_LEAD_TIME");
+		if (!rs.wasNull()) {
+			builder.rotationLeadTime(rotationLeadTime);
 		}
 
 		final long destructionGracePeriod = rs.getLong("DESTRUCTION_GRACE_PERIOD");
