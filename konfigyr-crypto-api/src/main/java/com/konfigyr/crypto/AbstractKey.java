@@ -360,6 +360,37 @@ public abstract class AbstractKey<A extends Algorithm> implements Key {
 		}
 
 		/**
+		 * Promotes the {@link Key} to be the primary key of its {@link Keyset}, which expires at the given time.
+		 * <p>
+		 * Used when an existing key, created ahead of the rotation, becomes the primary key. Its expiration
+		 * time is reset, so it is counted from the moment of the promotion instead of its creation.
+		 *
+		 * @param expiresAt the new expiration time of the key, can be {@literal null} when automatic key
+		 *                  rotation is disabled
+		 * @return the key builder instance.
+		 * @see #demote()
+		 * @since 1.1.0
+		 */
+		public B promote(@Nullable Instant expiresAt) {
+			return primary().expiresAt(expiresAt);
+		}
+
+		/**
+		 * Demotes the {@link Key} so it is no longer the primary key of its {@link Keyset}.
+		 * <p>
+		 * Used when the primary key is rotated or when another key is promoted to be the primary key.
+		 * <p>
+		 * The expiration time of the demoted key is left unchanged.
+		 *
+		 * @return the key builder instance.
+		 * @see #promote(Instant)
+		 * @since 1.1.0
+		 */
+		public B demote() {
+			return primary(false);
+		}
+
+		/**
 		 * Specify the timestamp when the {@link Key} was created.
 		 *
 		 * @param createdAt the timestamp when the key was created

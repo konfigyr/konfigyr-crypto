@@ -3,6 +3,7 @@ package com.konfigyr.crypto;
 import com.konfigyr.crypto.test.TestAlgorithm;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.Answers;
 
 import java.time.Duration;
 import java.util.Optional;
@@ -24,7 +25,84 @@ class KeysetDefinitionTest {
 			.returns(KeysetPurpose.ENCRYPTION, KeysetDefinition::getPurpose)
 			.returns(algorithm, KeysetDefinition::getAlgorithm)
 			.returns(Optional.of(Duration.ofDays(90)), KeysetDefinition::getRotationInterval)
+			.returns(Optional.empty(), KeysetDefinition::getRotationLeadTime)
 			.returns(Optional.of(Duration.ofDays(30)), KeysetDefinition::getDestructionGracePeriod);
+	}
+
+	@Test
+	@DisplayName("should create keyset definition with rotation lead time")
+	void shouldCreateKeysetDefinitionWithRotationLeadTime() {
+		final var definition = KeysetDefinition.builder()
+			.name("test-keyset")
+			.algorithm(algorithm)
+			.rotationInterval(Duration.ofDays(90))
+			.rotationLeadTime(Duration.ofDays(30))
+			.build();
+
+		assertThat(definition)
+			.returns(Optional.of(Duration.ofDays(90)), KeysetDefinition::getRotationInterval)
+			.returns(Optional.of(Duration.ofDays(30)), KeysetDefinition::getRotationLeadTime)
+			.returns(Optional.of(Duration.ofDays(30)), KeysetDefinition::getDestructionGracePeriod)
+			.isEqualTo(KeysetDefinition.builder()
+				.name("test-keyset")
+				.algorithm(algorithm)
+				.rotationLeadTime(Duration.ofDays(30))
+				.build())
+			.isNotEqualTo(KeysetDefinition.of("test-keyset", algorithm));
+	}
+
+	@Test
+	@DisplayName("should validate key rotation lead time")
+	void shouldValidateRotationLeadTime() {
+		final var builder = KeysetDefinition.builder()
+			.name("test-keyset")
+			.algorithm(algorithm)
+			.rotationInterval(Duration.ofDays(90));
+
+		assertThatIllegalArgumentException()
+			.isThrownBy(builder.rotationLeadTime(Duration.ZERO)::build)
+			.withMessage("Keyset rotation lead time must be positive");
+
+		assertThatIllegalArgumentException()
+			.isThrownBy(builder.rotationLeadTime(Duration.ofDays(-1))::build)
+			.withMessage("Keyset rotation lead time must be positive");
+
+		assertThatIllegalArgumentException()
+			.isThrownBy(builder.rotationLeadTime(Duration.ofDays(90))::build)
+			.withMessage("Keyset rotation lead time must be shorter than the rotation interval of 90 days");
+
+		assertThatIllegalArgumentException()
+			.isThrownBy(builder.rotationLeadTime(Duration.ofDays(120))::build)
+			.withMessage("Keyset rotation lead time must be shorter than the rotation interval of 90 days");
+
+		assertThatIllegalArgumentException()
+			.isThrownBy(builder.rotationLeadTime(Duration.ofDays(30)).disableAutomaticKeyRotation()::build)
+			.withMessage("Keyset rotation lead time can not be specified when automatic key rotation is disabled");
+	}
+
+	@Test
+	@DisplayName("should disable rotation lead time")
+	void shouldDisableRotationLeadTime() {
+		final var definition = KeysetDefinition.builder()
+			.name("test-keyset")
+			.algorithm(algorithm)
+			.rotationLeadTime(Duration.ofDays(30))
+			.disableRotationLeadTime()
+			.disableAutomaticKeyRotation()
+			.build();
+
+		assertThat(definition)
+			.returns(Optional.empty(), KeysetDefinition::getRotationInterval)
+			.returns(Optional.empty(), KeysetDefinition::getRotationLeadTime);
+	}
+
+	@Test
+	@DisplayName("should not expose rotation lead time for custom keyset definitions")
+	void shouldDefaultRotationLeadTimeForCustomDefinitions() {
+		final var definition = mock(KeysetDefinition.class, Answers.CALLS_REAL_METHODS);
+
+		assertThat(definition.getRotationLeadTime())
+			.isEmpty();
 	}
 
 	@Test

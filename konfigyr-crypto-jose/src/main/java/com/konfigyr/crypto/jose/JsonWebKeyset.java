@@ -17,6 +17,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.util.Assert;
 import org.springframework.util.function.ThrowingFunction;
 
+import java.time.Instant;
 import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
 import java.util.*;
@@ -154,7 +155,24 @@ class JsonWebKeyset extends AbstractKeyset<JsonWebKey> implements JWKSource<Secu
 
 		stream().map(JsonWebKey.class::cast).forEach(existing -> {
 			if (existing.isPrimary() && definition.isPrimary()) {
-				builder.key(rotateKey(existing));
+				builder.key(demote(existing));
+			} else {
+				builder.key(existing);
+			}
+		});
+
+		return builder.build();
+	}
+
+	@Override
+	protected Keyset doPromote(JsonWebKey key, @Nullable Instant expiresAt) {
+		final Builder builder = new Builder(this);
+
+		stream().map(JsonWebKey.class::cast).forEach(existing -> {
+			if (existing.getId().equals(key.getId())) {
+				builder.key(promote(existing, expiresAt));
+			} else if (existing.isPrimary()) {
+				builder.key(demote(existing));
 			} else {
 				builder.key(existing);
 			}
@@ -250,14 +268,47 @@ class JsonWebKeyset extends AbstractKeyset<JsonWebKey> implements JWKSource<Secu
 		throw new IllegalArgumentException("Unsupported JWK key type: " + key.getValue().getKeyType());
 	}
 
+	private void assertKeysetOperation(KeysetOperation operation) {
+		if (!purpose.isOperationSupported(operation)) {
+			throw new CryptoException.UnsupportedKeysetOperationException(name, operation, purpose.operations());
+		}
+	}
+
 	/**
-	 * Rotates the previously generated key that was part of the keyset. The key should not be marked
-	 * as primary anymore and should not perform encryption or signing operations.
+	 * Promotes the given key to be the primary key, restoring all the key operations permitted by the
+	 * purpose of its algorithm, as these are removed when a key is {@link #demote(JsonWebKey) demoted}.
 	 *
-	 * @param key the existing key to be rotated
-	 * @return the rotated key
+	 * @param key       the key to be promoted
+	 * @param expiresAt the new expiration time of the promoted key
+	 * @return the promoted key
 	 */
-	private JsonWebKey rotateKey(JsonWebKey key) {
+	private static JsonWebKey promote(JsonWebKey key, @Nullable Instant expiresAt) {
+		final Set<KeyOperation> operations = JoseUtils.resolveKeyOperations(key.getAlgorithm().purpose());
+
+		final JWK jwk = switch (key.getValue()) {
+			case RSAKey rsa -> new RSAKey.Builder(rsa)
+				.keyOperations(operations)
+				.build();
+			case ECKey ec -> new ECKey.Builder(ec)
+				.keyOperations(operations)
+				.build();
+			case OctetSequenceKey secret -> new OctetSequenceKey.Builder(secret)
+				.keyOperations(operations)
+				.build();
+			default -> throw new IllegalStateException("Unsupported JWK type: " + key.getValue().getKeyType());
+		};
+
+		return new JsonWebKey.Builder(key, jwk).promote(expiresAt).build();
+	}
+
+	/**
+	 * Demotes the primary key of the keyset when it is rotated or when another key is promoted. The key
+	 * should not be marked as primary anymore and should not perform encryption or signing operations.
+	 *
+	 * @param key the existing primary key to be demoted
+	 * @return the demoted key
+	 */
+	private static JsonWebKey demote(JsonWebKey key) {
 		final Set<KeyOperation> operations = key.getValue()
 			.getKeyOperations()
 			.stream()
@@ -277,15 +328,7 @@ class JsonWebKeyset extends AbstractKeyset<JsonWebKey> implements JWKSource<Secu
 			default -> throw new IllegalStateException("Unsupported JWK type: " + key.getValue().getKeyType());
 		};
 
-		return new JsonWebKey.Builder(key, jwk)
-			.primary(false)
-			.build();
-	}
-
-	private void assertKeysetOperation(KeysetOperation operation) {
-		if (!purpose.isOperationSupported(operation)) {
-			throw new CryptoException.UnsupportedKeysetOperationException(name, operation, purpose.operations());
-		}
+		return new JsonWebKey.Builder(key, jwk).demote().build();
 	}
 
 	static final class Builder extends AbstractKeyset.Builder<JsonWebKey, JsonWebKeyset, Builder> {

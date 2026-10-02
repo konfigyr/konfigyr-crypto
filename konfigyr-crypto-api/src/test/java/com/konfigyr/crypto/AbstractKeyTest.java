@@ -13,6 +13,7 @@ import java.time.Duration;
 import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.mockito.Mockito.mock;
 
 class AbstractKeyTest {
 
@@ -30,6 +31,71 @@ class AbstractKeyTest {
 			.build();
 
 		assertThat(key.getCreatedAt()).isBetween(before, Instant.now());
+	}
+
+	@Test
+	@DisplayName("should check if the key uses the given algorithm")
+	void shouldCheckKeyAlgorithm() {
+		final Algorithm other = mock(Algorithm.class);
+
+		final var key = TestKey.builder()
+			.id("key-id")
+			.algorithm(TestAlgorithm.INSTANCE)
+			.status(KeyStatus.ENABLED)
+			.build();
+
+		assertThat(key.isUsing(TestAlgorithm.INSTANCE))
+			.as("key must use the algorithm it was created with")
+			.isTrue();
+
+		assertThat(key.isUsing(other))
+			.as("key must not use a different algorithm")
+			.isFalse();
+	}
+
+	@Test
+	@DisplayName("should promote the key to be primary and reset its expiration time")
+	void shouldPromoteKey() {
+		final var key = TestKey.builder()
+			.id("key-id")
+			.algorithm(TestAlgorithm.INSTANCE)
+			.status(KeyStatus.ENABLED)
+			.primary(false)
+			.createdAt(now)
+			.expiresAt(now.plus(Duration.ofDays(90)))
+			.build();
+
+		final Instant expiresAt = now.plus(Duration.ofDays(120));
+
+		KeyAssert.assertThat(TestKey.builder(key).promote(expiresAt).build())
+			.hasId("key-id")
+			.isPrimary()
+			.isCreatedAt(now)
+			.expiresAt(expiresAt);
+
+		KeyAssert.assertThat(TestKey.builder(key).promote(null).build())
+			.as("promoted key must not expire when automatic key rotation is disabled")
+			.isPrimary()
+			.expiresAt(null);
+	}
+
+	@Test
+	@DisplayName("should demote the key and retain its expiration time")
+	void shouldDemoteKey() {
+		final var key = TestKey.builder()
+			.id("key-id")
+			.algorithm(TestAlgorithm.INSTANCE)
+			.status(KeyStatus.ENABLED)
+			.primary(true)
+			.createdAt(now)
+			.expiresAt(now.plus(Duration.ofDays(90)))
+			.build();
+
+		KeyAssert.assertThat(TestKey.builder(key).demote().build())
+			.hasId("key-id")
+			.isNotPrimary()
+			.isCreatedAt(now)
+			.expiresAt(now.plus(Duration.ofDays(90)));
 	}
 
 	@Test

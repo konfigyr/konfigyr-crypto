@@ -58,8 +58,8 @@ public class KeysetAssert extends AbstractObjectAssert<KeysetAssert, @Nullable K
 	}
 
 	/**
-	 * Verifies that the keyset's name, purpose, rotation interval, and destruction grace period
-	 * all match the corresponding values of the given {@link KeysetDefinition}.
+	 * Verifies that the keyset's name, purpose, rotation interval, rotation lead time, and destruction
+	 * grace period all match the corresponding values of the given {@link KeysetDefinition}.
 	 *
 	 * @param definition the definition to match against, can't be {@literal null}
 	 * @return this assertion for chaining, never {@literal null}
@@ -68,6 +68,7 @@ public class KeysetAssert extends AbstractObjectAssert<KeysetAssert, @Nullable K
 		return hasName(definition.getName())
 			.hasPurpose(definition.getPurpose())
 			.hasRotationInterval(definition.getRotationInterval().orElse(null))
+			.hasRotationLeadTime(definition.getRotationLeadTime().orElse(null))
 			.hasDestructionGracePeriod(definition.getDestructionGracePeriod().orElse(null));
 	}
 
@@ -189,6 +190,37 @@ public class KeysetAssert extends AbstractObjectAssert<KeysetAssert, @Nullable K
 			.extracting(Keyset::getRotationInterval, InstanceOfAssertFactories.optional(Duration.class))
 			.as("keyset rotation interval")
 			.hasValue(interval);
+		return myself;
+	}
+
+	/**
+	 * Verifies that the keyset has no rotation lead time configured.
+	 *
+	 * @return this assertion for chaining, never {@literal null}
+	 */
+	public KeysetAssert hasNoRotationLeadTime() {
+		assertThatKeyset()
+			.extracting(Keyset::getRotationLeadTime, InstanceOfAssertFactories.optional(Duration.class))
+			.as("keyset rotation lead time")
+			.isEmpty();
+		return myself;
+	}
+
+	/**
+	 * Verifies that the keyset has the expected rotation lead time. Pass {@literal null} to assert
+	 * that no rotation lead time is configured.
+	 *
+	 * @param leadTime the expected rotation lead time, can be {@literal null}
+	 * @return this assertion for chaining, never {@literal null}
+	 */
+	public KeysetAssert hasRotationLeadTime(@Nullable Duration leadTime) {
+		if (leadTime == null) {
+			return hasNoRotationLeadTime();
+		}
+		assertThatKeyset()
+			.extracting(Keyset::getRotationLeadTime, InstanceOfAssertFactories.optional(Duration.class))
+			.as("keyset rotation lead time")
+			.hasValue(leadTime);
 		return myself;
 	}
 

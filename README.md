@@ -255,6 +255,58 @@ class TinkExample {
 }
 ```
 
+### Rotation lead time
+
+Rotating a keyset replaces its primary key at once. That is a problem when third parties cache your public keys, like the consumers of a JSON Web Key Set or of SAML metadata: until they refresh their copy, they reject everything signed or encrypted with the new primary key.
+
+A rotation lead time solves this. The next key is created ahead of the rotation as a non-primary key, so it can be shared with third parties while the current primary key keeps signing. Once the current primary key expires, the next key, which they already know, takes over. Configure it on the keyset definition:
+
+```java
+store.create("my-kek-provider", "my-kek", KeysetDefinition.builder()
+        .name("my-jwks")
+        .algorithm(JoseAlgorithm.ES256)
+        .rotationInterval(Duration.ofDays(90)) // each primary key signs for 90 days
+        .rotationLeadTime(Duration.ofDays(30)) // its successor is created 30 days before it takes over
+        .build());
+```
+
+The [scheduled `keyset-rotation` task](#scheduled-maintenance-rotation-and-destruction) then takes care of the rest. For a keyset created on day 0:
+
+| Day | What the task does | Primary key (signs) | Next key (does not sign yet) |
+|---|---|---|---|
+| 0 | — | key 1 | — |
+| 60 | key 1 expires within 30 days: creates key 2 | key 1 | key 2 |
+| 90 | key 1 expired: promotes key 2, demotes key 1 | key 2 | — |
+| 150 | key 2 expires within 30 days: creates key 3 | key 2 | key 3 |
+| 180 | key 2 expired: promotes key 3, demotes key 2 | key 3 | — |
+
+A few things to keep in mind:
+
+- **The next key is visible like any other key.** `Keyset.getKeys()` returns it, and the JOSE keyset exposes it through its `JWKSource`, so a JSON Web Key Set built from the keyset contains it. Use `Keyset.getNextKey()` when you need it explicitly, for instance to list the upcoming certificate in SAML metadata.
+- **Demoted keys are not retired.** A previous primary key stays `ENABLED`, so data and signatures it produced remain readable, until you [disable or destroy it](#key-lifecycle-management).
+- **Choose a lead time longer than the refresh interval of your third parties.** If a consumer caches your JSON Web Key Set for a day, a lead time of a few days leaves plenty of margin. The task itself runs every hour by default, which must be well within the lead time.
+- **The lead time is validated when the definition is built.** It must be positive, requires a rotation interval and must be shorter than it, otherwise an `IllegalArgumentException` is thrown.
+
+You can also prepare and promote the next key yourself, for instance when the scheduled tasks are disabled:
+
+```java
+// create the next key as a non-primary key, it does not sign yet
+store.rotate("my-jwks", KeyDefinition.builder()
+        .algorithm(JoseAlgorithm.ES256)
+        .rotationInterval(Duration.ofDays(90))
+        .primary(false)
+        .build());
+
+// promote the next key to be the primary key
+store.rotate("my-jwks");
+```
+
+When a keyset is rotated, its next key becomes the primary key. A new primary key is generated instead, exactly like for keysets without a lead time, when:
+
+- there is no next key, because the keyset was not prepared yet. The new key then signs before third parties could obtain it.
+- the current primary key is not `ENABLED`, for instance after it was [compromised](#key-lifecycle-management). The next key may have been exposed as well, so it is not trusted to take over. Compromise it too if that is the case.
+- you rotate to a different algorithm than the one of the next key.
+
 ### Key lifecycle management
 
 Each `EncryptedKey` within a keyset carries a `KeyStatus` that describes its position in the lifecycle state machine:
@@ -301,13 +353,15 @@ Konfigyr Crypto comes with the following implementations of the `KeysetRepositor
 
 ### Scheduled maintenance: rotation and destruction
 
-`KeysetRepository` exposes two query methods designed for use in scheduled maintenance tasks.
+`KeysetRepository` exposes three query methods designed for use in scheduled maintenance tasks.
 
-`findPendingRotation()` returns partial keysets (metadata only, empty key list) whose primary key's expiry time has elapsed. Call `store.rotate(name)` for each result:
+`findPendingPreparation()` returns partial keysets (metadata only, empty key list) that have a [rotation lead time](#rotation-lead-time), whose primary key expires within it, and that have no next key yet. Create the next key for each result as a non-primary key.
+
+`findPendingRotation()` returns partial keysets (metadata only, empty key list) whose primary key's expiry time has elapsed. Call `store.rotate(name)` for each result, which promotes the next key of prepared keysets:
 
 ```java
 for (EncryptedKeyset keyset : repository.findPendingRotation()) {
-    store.rotate(keyset.getName());
+    store.rotate(keyset.name());
 }
 ```
 
@@ -316,14 +370,23 @@ for (EncryptedKeyset keyset : repository.findPendingRotation()) {
 ```java
 for (EncryptedKeyset keyset : repository.findPendingDestruction()) {
     for (EncryptedKey key : keyset) {
-        store.destroy(keyset.getName(), key.getId());
+        store.destroy(keyset.name(), key.id());
     }
 }
 ```
 
-Both methods return an empty list by default; repositories that can issue an efficient query — such as `JdbcKeysetRepository` — override them.
+All methods return an empty list by default; repositories that can issue an efficient query — such as `JdbcKeysetRepository` — override them.
 
 When both a `KeysetStore` and a `KeysetRepository` bean are present in the application context, `KeysetTaskAutoConfiguration` registers both tasks automatically and enables Spring scheduling. Each task runs on a fixed-rate trigger every **1 hour** by default.
+
+The `keyset-rotation` task runs in two steps:
+
+1. It creates the next key of every keyset returned by `findPendingPreparation()`.
+2. It rotates every keyset returned by `findPendingRotation()`, which promotes their next keys.
+
+When a keyset misses its whole lead time, for instance because the application was down, both steps run for it in the same run. Its next key then takes over before third parties could obtain it, and the task logs a warning.
+
+When the task runs on several application instances, they may try to prepare or rotate the same keyset at the same time. Only one of them succeeds, the others detect the concurrent modification, skip the keyset and log it at debug level.
 
 Tasks are configured under the `konfigyr.crypto.tasks` prefix. Each task name is a key in the map (`keyset-rotation` or `keyset-destruction`) and supports three properties:
 

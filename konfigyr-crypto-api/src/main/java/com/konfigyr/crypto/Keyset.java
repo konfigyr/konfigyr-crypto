@@ -112,6 +112,22 @@ public interface Keyset extends Iterable<Key> {
 	}
 
 	/**
+	 * Retrieves the next {@link Key} of this {@link Keyset}, the key that is promoted to be the primary key
+	 * on the next {@link #rotate() rotation}.
+	 * <p>
+	 * The next key is created ahead of the rotation, as defined by the {@link #getRotationLeadTime() rotation
+	 * lead time}, so third parties that cache the public key material can obtain it before it is used. It is a
+	 * non-primary {@link KeyStatus#ENABLED} key that was created after the current primary key. When more than
+	 * one key matches, the most recently created key is returned.
+	 *
+	 * @return the next key or an empty {@link Optional} when there is none
+	 * @since 1.1.0
+	 */
+	default Optional<? extends Key> getNextKey() {
+		return Optional.empty();
+	}
+
+	/**
 	 * Encrypts the given byte buffer wrapped inside a {@link ByteArray}. Only supported when
 	 * {@link Algorithm#purpose()} is {@link KeysetPurpose#ENCRYPTION}.
 	 *
@@ -321,6 +337,22 @@ public interface Keyset extends Iterable<Key> {
 	 * @see Keyset#rotate()
 	 */
 	Optional<Duration> getRotationInterval();
+
+	/**
+	 * Retrieves how long before the scheduled rotation of the primary key the next key should be created.
+	 * <p>
+	 * The next key is created as a non-primary key, so third parties that cache the public key material,
+	 * like the consumers of a JSON Web Key Set or SAML metadata, can obtain it before it becomes the
+	 * primary key.
+	 *
+	 * @return rotation lead time, it may return an {@link Optional#empty()} if the next key should be
+	 * created at the moment of rotation.
+	 * @see KeysetDefinition#getRotationLeadTime()
+	 * @since 1.1.0
+	 */
+	default Optional<Duration> getRotationLeadTime() {
+		return Optional.empty();
+	}
 
 	/**
 	 * Retrieves the grace period duration that will be applied if the {@link Key} is scheduled for destruction.

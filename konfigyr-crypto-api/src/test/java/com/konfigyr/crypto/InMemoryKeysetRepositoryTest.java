@@ -240,6 +240,52 @@ class InMemoryKeysetRepositoryTest {
 	}
 
 	@Test
+	@DisplayName("should return keysets whose primary key expires within the rotation lead time")
+	void shouldFindKeysetsPendingPreparation() throws IOException {
+		final Instant now = Instant.now();
+
+		// primary key expires within the lead time and there is no next key yet: returned
+		repository.write(preparedKeyset("within-lead-time",
+			expiringKey("primary", true, KeyStatus.ENABLED, now.minus(Duration.ofDays(70)), now.plus(Duration.ofDays(20)))));
+
+		// primary key already expired without the keyset being prepared: returned
+		repository.write(preparedKeyset("missed-lead-time",
+			expiringKey("primary", true, KeyStatus.ENABLED, now.minus(Duration.ofDays(100)), now.minus(Duration.ofDays(10)))));
+
+		// primary key expires after the lead time: not returned
+		repository.write(preparedKeyset("before-lead-time",
+			expiringKey("primary", true, KeyStatus.ENABLED, now.minus(Duration.ofDays(30)), now.plus(Duration.ofDays(60)))));
+
+		// next key already exists: not returned
+		repository.write(preparedKeyset("already-prepared",
+			expiringKey("primary", true, KeyStatus.ENABLED, now.minus(Duration.ofDays(70)), now.plus(Duration.ofDays(20))),
+			expiringKey("next", false, KeyStatus.ENABLED, now.minus(Duration.ofDays(5)), now.plus(Duration.ofDays(85)))));
+
+		// only an older, demoted, key and a disabled newer key exist: returned
+		repository.write(preparedKeyset("not-prepared",
+			expiringKey("previous", false, KeyStatus.ENABLED, now.minus(Duration.ofDays(160)), now.minus(Duration.ofDays(70))),
+			expiringKey("primary", true, KeyStatus.ENABLED, now.minus(Duration.ofDays(70)), now.plus(Duration.ofDays(20))),
+			expiringKey("disabled", false, KeyStatus.DISABLED, now.minus(Duration.ofDays(5)), now.plus(Duration.ofDays(85)))));
+
+		// primary key is not enabled: not returned
+		repository.write(preparedKeyset("compromised",
+			expiringKey("primary", true, KeyStatus.COMPROMISED, now.minus(Duration.ofDays(70)), now.plus(Duration.ofDays(20)))));
+
+		// keyset without a rotation lead time: not returned
+		repository.write(EncryptedKeyset.builder(preparedKeyset("no-lead-time"))
+			.rotationLeadTime((Duration) null)
+			.build(expiringKey("primary", true, KeyStatus.ENABLED, now.minus(Duration.ofDays(70)), now.plus(Duration.ofDays(20)))));
+
+		assertThat(repository.findPendingPreparation())
+			.extracting(EncryptedKeyset::name, EncryptedKeyset::keys)
+			.containsExactlyInAnyOrder(
+				tuple("within-lead-time", List.of()),
+				tuple("missed-lead-time", List.of()),
+				tuple("not-prepared", List.of())
+			);
+	}
+
+	@Test
 	@DisplayName("should throw when a concurrent modification is detected on write")
 	void shouldDetectConcurrentModificationOnWrite() throws IOException {
 		final EncryptedKey key = encryptedKey("key-1", KeyStatus.ENABLED, true,
@@ -251,6 +297,24 @@ class InMemoryKeysetRepositoryTest {
 
 		assertThatThrownBy(() -> repository.write(keyset)) // keyset is still v0, stored is v1
 			.isInstanceOf(CryptoException.KeysetConcurrentModificationException.class);
+	}
+
+	private static EncryptedKeyset preparedKeyset(String name, EncryptedKey... keys) {
+		return EncryptedKeyset.builder(encryptedKeyset(name))
+			.rotationLeadTime(Duration.ofDays(30))
+			.build(keys);
+	}
+
+	private static EncryptedKey expiringKey(String id, boolean primary, KeyStatus status, Instant createdAt,
+			Instant expiresAt) {
+		return EncryptedKey.builder()
+			.id(id)
+			.algorithm(TestAlgorithm.INSTANCE)
+			.status(status)
+			.primary(primary)
+			.createdAt(createdAt)
+			.expiresAt(expiresAt)
+			.build(ByteArray.fromString("key-material"));
 	}
 
 	private static EncryptedKeyset encryptedKeyset(String name, EncryptedKey... keys) {
