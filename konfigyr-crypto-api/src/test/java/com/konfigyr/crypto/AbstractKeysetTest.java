@@ -8,6 +8,8 @@ import com.konfigyr.crypto.test.TestKeyset;
 import com.konfigyr.crypto.test.TestKeyEncryptionKey;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -254,10 +256,45 @@ class AbstractKeysetTest {
 	}
 
 	@Test
+	@DisplayName("should throw KeysetCompromisedException when the compromised primary key is pending destruction")
+	void shouldThrowWhenPrimaryKeyIsCompromisedPendingDestruction() {
+		final var keyset = TestKeyset.builder()
+			.name("test-keyset")
+			.factory("test-factory")
+			.purpose(KeysetPurpose.ENCRYPTION)
+			.keyEncryptionKey(kek)
+			.key(createKey("primary-key", true, KeyStatus.COMPROMISED_PENDING_DESTRUCTION))
+			.build();
+
+		assertThatExceptionOfType(CryptoException.KeysetCompromisedException.class)
+			.isThrownBy(keyset::requireActivePrimary)
+			.returns("test-keyset", CryptoException.KeysetException::getName);
+	}
+
+	@EnumSource(value = KeyStatus.class, names = { "INITIALIZING", "INITIALIZATION_FAILED", "DESTRUCTION_FAILED" })
+	@ParameterizedTest(name = "{0}")
+	@DisplayName("should throw KeysetUnavailableException when the primary key is in a non-operational state")
+	void shouldThrowWhenPrimaryKeyIsUnavailable(KeyStatus status) {
+		final var keyset = TestKeyset.builder()
+			.name("test-keyset")
+			.factory("test-factory")
+			.purpose(KeysetPurpose.ENCRYPTION)
+			.keyEncryptionKey(kek)
+			.key(createKey("primary-key", true, status))
+			.build();
+
+		assertThatExceptionOfType(CryptoException.KeysetUnavailableException.class)
+			.isThrownBy(keyset::requireActivePrimary)
+			.returns("test-keyset", CryptoException.KeysetException::getName)
+			.returns(status, CryptoException.KeysetUnavailableException::getStatus);
+	}
+
+	@Test
 	@DisplayName("should allow rotation when the primary key is in a non-operational state")
 	void shouldAllowRotationWhenPrimaryKeyIsNonOperational() {
 		for (final KeyStatus status : new KeyStatus[]{
-			KeyStatus.COMPROMISED, KeyStatus.DISABLED, KeyStatus.PENDING_DESTRUCTION, KeyStatus.DESTROYED
+			KeyStatus.COMPROMISED, KeyStatus.COMPROMISED_PENDING_DESTRUCTION, KeyStatus.DISABLED,
+			KeyStatus.PENDING_DESTRUCTION, KeyStatus.DESTROYED
 		}) {
 			final var keyset = TestKeyset.builder()
 				.name("test-keyset")

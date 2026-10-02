@@ -26,6 +26,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 /**
  * A {@link KeysetRepository} implementation that uses Spring's {@link JdbcOperations} to
@@ -34,7 +35,11 @@ import java.util.Optional;
  * <p>
  * By default, this implementation uses two tables: {@code KEYSETS} for keyset-level metadata
  * and {@code KEYSET_KEYS} for per-key encrypted material with lifecycle timestamps. The table
- * names can be customized via {@link #setTableName(String)} and {@link #setKeysTableName(String)}.
+ * names can be customized via {@link #setKeysetsTableName(String)} and {@link #setKeysTableName(String)}.
+ * <p>
+ * Custom SQL queries can reference the configured table names using the {@code %KEYSETS_TABLE_NAME%}
+ * and {@code %KEYS_TABLE_NAME%} placeholders. The {@code %TABLE_NAME%} placeholder is deprecated since
+ * {@code 1.1.0} and is resolved to the keysets table name until it is removed.
  * <p>
  * Depending on your database, the table definitions can be described as below:
  * <pre class="code">
@@ -75,16 +80,47 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 	/**
 	 * The default name of the database table used to store {@link EncryptedKeyset keyset} metadata.
 	 */
-	public static final String DEFAULT_TABLE_NAME = "KEYSETS";
+	public static final String DEFAULT_KEYSETS_TABLE_NAME = "KEYSETS";
+
+	/**
+	 * The default name of the database table used to store {@link EncryptedKeyset keyset} metadata.
+	 *
+	 * @deprecated since 1.1.0, for removal, use {@link #DEFAULT_KEYSETS_TABLE_NAME} instead
+	 */
+	@Deprecated(since = "1.1.0", forRemoval = true)
+	public static final String DEFAULT_TABLE_NAME = DEFAULT_KEYSETS_TABLE_NAME;
 
 	/**
 	 * The default name of the database table used to store {@link EncryptedKey encrypted keys}.
 	 */
 	public static final String DEFAULT_KEYS_TABLE_NAME = "KEYSET_KEYS";
 
+	/**
+	 * Pattern for a single SQL identifier part: either an unquoted identifier or a double-quoted
+	 * (ANSI) or backtick-quoted (MySQL) identifier that may also contain {@code -} and {@code $}.
+	 */
+	private static final String IDENTIFIER_PART = "(?:[A-Za-z][A-Za-z0-9_]*|\"[A-Za-z0-9_$-]+\"|`[A-Za-z0-9_$-]+`)";
+
+	/**
+	 * Pattern for an optionally qualified table name such as {@code table}, {@code schema.table}
+	 * or {@code catalog.schema.table}. Table names are concatenated into SQL statements, hence the
+	 * strict validation to prevent SQL injection.
+	 */
+	private static final Pattern TABLE_NAME_PATTERN = Pattern.compile(
+			IDENTIFIER_PART + "(?:\\." + IDENTIFIER_PART + "){0,2}");
+
+	private static final String KEYSETS_TABLE_NAME_PLACEHOLDER = "%KEYSETS_TABLE_NAME%";
+
+	private static final String KEYS_TABLE_NAME_PLACEHOLDER = "%KEYS_TABLE_NAME%";
+
+	/**
+	 * Deprecated placeholder for the keysets table name, replaced by {@link #KEYSETS_TABLE_NAME_PLACEHOLDER}.
+	 */
+	private static final String LEGACY_TABLE_NAME_PLACEHOLDER = "%TABLE_NAME%";
+
 	private static final String GET_KEYSET_QUERY = """
 			SELECT K.KEYSET_NAME, K.KEYSET_PURPOSE, K.KEYSET_FACTORY, K.KEYSET_PROVIDER, K.KEYSET_KEK, K.ROTATION_INTERVAL, K.DESTRUCTION_GRACE_PERIOD, K.KEYSET_VERSION
-			FROM %TABLE_NAME% K
+			FROM %KEYSETS_TABLE_NAME% K
 			WHERE K.KEYSET_NAME = ?
 			""";
 
@@ -98,24 +134,24 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 
 	private static final String KEYSET_EXISTS_QUERY = """
 			SELECT 1
-			FROM %TABLE_NAME% K
+			FROM %KEYSETS_TABLE_NAME% K
 			WHERE K.KEYSET_NAME = ?
 			""";
 
 	private static final String CREATE_KEYSET_QUERY = """
-			INSERT INTO %TABLE_NAME% (KEYSET_NAME, KEYSET_PURPOSE, KEYSET_FACTORY, KEYSET_PROVIDER, KEYSET_KEK, ROTATION_INTERVAL, DESTRUCTION_GRACE_PERIOD, KEYSET_VERSION)
+			INSERT INTO %KEYSETS_TABLE_NAME% (KEYSET_NAME, KEYSET_PURPOSE, KEYSET_FACTORY, KEYSET_PROVIDER, KEYSET_KEK, ROTATION_INTERVAL, DESTRUCTION_GRACE_PERIOD, KEYSET_VERSION)
 			VALUES (?, ?, ?, ?, ?, ?, ?, 0)
 			""";
 
 	private static final String UPDATE_KEYSET_QUERY = """
-			UPDATE %TABLE_NAME%
+			UPDATE %KEYSETS_TABLE_NAME%
 			SET KEYSET_PURPOSE = ?, KEYSET_FACTORY = ?, KEYSET_PROVIDER = ?, KEYSET_KEK = ?, ROTATION_INTERVAL = ?, DESTRUCTION_GRACE_PERIOD = ?,
 				KEYSET_VERSION = KEYSET_VERSION + 1
 			WHERE KEYSET_NAME = ? AND KEYSET_VERSION = ?
 			""";
 
 	private static final String BUMP_KEYSET_VERSION_QUERY = """
-			UPDATE %TABLE_NAME%
+			UPDATE %KEYSETS_TABLE_NAME%
 			SET KEYSET_VERSION = KEYSET_VERSION + 1
 			WHERE KEYSET_NAME = ? AND KEYSET_VERSION = ?
 			""";
@@ -143,7 +179,7 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 			""";
 
 	private static final String DELETE_KEYSET_QUERY = """
-			DELETE FROM %TABLE_NAME%
+			DELETE FROM %KEYSETS_TABLE_NAME%
 			WHERE KEYSET_NAME = ?
 			""";
 
@@ -164,9 +200,9 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 				K.ROTATION_INTERVAL, K.DESTRUCTION_GRACE_PERIOD, K.KEYSET_VERSION,
 				E.KEY_ID, E.KEY_ALGORITHM, E.KEY_TYPE, E.KEY_STATUS, E.KEY_PRIMARY, E.KEY_DATA,
 				E.CREATED_AT, E.INITIALIZED_AT, E.EXPIRES_AT, E.DESTRUCTION_SCHEDULED_AT, E.DESTROYED_AT
-			FROM %TABLE_NAME% K
+			FROM %KEYSETS_TABLE_NAME% K
 			INNER JOIN %KEYS_TABLE_NAME% E ON E.KEYSET_NAME = K.KEYSET_NAME
-			WHERE E.KEY_STATUS = 'PENDING_DESTRUCTION'
+			WHERE E.KEY_STATUS IN ('PENDING_DESTRUCTION', 'COMPROMISED_PENDING_DESTRUCTION')
 				AND E.DESTRUCTION_SCHEDULED_AT IS NOT NULL
 				AND E.DESTRUCTION_SCHEDULED_AT <= ?
 			ORDER BY K.KEYSET_NAME, E.KEY_ID
@@ -175,7 +211,7 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 	private static final String FIND_PENDING_ROTATION_QUERY = """
 			SELECT K.KEYSET_NAME, K.KEYSET_PURPOSE, K.KEYSET_FACTORY, K.KEYSET_PROVIDER, K.KEYSET_KEK,
 				K.ROTATION_INTERVAL, K.DESTRUCTION_GRACE_PERIOD, K.KEYSET_VERSION
-			FROM %TABLE_NAME% K
+			FROM %KEYSETS_TABLE_NAME% K
 			INNER JOIN %KEYS_TABLE_NAME% E ON E.KEYSET_NAME = K.KEYSET_NAME
 			WHERE E.KEY_PRIMARY = TRUE
 				AND E.KEY_STATUS = 'ENABLED'
@@ -186,7 +222,7 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 
 	/* Configurable table names and query overrides */
 
-	private String tableName = DEFAULT_TABLE_NAME;
+	private String keysetsTableName = DEFAULT_KEYSETS_TABLE_NAME;
 
 	private String keysTableName = DEFAULT_KEYS_TABLE_NAME;
 
@@ -239,17 +275,37 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 
 	/**
 	 * Sets the name of the database table used to store keyset metadata.
-	 * Defaults to {@value DEFAULT_TABLE_NAME}.
+	 * Defaults to {@value DEFAULT_KEYSETS_TABLE_NAME}.
+	 * <p>
+	 * The name may be qualified with a schema and/or catalog, e.g. {@code my_schema.KEYSETS}.
+	 * Identifier parts containing characters such as {@code -} must be quoted, using either double
+	 * quotes or backticks, depending on your database, e.g. {@code "my-schema".KEYSETS}.
+	 *
+	 * @param keysetsTableName the keysets table name, can't be {@literal null}
+	 */
+	public void setKeysetsTableName(String keysetsTableName) {
+		this.keysetsTableName = keysetsTableName;
+	}
+
+	/**
+	 * Sets the name of the database table used to store keyset metadata.
+	 * Defaults to {@value DEFAULT_KEYSETS_TABLE_NAME}.
 	 *
 	 * @param tableName the table name, can't be {@literal null}
+	 * @deprecated since 1.1.0, for removal, use {@link #setKeysetsTableName(String)} instead
 	 */
+	@Deprecated(since = "1.1.0", forRemoval = true)
 	public void setTableName(String tableName) {
-		this.tableName = tableName;
+		setKeysetsTableName(tableName);
 	}
 
 	/**
 	 * Sets the name of the database table used to store encrypted key entries.
 	 * Defaults to {@value DEFAULT_KEYS_TABLE_NAME}.
+	 * <p>
+	 * The name may be qualified with a schema and/or catalog, e.g. {@code my_schema.KEYSET_KEYS}.
+	 * Identifier parts containing characters such as {@code -} must be quoted, using either double
+	 * quotes or backticks, depending on your database, e.g. {@code "my-schema".KEYSET_KEYS}.
 	 *
 	 * @param keysTableName the keys table name, can't be {@literal null}
 	 */
@@ -409,11 +465,11 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 
 	@Override
 	public void afterPropertiesSet() {
-		Assert.hasText(tableName, "Table name for encrypted keysets can not be blank");
+		Assert.hasText(keysetsTableName, "Table name for encrypted keysets can not be blank");
 		Assert.hasText(keysTableName, "Table name for encrypted keys can not be blank");
-		Assert.isTrue(tableName.matches("[A-Za-z][A-Za-z0-9_]*"),
-				"Keyset table name must be a valid SQL identifier: " + tableName);
-		Assert.isTrue(keysTableName.matches("[A-Za-z][A-Za-z0-9_]*"),
+		Assert.isTrue(TABLE_NAME_PATTERN.matcher(keysetsTableName).matches(),
+				"Keysets table name must be a valid SQL identifier: " + keysetsTableName);
+		Assert.isTrue(TABLE_NAME_PATTERN.matcher(keysTableName).matches(),
 				"Keys table name must be a valid SQL identifier: " + keysTableName);
 
 		getKeysetQuery = sql(getKeysetQuery, GET_KEYSET_QUERY);
@@ -721,10 +777,16 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 	}
 
 	private String sql(@Nullable String query, @NonNull String fallback) {
-		return StringUtils.replace(
-			StringUtils.replace(query == null ? fallback : query, "%TABLE_NAME%", this.tableName),
-			"%KEYS_TABLE_NAME%", this.keysTableName
-		);
+		String sql = query == null ? fallback : query;
+
+		if (sql.contains(LEGACY_TABLE_NAME_PLACEHOLDER)) {
+			log.warn("Custom SQL query uses the deprecated '{}' placeholder, please replace it with '{}': {}",
+					LEGACY_TABLE_NAME_PLACEHOLDER, KEYSETS_TABLE_NAME_PLACEHOLDER, sql);
+			sql = StringUtils.replace(sql, LEGACY_TABLE_NAME_PLACEHOLDER, this.keysetsTableName);
+		}
+
+		sql = StringUtils.replace(sql, KEYSETS_TABLE_NAME_PLACEHOLDER, this.keysetsTableName);
+		return StringUtils.replace(sql, KEYS_TABLE_NAME_PLACEHOLDER, this.keysTableName);
 	}
 
 	private EncryptedKeyset.@Nullable Builder extractKeyset(@NonNull ResultSet rs) throws SQLException, DataAccessException {

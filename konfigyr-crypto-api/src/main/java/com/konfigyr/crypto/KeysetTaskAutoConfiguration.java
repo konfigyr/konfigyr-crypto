@@ -25,7 +25,8 @@ import java.util.List;
  *     elapsed. Controlled via {@code konfigyr.crypto.tasks.keyset-rotation.*}.</li>
  *     <li><em>keyset-destruction</em> — calls
  *     {@link KeysetStore#destroy(String, String)} for every key whose
- *     {@link KeyStatus#PENDING_DESTRUCTION} grace period has elapsed. Controlled via
+ *     {@link KeyStatus#PENDING_DESTRUCTION} or {@link KeyStatus#COMPROMISED_PENDING_DESTRUCTION}
+ *     grace period has elapsed. Controlled via
  *     {@code konfigyr.crypto.tasks.keyset-destruction.*}.</li>
  * </ul>
  * <p>

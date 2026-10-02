@@ -170,20 +170,25 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 	 *
 	 * @return the primary key, never {@literal null}
 	 * @throws CryptoException.KeysetCompromisedException      if the primary key status is {@link KeyStatus#COMPROMISED}
+	 *                                                         or {@link KeyStatus#COMPROMISED_PENDING_DESTRUCTION}
 	 * @throws CryptoException.KeysetDisabledException         if the primary key status is {@link KeyStatus#DISABLED}
 	 * @throws CryptoException.KeysetPendingDestructionException if the primary key status is {@link KeyStatus#PENDING_DESTRUCTION}
 	 * @throws CryptoException.KeysetDestroyedException        if the primary key status is {@link KeyStatus#DESTROYED}
+	 * @throws CryptoException.KeysetUnavailableException      if the primary key status is any other status than
+	 *                                                         {@link KeyStatus#ENABLED}
 	 */
 	@SuppressWarnings("unchecked")
 	protected final T requireActivePrimary() {
 		final T primary = (T) getPrimary();
 
 		return switch (primary.getStatus()) {
-			case COMPROMISED -> throw new CryptoException.KeysetCompromisedException(name);
+			case COMPROMISED, COMPROMISED_PENDING_DESTRUCTION -> throw new CryptoException.KeysetCompromisedException(name);
 			case DISABLED -> throw new CryptoException.KeysetDisabledException(name);
 			case PENDING_DESTRUCTION -> throw new CryptoException.KeysetPendingDestructionException(name);
 			case DESTROYED -> throw new CryptoException.KeysetDestroyedException(name);
-			default -> primary;
+			case INITIALIZING, INITIALIZATION_FAILED, DESTRUCTION_FAILED ->
+				throw new CryptoException.KeysetUnavailableException(name, primary.getStatus());
+			case ENABLED -> primary;
 		};
 	}
 

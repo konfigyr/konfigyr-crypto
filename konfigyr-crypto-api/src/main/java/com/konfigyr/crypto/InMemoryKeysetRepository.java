@@ -54,7 +54,8 @@ public class InMemoryKeysetRepository implements KeysetRepository {
 	 * {@inheritDoc}
 	 * <p>
 	 * Scans all stored keysets and returns partial {@link EncryptedKeyset} views containing
-	 * only the keys in {@link KeyStatus#PENDING_DESTRUCTION} whose scheduled destruction time
+	 * only the keys in {@link KeyStatus#PENDING_DESTRUCTION} or
+	 * {@link KeyStatus#COMPROMISED_PENDING_DESTRUCTION} whose scheduled destruction time
 	 * is in the past.
 	 */
 	@Override
@@ -64,7 +65,8 @@ public class InMemoryKeysetRepository implements KeysetRepository {
 		for (EncryptedKeyset keyset : store.values()) {
 			final List<EncryptedKey> pending = new ArrayList<>();
 			for (EncryptedKey key : keyset.keys()) {
-				if (key.status() == KeyStatus.PENDING_DESTRUCTION
+				if ((key.status() == KeyStatus.PENDING_DESTRUCTION
+						|| key.status() == KeyStatus.COMPROMISED_PENDING_DESTRUCTION)
 						&& key.destructionScheduledAt() != null
 						&& !key.destructionScheduledAt().isAfter(now)) {
 					pending.add(key);

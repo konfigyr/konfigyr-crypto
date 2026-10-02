@@ -7,6 +7,8 @@ import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 
 import static com.konfigyr.crypto.jose.JoseIntegrationConfiguration.KEK_IDENTIFIER;
@@ -175,6 +177,13 @@ public class JoseIntegrationTest {
 			.filter(key -> !key.isPrimary())
 			.findFirst()
 			.orElseThrow();
+
+		assertThatNoException()
+			.isThrownBy(() -> store.disable(jwsDefinition.getName(), oldKey.getId()));
+
+		assertThatNoException()
+			.isThrownBy(() -> store.scheduleDestruction(jwsDefinition.getName(), oldKey.getId(),
+				Instant.now().plus(Duration.ofDays(1))));
 
 		assertThatNoException()
 			.isThrownBy(() -> store.destroy(jwsDefinition.getName(), oldKey.getId()));
