@@ -5,6 +5,9 @@ import com.konfigyr.crypto.test.TestAlgorithm;
 import com.konfigyr.crypto.test.TestKey;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -82,6 +85,47 @@ class AbstractKeyTest {
 			.build();
 
 		KeyAssert.assertThat(key).isPrimary();
+	}
+
+	@ValueSource(booleans = { true, false })
+	@ParameterizedTest(name = "should be usable when key is ENABLED and primary flag is {0}")
+	@DisplayName("should be usable for cryptographic operations when key is enabled")
+	void shouldBeUsableWhenEnabled(boolean primary) {
+		final var key = TestKey.builder()
+			.id("key-id")
+			.algorithm(TestAlgorithm.INSTANCE)
+			.status(KeyStatus.ENABLED)
+			.primary(primary)
+			.createdAt(now)
+			.build();
+
+		assertThat(key.isEnabled()).isTrue();
+	}
+
+	@EnumSource(value = KeyStatus.class, names = "ENABLED", mode = EnumSource.Mode.EXCLUDE)
+	@ParameterizedTest(name = "should not be usable when key is {0}")
+	@DisplayName("should not be usable for cryptographic operations when key is not enabled")
+	void shouldNotBeUsableWhenNotEnabled(KeyStatus status) {
+		final var primary = TestKey.builder()
+			.id("primary-key")
+			.algorithm(TestAlgorithm.INSTANCE)
+			.status(status)
+			.primary()
+			.createdAt(now)
+			.build();
+
+		final var secondary = TestKey.builder(primary)
+			.id("secondary-key")
+			.primary(false)
+			.build();
+
+		assertThat(primary.isEnabled())
+			.as("primary key in %s status must not be usable", status)
+			.isFalse();
+
+		assertThat(secondary.isEnabled())
+			.as("non-primary key in %s status must not be usable", status)
+			.isFalse();
 	}
 
 	@Test

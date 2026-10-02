@@ -14,7 +14,7 @@ import java.util.List;
  * X509MaterialSelector selector = (X509MaterialSelector) store.read("saml-signing");
  *
  * List<Saml2X509Credential> credentials = selector.select(X509Matcher.builder()
- *         .statuses(KeyStatus.ENABLED)
+ *         .validAt(Instant.now())
  *         .build())
  *     .stream()
  *     .map(material -> material.convert(
@@ -24,8 +24,7 @@ import java.util.List;
  * }</pre>
  * Implementations must honor the following rules, regardless of the {@link X509Matcher}:
  * <ul>
- *     <li>keys that are {@link KeyStatus#COMPROMISED compromised} or {@link KeyStatus#DESTROYED destroyed}
- *         are never selected,</li>
+ *     <li>keys that are not {@link KeyStatus#ENABLED enabled} are never selected,</li>
  *     <li>the primary key, when selected, is always the first element, followed by the remaining keys
  *         ordered from the most recently created one.</li>
  * </ul>

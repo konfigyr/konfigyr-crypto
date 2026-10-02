@@ -20,6 +20,7 @@ import org.springframework.util.function.ThrowingFunction;
 import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
 import java.util.*;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
@@ -28,6 +29,12 @@ import java.util.stream.Collectors;
  * <p>
  * Internally, it wraps a {@link JWKSet} to manage the JSON Web Key (JWK) representation and
  * facilitates key selection via a {@link JWKSource}.
+ * <p>
+ * Only {@link Key#isEnabled() enabled} keys take part in cryptographic operations. This applies
+ * to the {@link JWKSource#get(JWKSelector, SecurityContext)} method as well, which only exposes
+ * enabled keys. This prevents disabled or compromised keys from being used by Nimbus processors,
+ * such as the {@code DefaultJWTProcessor}, or from being published as part of a public JWK set.
+ * The {@link #getKeys()} method still lists every key in this keyset, regardless of its status.
  *
  * @author Vladimir Spasic
  * @since 1.0.0
@@ -40,14 +47,17 @@ class JsonWebKeyset extends AbstractKeyset<JsonWebKey> implements JWKSource<Secu
 		super(builder);
 	}
 
+	/**
+	 * Selects the matching JSON Web Keys that are {@link Key#isEnabled() enabled}. Keys in any other
+	 * {@link KeyStatus} are never returned by this method, regardless of the given selector.
+	 *
+	 * @param selector the JWK selector, can't be {@literal null}
+	 * @param context the optional security context, can be {@literal null}
+	 * @return the matching enabled keys, never {@literal null}
+	 */
 	@Override
 	public List<JWK> get(JWKSelector selector, @Nullable SecurityContext context) {
-		final List<JWK> keys = stream()
-			.map(JsonWebKey.class::cast)
-			.map(JsonWebKey::getValue)
-			.toList();
-
-		return selector.select(new JWKSet(keys));
+		return select(selector, Key::isEnabled);
 	}
 
 	@Override
@@ -196,8 +206,19 @@ class JsonWebKeyset extends AbstractKeyset<JsonWebKey> implements JWKSource<Secu
 		}
 	}
 
+	private List<JWK> select(JWKSelector selector, Predicate<Key> filter) {
+		final List<JWK> keys = stream()
+			.filter(filter)
+			.map(JsonWebKey.class::cast)
+			.map(JsonWebKey::getValue)
+			.toList();
+
+		return selector.select(new JWKSet(keys));
+	}
+
 	private JsonWebKey resolveMatchingKey(JWKMatcher matcher) throws JOSEException {
-		final List<JWK> keys = get(new JWKSelector(matcher), new SimpleSecurityContext());
+		// select over all keys so that a key that is not usable fails with a status-specific exception
+		final List<JWK> keys = select(new JWKSelector(matcher), key -> true);
 
 		if (keys.isEmpty()) {
 			throw new KeySourceException("No matching key found for JWK matcher: " + matcher);
@@ -207,11 +228,7 @@ class JsonWebKeyset extends AbstractKeyset<JsonWebKey> implements JWKSource<Secu
 			throw new KeySourceException("Found multiple keys for JWK matcher: " + matcher);
 		}
 
-		final JWK key = keys.getFirst();
-
-		return getKey(key.getKeyID()).orElseThrow(() -> new IllegalStateException(
-			"Failed to find JSON Web key with identifier: " + key.getKeyID()
-		));
+		return requireUsableKey(keys.getFirst().getKeyID());
 	}
 
 	private java.security.Key resolveCryptographicKey(

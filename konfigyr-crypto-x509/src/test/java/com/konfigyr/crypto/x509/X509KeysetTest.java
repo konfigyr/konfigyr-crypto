@@ -12,7 +12,9 @@ import com.konfigyr.io.ByteArray;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.FieldSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.nio.ByteBuffer;
 import java.security.cert.X509Certificate;
@@ -20,6 +22,7 @@ import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
@@ -153,26 +156,68 @@ class X509KeysetTest {
 			.isEqualTo(data);
 	}
 
-	@Test
-	@DisplayName("should not verify or decrypt with compromised keys")
-	void shouldRejectCompromisedKeys() {
+	@MethodSource("blockedStatuses")
+	@ParameterizedTest(name = "should throw {1} when the primary key is {0}")
+	@DisplayName("should not sign, encrypt, verify or decrypt when the primary key is not enabled")
+	void shouldRejectBlockedPrimaryKey(KeyStatus status, Class<? extends CryptoException.KeysetException> type) {
 		final X509Keyset signing = keyset(X509Algorithm.EC_P256_SIGNING);
 		final X509Keyset encryption = keyset(X509Algorithm.RSA_3072_ENCRYPTION);
 
 		final ByteArray signature = signing.sign(data);
 		final ByteArray cipher = encryption.encrypt(data);
 
-		final X509Keyset compromisedSigning = compromise(signing);
-		final X509Keyset compromisedEncryption = compromise(encryption);
+		final X509Keyset blockedSigning = withPrimaryStatus(signing, status);
+		final X509Keyset blockedEncryption = withPrimaryStatus(encryption, status);
 
-		assertThat(compromisedSigning.verify(signature, data))
-			.isFalse();
+		assertThatExceptionOfType(type)
+			.isThrownBy(() -> blockedSigning.sign(data))
+			.returns(signing.getName(), CryptoException.KeysetException::getName);
 
-		assertThatExceptionOfType(CryptoException.KeysetOperationException.class)
-			.isThrownBy(() -> compromisedEncryption.decrypt(cipher));
+		assertThatExceptionOfType(type)
+			.isThrownBy(() -> blockedEncryption.encrypt(data))
+			.returns(encryption.getName(), CryptoException.KeysetException::getName);
 
-		assertThatExceptionOfType(CryptoException.KeysetCompromisedException.class)
-			.isThrownBy(() -> compromisedSigning.sign(data));
+		assertThatExceptionOfType(type)
+			.isThrownBy(() -> blockedSigning.verify(signature, data))
+			.withMessageStartingWith("Primary key '%s'", signing.getPrimary().getId());
+
+		assertThatExceptionOfType(type)
+			.isThrownBy(() -> blockedEncryption.decrypt(cipher))
+			.withMessageStartingWith("Primary key '%s'", encryption.getPrimary().getId());
+	}
+
+	@MethodSource("blockedStatuses")
+	@ParameterizedTest(name = "should throw {1} when the previous key is {0}")
+	@DisplayName("should not verify or decrypt with a previous key that is not enabled")
+	void shouldRejectBlockedPreviousKey(KeyStatus status, Class<? extends CryptoException.KeysetException> type) {
+		final X509Keyset signing = keyset(X509Algorithm.EC_P256_SIGNING);
+		final X509Keyset encryption = keyset(X509Algorithm.RSA_3072_ENCRYPTION);
+
+		final ByteArray signature = signing.sign(data);
+		final ByteArray cipher = encryption.encrypt(data);
+
+		final X509Keyset rotatedSigning = withStatus(signing.rotate(), signing.getPrimary().getId(), status);
+		final X509Keyset rotatedEncryption = withStatus(encryption.rotate(), encryption.getPrimary().getId(), status);
+
+		assertThatExceptionOfType(type)
+			.isThrownBy(() -> rotatedSigning.verify(signature, data))
+			.withMessageStartingWith("Key '%s'", signing.getPrimary().getId());
+
+		assertThatExceptionOfType(type)
+			.isThrownBy(() -> rotatedEncryption.decrypt(cipher))
+			.withMessageStartingWith("Key '%s'", encryption.getPrimary().getId());
+
+		assertThat(rotatedSigning.verify(rotatedSigning.sign(data), data))
+			.as("the enabled primary key must still verify its own signatures")
+			.isTrue();
+
+		assertThat(rotatedEncryption.decrypt(rotatedEncryption.encrypt(data)))
+			.as("the enabled primary key must still decrypt its own cipher texts")
+			.isEqualTo(data);
+
+		assertThat(rotatedSigning.getKeys())
+			.as("blocked keys must still be listed by the keyset")
+			.hasSize(2);
 	}
 
 	@Test
@@ -204,7 +249,7 @@ class X509KeysetTest {
 
 		assertThatExceptionOfType(CryptoException.KeysetOperationException.class)
 			.isThrownBy(() -> encryption.decrypt(withUnknownKey(cipher)))
-			.withMessageContaining("No usable key found for the cipher text");
+			.withMessageContaining("No key found for the cipher text");
 	}
 
 	@Test
@@ -302,12 +347,31 @@ class X509KeysetTest {
 		return new ByteArray(bytes);
 	}
 
-	static X509Keyset compromise(X509Keyset keyset) {
-		final X509Key primary = (X509Key) keyset.getPrimary();
+	static X509Keyset withPrimaryStatus(X509Keyset keyset, KeyStatus status) {
+		return withStatus(keyset, keyset.getPrimary().getId(), status);
+	}
 
-		return new X509Keyset.Builder(keyset)
-			.key(new X509Key.Builder(primary).status(KeyStatus.COMPROMISED).build())
-			.build();
+	static X509Keyset withStatus(Keyset keyset, String keyId, KeyStatus status) {
+		final X509Keyset.Builder builder = new X509Keyset.Builder((X509Keyset) keyset);
+
+		keyset.getKeys().stream().map(X509Key.class::cast).forEach(key -> builder.key(key.getId().equals(keyId)
+			? new X509Key.Builder(key).status(status).build()
+			: key));
+
+		return builder.build();
+	}
+
+	static Stream<Arguments> blockedStatuses() {
+		return Stream.of(
+			Arguments.of(KeyStatus.COMPROMISED, CryptoException.KeysetCompromisedException.class),
+			Arguments.of(KeyStatus.COMPROMISED_PENDING_DESTRUCTION, CryptoException.KeysetCompromisedException.class),
+			Arguments.of(KeyStatus.DISABLED, CryptoException.KeysetDisabledException.class),
+			Arguments.of(KeyStatus.PENDING_DESTRUCTION, CryptoException.KeysetPendingDestructionException.class),
+			Arguments.of(KeyStatus.DESTROYED, CryptoException.KeysetDestroyedException.class),
+			Arguments.of(KeyStatus.INITIALIZING, CryptoException.KeysetUnavailableException.class),
+			Arguments.of(KeyStatus.INITIALIZATION_FAILED, CryptoException.KeysetUnavailableException.class),
+			Arguments.of(KeyStatus.DESTRUCTION_FAILED, CryptoException.KeysetUnavailableException.class)
+		);
 	}
 
 }

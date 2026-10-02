@@ -97,7 +97,7 @@ final class X509Keyset extends AbstractKeyset<X509Key> implements X509MaterialSe
 			name, KeysetOperation.DECRYPT, "Invalid cipher text format"));
 
 		final X509Key key = resolveKey(prefixed).orElseThrow(() -> new CryptoException.KeysetOperationException(
-			name, KeysetOperation.DECRYPT, "No usable key found for the cipher text"));
+			name, KeysetOperation.DECRYPT, "No key found for the cipher text"));
 
 		try {
 			final Cipher decrypter = Cipher.getInstance(OAEP_TRANSFORMATION);
@@ -136,6 +136,7 @@ final class X509Keyset extends AbstractKeyset<X509Key> implements X509MaterialSe
 		final Optional<Prefixed> prefixed = parse(signature);
 		final Optional<X509Key> key = prefixed.flatMap(this::resolveKey);
 
+		// malformed signatures, or signatures referencing an unknown key, are simply not valid
 		if (prefixed.isEmpty() || key.isEmpty()) {
 			return false;
 		}
@@ -159,7 +160,7 @@ final class X509Keyset extends AbstractKeyset<X509Key> implements X509MaterialSe
 
 		return stream()
 			.map(X509Key.class::cast)
-			.filter(X509Key::isUsable)
+			.filter(X509Key::isEnabled)
 			.filter(matcher::matches)
 			.sorted(SELECTION_ORDER)
 			.map(X509Material.class::cast)
@@ -188,13 +189,13 @@ final class X509Keyset extends AbstractKeyset<X509Key> implements X509MaterialSe
 	}
 
 	/**
-	 * Resolves the key that produced the cipher text or signature. Keys whose material is compromised
-	 * or destroyed are never used to decrypt or verify.
+	 * Resolves the key that produced the cipher text or signature. Only enabled keys are used to decrypt
+	 * or verify, a key in any other status fails with a status specific exception.
 	 */
 	private Optional<X509Key> resolveKey(Prefixed prefixed) {
 		return getKey(prefixed.keyId())
 			.map(X509Key.class::cast)
-			.filter(X509Key::isUsable);
+			.map(this::requireUsableKey);
 	}
 
 	private void assertKeysetOperation(KeysetOperation operation) {

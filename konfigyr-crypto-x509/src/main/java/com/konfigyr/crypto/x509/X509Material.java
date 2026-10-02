@@ -63,14 +63,13 @@ public sealed interface X509Material extends Key permits X509Key {
 	 * The private key is live key material: neither the private key nor the converted result should be
 	 * logged, serialized, cached outside the process, or persisted.
 	 * <p>
-	 * The private key of a {@link KeyStatus#COMPROMISED compromised} or {@link KeyStatus#DESTROYED destroyed}
-	 * key is never handed over. Keep in mind that the status is the one this key had when its keyset was
+	 * The private key is only handed over when the key is {@link KeyStatus#ENABLED enabled}. Keep in mind that the status is the one this key had when its keyset was
 	 * read from the {@link com.konfigyr.crypto.KeysetStore}, read the keyset again to observe status changes.
 	 *
 	 * @param converter converter that creates the consumer type from the private key, can't be {@literal null}
 	 * @param <T> the type created by the converter
 	 * @return the converted result as returned by the converter
-	 * @throws com.konfigyr.crypto.CryptoException.KeysetException when the key is compromised or destroyed
+	 * @throws com.konfigyr.crypto.CryptoException.KeysetException when the key is not enabled
 	 */
 	<T extends @Nullable Object> T convert(Converter<PrivateKey, T> converter);
 

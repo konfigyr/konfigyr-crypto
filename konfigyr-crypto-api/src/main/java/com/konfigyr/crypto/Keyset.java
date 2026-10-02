@@ -119,6 +119,8 @@ public interface Keyset extends Iterable<Key> {
 	 * @return Encrypted data wrapped inside a byte buffer.
 	 * @throws CryptoException.UnsupportedKeysetOperationException when the algorithm does not
 	 * support {@link KeysetOperation#ENCRYPT}.
+	 * @throws CryptoException.KeysetException when the primary key is not
+	 * {@link Key#isEnabled() enabled}, see {@link #encrypt(ByteArray, ByteArray)}.
 	 */
 	default ByteArray encrypt(ByteArray data) {
 		return encrypt(data, null);
@@ -128,12 +130,26 @@ public interface Keyset extends Iterable<Key> {
 	 * Encrypt the byte buffer with additional data to be used as authentication context when
 	 * performing encryption. Only supported when {@link Algorithm#purpose()} is
 	 * {@link KeysetPurpose#ENCRYPTION}.
+	 * <p>
+	 * Data is always encrypted by the {@link #getPrimary() primary key}, which must be
+	 * {@link Key#isEnabled() enabled}. Otherwise, the operation fails with a status specific
+	 * exception before the key material is used.
 	 *
 	 * @param data Data wrapped as a byte buffer that should be encrypted, can't be {@literal null}.
 	 * @param context Authentication context byte buffer, can be {@literal null}.
 	 * @return Encrypted data wrapped inside a byte buffer.
 	 * @throws CryptoException.UnsupportedKeysetOperationException when the algorithm does not
 	 * support {@link KeysetOperation#ENCRYPT}.
+	 * @throws CryptoException.KeysetCompromisedException when the primary key is in
+	 * {@link KeyStatus#COMPROMISED} state.
+	 * @throws CryptoException.KeysetDisabledException when the primary key is in
+	 * {@link KeyStatus#DISABLED} state.
+	 * @throws CryptoException.KeysetPendingDestructionException when the primary key is in
+	 * {@link KeyStatus#PENDING_DESTRUCTION} state.
+	 * @throws CryptoException.KeysetDestroyedException when the primary key is in
+	 * {@link KeyStatus#DESTROYED} state.
+	 * @throws CryptoException.KeysetException when the primary key is in any other state
+	 * that is not {@link KeyStatus#ENABLED}.
 	 */
 	default ByteArray encrypt(ByteArray data, @Nullable ByteArray context) {
 		throw new CryptoException.UnsupportedKeysetOperationException(
@@ -148,6 +164,8 @@ public interface Keyset extends Iterable<Key> {
 	 * @return Decrypted data wrapped inside a byte buffer.
 	 * @throws CryptoException.UnsupportedKeysetOperationException when the algorithm does not
 	 * support {@link KeysetOperation#DECRYPT}.
+	 * @throws CryptoException.KeysetException when the cipher was produced by a key that is not
+	 * {@link Key#isEnabled() enabled}, see {@link #decrypt(ByteArray, ByteArray)}.
 	 */
 	default ByteArray decrypt(ByteArray cipher) {
 		return decrypt(cipher, null);
@@ -157,12 +175,28 @@ public interface Keyset extends Iterable<Key> {
 	 * Decrypt the byte buffer with additional data that was used during encryption as
 	 * authentication context. Only supported when {@link Algorithm#purpose()} is
 	 * {@link KeysetPurpose#ENCRYPTION}.
+	 * <p>
+	 * The cipher can only be decrypted by a {@link Key} that is {@link Key#isEnabled() enabled}.
+	 * When the cipher was produced by a key that is no longer enabled, for instance a key that was
+	 * disabled or marked as compromised after rotation, the operation fails with a status specific
+	 * exception before the key material is used.
 	 *
 	 * @param cipher Data wrapped as a byte buffer that should be decrypted, can't be {@literal null}.
 	 * @param context Authentication context byte buffer, can be {@literal null}.
 	 * @return Decrypted data wrapped inside a byte buffer.
 	 * @throws CryptoException.UnsupportedKeysetOperationException when the algorithm does not
 	 * support {@link KeysetOperation#DECRYPT}.
+	 * @throws CryptoException.KeysetCompromisedException when the cipher was produced by a key in
+	 * {@link KeyStatus#COMPROMISED} state.
+	 * @throws CryptoException.KeysetDisabledException when the cipher was produced by a key in
+	 * {@link KeyStatus#DISABLED} state.
+	 * @throws CryptoException.KeysetPendingDestructionException when the cipher was produced by a key in
+	 * {@link KeyStatus#PENDING_DESTRUCTION} state.
+	 * @throws CryptoException.KeysetDestroyedException when the cipher was produced by a key in
+	 * {@link KeyStatus#DESTROYED} state.
+	 * @throws CryptoException.KeysetException when the cipher was produced by a key in any other state
+	 * that is not {@link KeyStatus#ENABLED}.
+	 * @throws CryptoException.KeysetOperationException when the cipher can't be decrypted.
 	 */
 	default ByteArray decrypt(ByteArray cipher, @Nullable ByteArray context) {
 		throw new CryptoException.UnsupportedKeysetOperationException(
@@ -172,11 +206,25 @@ public interface Keyset extends Iterable<Key> {
 	/**
 	 * Signs the data wrapped inside a {@link ByteArray}. Only supported when
 	 * {@link Algorithm#purpose()} is {@link KeysetPurpose#SIGNING}.
+	 * <p>
+	 * Data is always signed by the {@link #getPrimary() primary key}, which must be
+	 * {@link Key#isEnabled() enabled}. Otherwise, the operation fails with a status specific
+	 * exception before the key material is used.
 	 *
 	 * @param data Data wrapped as a byte buffer that should be signed, can't be {@literal null}.
 	 * @return digital signature wrapped inside a byte buffer.
 	 * @throws CryptoException.UnsupportedKeysetOperationException when the algorithm does not
 	 * support {@link KeysetOperation#SIGN}.
+	 * @throws CryptoException.KeysetCompromisedException when the primary key is in
+	 * {@link KeyStatus#COMPROMISED} state.
+	 * @throws CryptoException.KeysetDisabledException when the primary key is in
+	 * {@link KeyStatus#DISABLED} state.
+	 * @throws CryptoException.KeysetPendingDestructionException when the primary key is in
+	 * {@link KeyStatus#PENDING_DESTRUCTION} state.
+	 * @throws CryptoException.KeysetDestroyedException when the primary key is in
+	 * {@link KeyStatus#DESTROYED} state.
+	 * @throws CryptoException.KeysetException when the primary key is in any other state
+	 * that is not {@link KeyStatus#ENABLED}.
 	 */
 	default ByteArray sign(ByteArray data) {
 		throw new CryptoException.UnsupportedKeysetOperationException(
@@ -186,12 +234,28 @@ public interface Keyset extends Iterable<Key> {
 	/**
 	 * Verifies if the digital signature of the data wrapped inside a {@link ByteArray} is
 	 * correct. Only supported when {@link Algorithm#purpose()} is {@link KeysetPurpose#SIGNING}.
+	 * <p>
+	 * The signature can only be verified by a {@link Key} that is {@link Key#isEnabled() enabled}.
+	 * When the signature was produced by a key that is no longer enabled, for instance a key that
+	 * was disabled or marked as compromised after rotation, this method throws a status specific
+	 * exception instead of returning {@code false}. This allows the caller to tell a signature
+	 * made by a blocked key apart from an invalid or forged signature.
 	 *
 	 * @param signature Signature wrapped as a byte buffer that should be verified, can't be {@literal null}.
 	 * @param data Original data wrapped as a byte buffer from which the signature is created, can't be {@literal null}.
 	 * @return {@code true} if the signature is valid, {@code false} otherwise.
 	 * @throws CryptoException.UnsupportedKeysetOperationException when the algorithm does not
 	 * support {@link KeysetOperation#VERIFY}.
+	 * @throws CryptoException.KeysetCompromisedException when the signature was produced by a key in
+	 * {@link KeyStatus#COMPROMISED} state.
+	 * @throws CryptoException.KeysetDisabledException when the signature was produced by a key in
+	 * {@link KeyStatus#DISABLED} state.
+	 * @throws CryptoException.KeysetPendingDestructionException when the signature was produced by a key in
+	 * {@link KeyStatus#PENDING_DESTRUCTION} state.
+	 * @throws CryptoException.KeysetDestroyedException when the signature was produced by a key in
+	 * {@link KeyStatus#DESTROYED} state.
+	 * @throws CryptoException.KeysetException when the signature was produced by a key in any other state
+	 * that is not {@link KeyStatus#ENABLED}.
 	 */
 	default boolean verify(ByteArray signature, ByteArray data) {
 		throw new CryptoException.UnsupportedKeysetOperationException(

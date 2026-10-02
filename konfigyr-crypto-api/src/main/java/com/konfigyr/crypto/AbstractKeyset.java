@@ -169,26 +169,71 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 	 * For key inspection or rotation logic, use {@link #getPrimary()} instead.
 	 *
 	 * @return the primary key, never {@literal null}
-	 * @throws CryptoException.KeysetCompromisedException      if the primary key status is {@link KeyStatus#COMPROMISED}
-	 *                                                         or {@link KeyStatus#COMPROMISED_PENDING_DESTRUCTION}
-	 * @throws CryptoException.KeysetDisabledException         if the primary key status is {@link KeyStatus#DISABLED}
+	 * @throws CryptoException.KeysetCompromisedException       if the primary key status is {@link KeyStatus#COMPROMISED}
+	 *                                                          or {@link KeyStatus#COMPROMISED_PENDING_DESTRUCTION}
+	 * @throws CryptoException.KeysetDisabledException          if the primary key status is {@link KeyStatus#DISABLED}
 	 * @throws CryptoException.KeysetPendingDestructionException if the primary key status is {@link KeyStatus#PENDING_DESTRUCTION}
-	 * @throws CryptoException.KeysetDestroyedException        if the primary key status is {@link KeyStatus#DESTROYED}
-	 * @throws CryptoException.KeysetUnavailableException      if the primary key status is any other status than
-	 *                                                         {@link KeyStatus#ENABLED}
+	 * @throws CryptoException.KeysetDestroyedException         if the primary key status is {@link KeyStatus#DESTROYED}
+	 * @throws CryptoException.KeysetUnavailableException       if the primary key status is {@link KeyStatus#INITIALIZING},
+	 *                                                          {@link KeyStatus#INITIALIZATION_FAILED} or
+	 *                                                          {@link KeyStatus#DESTRUCTION_FAILED}
+	 * @see #requireUsableKey(Key)
 	 */
 	@SuppressWarnings("unchecked")
 	protected final T requireActivePrimary() {
-		final T primary = (T) getPrimary();
+		return requireUsableKey((T) getPrimary());
+	}
 
-		return switch (primary.getStatus()) {
-			case COMPROMISED, COMPROMISED_PENDING_DESTRUCTION -> throw new CryptoException.KeysetCompromisedException(name);
-			case DISABLED -> throw new CryptoException.KeysetDisabledException(name);
-			case PENDING_DESTRUCTION -> throw new CryptoException.KeysetPendingDestructionException(name);
-			case DESTROYED -> throw new CryptoException.KeysetDestroyedException(name);
+	/**
+	 * Looks up the {@link Key} with the given identifier within this keyset and asserts that it can
+	 * be used for cryptographic operations.
+	 * <p>
+	 * This method is intended for cryptographic read operations ({@code decrypt}, {@code verify})
+	 * where the key is resolved from the identifier carried by the ciphertext or signature.
+	 *
+	 * @param keyId the identifier of the key to resolve, can't be {@literal null}
+	 * @return the usable key, never {@literal null}
+	 * @throws CryptoException.KeyNotFoundException if no key with the given identifier exists in this keyset
+	 * @throws CryptoException.KeysetException      if the key is not usable, see {@link #requireUsableKey(Key)}
+	 */
+	protected final T requireUsableKey(String keyId) {
+		final T key = getKey(keyId).orElseThrow(() -> new CryptoException.KeyNotFoundException(name, keyId));
+		return requireUsableKey(key);
+	}
+
+	/**
+	 * Asserts that the given {@link Key} is in a state where it can be used for cryptographic
+	 * operations, as defined by {@link Key#isEnabled()}.
+	 * <p>
+	 * This method is the guard that every cryptographic operation must pass before key material
+	 * is used, both write operations ({@code encrypt}, {@code sign}) and read operations
+	 * ({@code decrypt}, {@code verify}). It deliberately evaluates the {@link KeyStatus} directly,
+	 * instead of relying on {@link Key#isEnabled()}, so that a {@link Key} implementation can't
+	 * weaken it and each blocked status results in its own exception type.
+	 * <p>
+	 * Exception messages only contain the keyset name, key identifier and status, never key material.
+	 *
+	 * @param key the key to check, can't be {@literal null}
+	 * @return the same key when it is usable, never {@literal null}
+	 * @throws CryptoException.KeysetCompromisedException       if the key status is {@link KeyStatus#COMPROMISED}
+	 *                                                          or {@link KeyStatus#COMPROMISED_PENDING_DESTRUCTION}
+	 * @throws CryptoException.KeysetDisabledException          if the key status is {@link KeyStatus#DISABLED}
+	 * @throws CryptoException.KeysetPendingDestructionException if the key status is {@link KeyStatus#PENDING_DESTRUCTION}
+	 * @throws CryptoException.KeysetDestroyedException         if the key status is {@link KeyStatus#DESTROYED}
+	 * @throws CryptoException.KeysetUnavailableException       if the key status is {@link KeyStatus#INITIALIZING},
+	 *                                                          {@link KeyStatus#INITIALIZATION_FAILED} or
+	 *                                                          {@link KeyStatus#DESTRUCTION_FAILED}
+	 */
+	protected final T requireUsableKey(T key) {
+		// exhaustive switch without a default branch, new statuses must be explicitly handled here
+		return switch (key.getStatus()) {
+			case ENABLED -> key;
+			case COMPROMISED, COMPROMISED_PENDING_DESTRUCTION -> throw new CryptoException.KeysetCompromisedException(name, key);
+			case DISABLED -> throw new CryptoException.KeysetDisabledException(name, key);
+			case PENDING_DESTRUCTION -> throw new CryptoException.KeysetPendingDestructionException(name, key);
+			case DESTROYED -> throw new CryptoException.KeysetDestroyedException(name, key);
 			case INITIALIZING, INITIALIZATION_FAILED, DESTRUCTION_FAILED ->
-				throw new CryptoException.KeysetUnavailableException(name, primary.getStatus());
-			case ENABLED -> primary;
+				throw new CryptoException.KeysetUnavailableException(name, key);
 		};
 	}
 
