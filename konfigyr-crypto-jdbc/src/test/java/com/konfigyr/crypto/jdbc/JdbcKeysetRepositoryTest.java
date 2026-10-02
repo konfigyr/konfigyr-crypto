@@ -162,6 +162,37 @@ class JdbcKeysetRepositoryTest {
 	}
 
 	@Test
+	@DisplayName("should store and update the keyset retirement policy")
+	void shouldPersistRetirementPolicy() throws IOException {
+		final String name = "retirement-policy";
+		final EncryptedKey key = encryptedKey("key-1", true, Instant.now().truncatedTo(ChronoUnit.MILLIS),
+			ByteArray.fromString("material"));
+
+		try {
+			final EncryptedKeyset written = repository.write(encryptedKeyset(name, key));
+
+			assertThat(repository.read(name))
+				.get()
+				.returns(RetirementPolicy.RETAIN, EncryptedKeyset::retirementPolicy);
+
+			repository.write(EncryptedKeyset.builder(written)
+				.retirementPolicy(RetirementPolicy.SCHEDULE_DESTRUCTION)
+				.build(written.keys()));
+
+			assertThat(repository.read(name))
+				.get()
+				.returns(RetirementPolicy.SCHEDULE_DESTRUCTION, EncryptedKeyset::retirementPolicy);
+
+			assertThat(jdbcOperations.queryForObject(
+					"SELECT RETIREMENT_POLICY FROM KEYSETS WHERE KEYSET_NAME = ?", String.class, name))
+				.as("retirement policy must be stored by its name")
+				.isEqualTo("SCHEDULE_DESTRUCTION");
+		} finally {
+			repository.remove(name);
+		}
+	}
+
+	@Test
 	@DisplayName("should update key status without altering key data")
 	void shouldUpdateKeyStatus() throws IOException {
 		final Instant t0 = Instant.now().truncatedTo(ChronoUnit.MILLIS);
@@ -479,7 +510,7 @@ class JdbcKeysetRepositoryTest {
 		final var repo = new JdbcKeysetRepository(jdbcOperations, transactionOperations);
 		repo.setFindPendingRotationQuery("""
 				SELECT DISTINCT K.KEYSET_NAME, K.KEYSET_PURPOSE, K.KEYSET_FACTORY, K.KEYSET_PROVIDER, K.KEYSET_KEK,
-					K.ROTATION_INTERVAL, K.ROTATION_LEAD_TIME, K.DESTRUCTION_GRACE_PERIOD, K.KEYSET_VERSION
+					K.ROTATION_INTERVAL, K.ROTATION_LEAD_TIME, K.DESTRUCTION_GRACE_PERIOD, K.RETIREMENT_POLICY, K.KEYSET_VERSION
 				FROM %KEYSETS_TABLE_NAME% K
 				INNER JOIN %KEYS_TABLE_NAME% E ON E.KEYSET_NAME = K.KEYSET_NAME
 				WHERE E.EXPIRES_AT <= ? AND E.KEY_PRIMARY <> ?
@@ -789,7 +820,7 @@ class JdbcKeysetRepositoryTest {
 		final var repo = new JdbcKeysetRepository(jdbcOperations, transactionOperations);
 		repo.setGetKeysetQuery("""
 				SELECT K.KEYSET_NAME, K.KEYSET_PURPOSE, K.KEYSET_FACTORY, K.KEYSET_PROVIDER, K.KEYSET_KEK,
-					K.ROTATION_INTERVAL, K.ROTATION_LEAD_TIME, K.DESTRUCTION_GRACE_PERIOD, K.KEYSET_VERSION
+					K.ROTATION_INTERVAL, K.ROTATION_LEAD_TIME, K.DESTRUCTION_GRACE_PERIOD, K.RETIREMENT_POLICY, K.KEYSET_VERSION
 				FROM %s K
 				WHERE K.KEYSET_NAME = ?
 				""".formatted(placeholder));
