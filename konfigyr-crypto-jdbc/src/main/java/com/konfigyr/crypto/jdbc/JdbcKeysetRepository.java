@@ -213,10 +213,10 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 				K.ROTATION_INTERVAL, K.DESTRUCTION_GRACE_PERIOD, K.KEYSET_VERSION
 			FROM %KEYSETS_TABLE_NAME% K
 			INNER JOIN %KEYS_TABLE_NAME% E ON E.KEYSET_NAME = K.KEYSET_NAME
-			WHERE E.KEY_PRIMARY = TRUE
-				AND E.KEY_STATUS = 'ENABLED'
-				AND E.EXPIRES_AT IS NOT NULL
+			WHERE E.EXPIRES_AT IS NOT NULL
 				AND E.EXPIRES_AT <= ?
+				AND E.KEY_PRIMARY = ?
+				AND E.KEY_STATUS = 'ENABLED'
 			ORDER BY K.KEYSET_NAME
 			""";
 
@@ -446,6 +446,16 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 	/**
 	 * Overrides the SQL query used to find keysets whose primary key has passed its rotation interval.
 	 * When {@literal null}, the built-in default query is used.
+	 * <p>
+	 * The query is executed with two bound parameters:
+	 * <ol>
+	 *     <li>the current time, in epoch milliseconds, compared against the {@code EXPIRES_AT} column</li>
+	 *     <li>the boolean {@literal true}, compared against the {@code KEY_PRIMARY} column</li>
+	 * </ol>
+	 * The primary flag is bound as a parameter, instead of using a {@code TRUE} literal, as some databases
+	 * (e.g. Oracle before 23ai, SQL Server or Sybase) store it as a numeric or {@code BIT} column that does
+	 * not accept boolean literals. Prior to {@code 1.1.0} only the first parameter was bound, custom queries
+	 * must therefore declare the second parameter placeholder.
 	 *
 	 * @param findPendingRotationQuery custom SQL query, or {@literal null} to use the default
 	 */
@@ -715,7 +725,10 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 		return transactionOperations.execute(status ->
 			jdbcOperations.query(
 				findPendingRotationQuery,
-				pss -> pss.setLong(1, Instant.now().toEpochMilli()),
+				pss -> {
+					pss.setLong(1, Instant.now().toEpochMilli());
+					pss.setBoolean(2, true);
+				},
 				this::extractPendingRotation));
 	}
 

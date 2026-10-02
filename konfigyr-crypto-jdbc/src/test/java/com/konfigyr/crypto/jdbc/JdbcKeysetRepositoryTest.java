@@ -321,6 +321,94 @@ class JdbcKeysetRepositoryTest {
 		repository.remove("rotation-not-due");
 	}
 
+	@Test
+	@DisplayName("should only return keysets whose primary and enabled key expiry time has elapsed")
+	void shouldOnlyFindKeysetsPendingRotationForExpiredPrimaryKeys() throws IOException {
+		final Instant t0 = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+		final Instant pastExpiry = t0.minus(Duration.ofDays(1));
+		final Instant futureExpiry = t0.plus(Duration.ofDays(30));
+
+		// primary key expired, alongside an expired non-primary key: returned exactly once
+		repository.write(encryptedKeyset("rotation-primary-expired",
+			expiringKey("primary", true, KeyStatus.ENABLED, pastExpiry),
+			expiringKey("secondary", false, KeyStatus.ENABLED, pastExpiry)
+		));
+
+		// only the non-primary key expired: not returned
+		repository.write(encryptedKeyset("rotation-secondary-expired",
+			expiringKey("primary", true, KeyStatus.ENABLED, futureExpiry),
+			expiringKey("secondary", false, KeyStatus.ENABLED, pastExpiry)
+		));
+
+		// expired primary key that is not enabled: not returned
+		repository.write(encryptedKeyset("rotation-primary-disabled",
+			expiringKey("primary", true, KeyStatus.DISABLED, pastExpiry)
+		));
+
+		try {
+			assertThat(repository.findPendingRotation())
+				.extracting(EncryptedKeyset::name)
+				.filteredOn(name -> name.startsWith("rotation-"))
+				.containsExactly("rotation-primary-expired");
+		} finally {
+			repository.remove("rotation-primary-expired");
+			repository.remove("rotation-secondary-expired");
+			repository.remove("rotation-primary-disabled");
+		}
+	}
+
+	@Test
+	@DisplayName("should bind the expiry time and primary flag parameters to a custom pending rotation query")
+	void shouldBindParametersToCustomPendingRotationQuery() throws IOException {
+		final Instant pastExpiry = Instant.now().truncatedTo(ChronoUnit.MILLIS).minus(Duration.ofDays(1));
+		final var repo = new JdbcKeysetRepository(jdbcOperations, transactionOperations);
+		repo.setFindPendingRotationQuery("""
+				SELECT DISTINCT K.KEYSET_NAME, K.KEYSET_PURPOSE, K.KEYSET_FACTORY, K.KEYSET_PROVIDER, K.KEYSET_KEK,
+					K.ROTATION_INTERVAL, K.DESTRUCTION_GRACE_PERIOD, K.KEYSET_VERSION
+				FROM %KEYSETS_TABLE_NAME% K
+				INNER JOIN %KEYS_TABLE_NAME% E ON E.KEYSET_NAME = K.KEYSET_NAME
+				WHERE E.EXPIRES_AT <= ? AND E.KEY_PRIMARY <> ?
+				ORDER BY K.KEYSET_NAME
+				""");
+		repo.afterPropertiesSet();
+
+		final Instant futureExpiry = pastExpiry.plus(Duration.ofDays(30));
+
+		// custom query matches expired non-primary keys, only matched when the primary flag is bound as true
+		repository.write(encryptedKeyset("rotation-custom-secondary",
+			expiringKey("primary", true, KeyStatus.ENABLED, futureExpiry),
+			expiringKey("secondary", false, KeyStatus.ENABLED, pastExpiry)
+		));
+
+		// would only be matched if the primary flag was bound as false
+		repository.write(encryptedKeyset("rotation-custom-primary",
+			expiringKey("primary", true, KeyStatus.ENABLED, pastExpiry),
+			expiringKey("secondary", false, KeyStatus.ENABLED, futureExpiry)
+		));
+
+		try {
+			assertThat(repo.findPendingRotation())
+				.extracting(EncryptedKeyset::name)
+				.filteredOn(name -> name.startsWith("rotation-custom-"))
+				.containsExactly("rotation-custom-secondary");
+		} finally {
+			repository.remove("rotation-custom-secondary");
+			repository.remove("rotation-custom-primary");
+		}
+	}
+
+	@NonNull
+	private static EncryptedKey expiringKey(String id, boolean primary, KeyStatus status, Instant expiresAt) {
+		return EncryptedKey.builder()
+			.id(id)
+			.algorithm(TestAlgorithm.INSTANCE)
+			.status(status)
+			.primary(primary)
+			.createdAt(expiresAt.minus(Duration.ofDays(90)))
+			.expiresAt(expiresAt)
+			.build(ByteArray.fromString("enc-key-material"));
+	}
+
 	@NonNull
 	private static EncryptedKeyset encryptedKeyset(String name, EncryptedKey... keys) {
 		return EncryptedKeyset.builder()
