@@ -7,6 +7,9 @@ import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
+import java.time.Duration;
+import java.time.Instant;
+
 import static org.assertj.core.api.Assertions.*;
 
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
@@ -225,6 +228,13 @@ public class TinkIntegrationTest {
 			.filter(key -> !key.isPrimary())
 			.findFirst()
 			.orElseThrow();
+
+		assertThatNoException()
+			.isThrownBy(() -> store.disable(definition.getName(), oldKey.getId()));
+
+		assertThatNoException()
+			.isThrownBy(() -> store.scheduleDestruction(definition.getName(), oldKey.getId(),
+				Instant.now().plus(Duration.ofDays(1))));
 
 		assertThatNoException()
 			.isThrownBy(() -> store.destroy(definition.getName(), oldKey.getId()));

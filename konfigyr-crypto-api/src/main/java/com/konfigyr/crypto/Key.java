@@ -131,13 +131,15 @@ public interface Key {
 
 	/**
 	 * The time when the cryptographic material should be destroyed for this key. This is usually
-	 * specified when the key is marked as {@link KeyStatus#PENDING_DESTRUCTION}.
+	 * specified when the key is marked as {@link KeyStatus#PENDING_DESTRUCTION} or
+	 * {@link KeyStatus#COMPROMISED_PENDING_DESTRUCTION}.
 	 * <p>
 	 * The key will be destroyed after the destruction grace period elapses.
 	 *
 	 * @return scheduled destruction timestamp, or {@literal null} if destruction has not
 	 * been scheduled.
 	 * @see KeyStatus#PENDING_DESTRUCTION
+	 * @see KeyStatus#COMPROMISED_PENDING_DESTRUCTION
 	 * @see Keyset#getDestructionGracePeriod()
 	 */
 	@Nullable

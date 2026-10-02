@@ -2,10 +2,15 @@ package com.konfigyr.crypto;
 
 import com.konfigyr.crypto.test.TestAlgorithm;
 import com.konfigyr.crypto.test.TestKeyEncryptionKey;
+import org.assertj.core.api.InstanceOfAssertFactories;
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -15,7 +20,10 @@ import com.konfigyr.io.ByteArray;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -470,16 +478,339 @@ class RepositoryKeysetStoreTest {
 	}
 
 	@Test
-	@DisplayName("should throw InvalidKeyStatusTransitionException when compromising a key in an invalid state")
+	@DisplayName("should throw InvalidKeyStatusTransitionException when compromising an already compromised key")
 	void shouldFailToCompromiseKeyInInvalidState() throws IOException {
-		repository.write(keysetWith("pending-key", KeyStatus.PENDING_DESTRUCTION));
+		repository.write(keysetWith("compromised-key", KeyStatus.COMPROMISED));
 
 		assertThatExceptionOfType(CryptoException.InvalidKeyStatusTransitionException.class)
-			.isThrownBy(() -> store.compromise(definition.getName(), "pending-key"))
+			.isThrownBy(() -> store.compromise(definition.getName(), "compromised-key"))
 			.returns(definition.getName(), CryptoException.KeysetException::getName)
-			.returns("pending-key", CryptoException.InvalidKeyStatusTransitionException::getKeyId)
+			.returns("compromised-key", CryptoException.InvalidKeyStatusTransitionException::getKeyId)
+			.returns(KeyStatus.COMPROMISED, CryptoException.InvalidKeyStatusTransitionException::getCurrentStatus)
+			.returns(KeyStatus.Operation.COMPROMISE, CryptoException.InvalidKeyStatusTransitionException::getOperation);
+	}
+
+	@Test
+	@DisplayName("should mark a PENDING_DESTRUCTION key as compromised and keep its scheduled destruction time")
+	void shouldCompromisePendingDestructionKey() throws IOException {
+		final Instant destructionTime = Instant.now().plus(Duration.ofDays(7));
+		repository.write(keysetWith(EncryptedKey.builder(encryptedKey("pending-key", KeyStatus.PENDING_DESTRUCTION))
+			.destructionScheduledAt(destructionTime)
+			.build(ByteArray.fromString("key-material"))));
+
+		assertThatNoException().isThrownBy(() -> store.compromise(definition.getName(), "pending-key"));
+
+		assertThat(lookupKey("pending-key"))
+			.returns(KeyStatus.COMPROMISED_PENDING_DESTRUCTION, EncryptedKey::status)
+			.returns(destructionTime, EncryptedKey::destructionScheduledAt)
+			.extracting(EncryptedKey::data)
+			.isNotNull();
+		verify(cache).evict(definition.getName());
+	}
+
+	@Test
+	@DisplayName("should throw InvalidKeyStatusTransitionException when compromising a key pending compromised destruction")
+	void shouldFailToCompromiseCompromisedPendingDestructionKey() throws IOException {
+		repository.write(keysetWith("compromised-key", KeyStatus.COMPROMISED_PENDING_DESTRUCTION));
+
+		assertThatExceptionOfType(CryptoException.InvalidKeyStatusTransitionException.class)
+			.isThrownBy(() -> store.compromise(definition.getName(), "compromised-key"))
+			.returns(KeyStatus.COMPROMISED_PENDING_DESTRUCTION,
+				CryptoException.InvalidKeyStatusTransitionException::getCurrentStatus)
+			.returns(KeyStatus.Operation.COMPROMISE, CryptoException.InvalidKeyStatusTransitionException::getOperation);
+
+		assertThat(lookupKey("compromised-key"))
+			.returns(KeyStatus.COMPROMISED_PENDING_DESTRUCTION, EncryptedKey::status);
+		verify(repository, never()).updateKeyStatus(any());
+	}
+
+	@Test
+	@DisplayName("should not allow a compromised key to be disabled and re-enabled")
+	void shouldNotDisableCompromisedKey() throws IOException {
+		repository.write(keysetWith("enabled-key", KeyStatus.ENABLED));
+
+		store.compromise(definition.getName(), "enabled-key");
+
+		assertThatExceptionOfType(CryptoException.InvalidKeyStatusTransitionException.class)
+			.isThrownBy(() -> store.disable(definition.getName(), "enabled-key"))
+			.returns(KeyStatus.COMPROMISED, CryptoException.InvalidKeyStatusTransitionException::getCurrentStatus)
+			.returns(KeyStatus.Operation.DISABLE, CryptoException.InvalidKeyStatusTransitionException::getOperation);
+
+		assertThatExceptionOfType(CryptoException.InvalidKeyStatusTransitionException.class)
+			.isThrownBy(() -> store.enable(definition.getName(), "enabled-key"))
+			.returns(KeyStatus.COMPROMISED, CryptoException.InvalidKeyStatusTransitionException::getCurrentStatus)
+			.returns(KeyStatus.Operation.ENABLE, CryptoException.InvalidKeyStatusTransitionException::getOperation);
+
+		assertThat(lookupKey("enabled-key"))
+			.returns(KeyStatus.COMPROMISED, EncryptedKey::status);
+	}
+
+	@Test
+	@DisplayName("should keep the key compromised when cancelling its scheduled destruction")
+	void shouldKeepKeyCompromisedWhenCancellingDestruction() throws IOException {
+		repository.write(keysetWith("enabled-key", KeyStatus.ENABLED));
+
+		store.compromise(definition.getName(), "enabled-key");
+		store.scheduleDestruction(definition.getName(), "enabled-key", Instant.now().plus(Duration.ofDays(30)));
+
+		assertThat(lookupKey("enabled-key"))
+			.returns(KeyStatus.COMPROMISED_PENDING_DESTRUCTION, EncryptedKey::status)
+			.extracting(EncryptedKey::destructionScheduledAt)
+			.isNotNull();
+
+		store.cancelDestruction(definition.getName(), "enabled-key");
+
+		assertThat(lookupKey("enabled-key"))
+			.returns(KeyStatus.COMPROMISED, EncryptedKey::status)
+			.returns(null, EncryptedKey::destructionScheduledAt);
+
+		assertThatExceptionOfType(CryptoException.InvalidKeyStatusTransitionException.class)
+			.isThrownBy(() -> store.enable(definition.getName(), "enabled-key"))
+			.returns(KeyStatus.COMPROMISED, CryptoException.InvalidKeyStatusTransitionException::getCurrentStatus);
+
+		assertThatExceptionOfType(CryptoException.InvalidKeyStatusTransitionException.class)
+			.isThrownBy(() -> store.disable(definition.getName(), "enabled-key"))
+			.returns(KeyStatus.COMPROMISED, CryptoException.InvalidKeyStatusTransitionException::getCurrentStatus);
+	}
+
+	@Test
+	@DisplayName("should keep the key compromised when it is compromised during its destruction grace period")
+	void shouldKeepKeyCompromisedWhenCompromisedDuringGracePeriod() throws IOException {
+		repository.write(keysetWith("enabled-key", KeyStatus.ENABLED));
+
+		final Instant destructionTime = Instant.now().plus(Duration.ofDays(30));
+
+		store.disable(definition.getName(), "enabled-key");
+		store.scheduleDestruction(definition.getName(), "enabled-key", destructionTime);
+		store.compromise(definition.getName(), "enabled-key");
+
+		assertThat(lookupKey("enabled-key"))
+			.returns(KeyStatus.COMPROMISED_PENDING_DESTRUCTION, EncryptedKey::status)
+			.returns(destructionTime, EncryptedKey::destructionScheduledAt);
+
+		store.cancelDestruction(definition.getName(), "enabled-key");
+
+		assertThat(lookupKey("enabled-key"))
+			.returns(KeyStatus.COMPROMISED, EncryptedKey::status);
+
+		assertThatExceptionOfType(CryptoException.InvalidKeyStatusTransitionException.class)
+			.isThrownBy(() -> store.enable(definition.getName(), "enabled-key"));
+	}
+
+	@Test
+	@DisplayName("should immediately destroy a compromised key when no grace period is configured")
+	void shouldImmediatelyDestroyCompromisedKeyWhenNoGracePeriod() throws IOException {
+		repository.write(EncryptedKeyset.builder()
+			.name(definition.getName())
+			.purpose(definition.getPurpose())
+			.factory(definition.getAlgorithm().factory())
+			.provider(kek.getProvider())
+			.keyEncryptionKey(kek.getId())
+			.build(List.of(encryptedKey("enabled-key", KeyStatus.ENABLED))));
+
+		store.compromise(definition.getName(), "enabled-key");
+		store.scheduleDestruction(definition.getName(), "enabled-key");
+
+		assertThat(lookupKey("enabled-key"))
+			.returns(KeyStatus.DESTROYED, EncryptedKey::status)
+			.returns(null, EncryptedKey::data)
+			.extracting(EncryptedKey::destroyedAt)
+			.isNotNull();
+	}
+
+	@Test
+	@DisplayName("should destroy a compromised key once its scheduled destruction time has elapsed")
+	void shouldDestroyCompromisedKeyAfterGracePeriod() throws IOException {
+		repository.write(keysetWith(EncryptedKey.builder(encryptedKey("compromised-key", KeyStatus.COMPROMISED_PENDING_DESTRUCTION))
+			.destructionScheduledAt(Instant.now().minusSeconds(60))
+			.build(ByteArray.fromString("key-material"))));
+
+		assertThat(repository.findPendingDestruction())
+			.hasSize(1)
+			.first()
+			.extracting(EncryptedKeyset::keys)
+			.asInstanceOf(InstanceOfAssertFactories.list(EncryptedKey.class))
+			.extracting(EncryptedKey::id)
+			.containsExactly("compromised-key");
+
+		assertThatNoException().isThrownBy(() -> store.destroy(definition.getName(), "compromised-key"));
+
+		assertThat(lookupKey("compromised-key"))
+			.returns(KeyStatus.DESTROYED, EncryptedKey::status)
+			.returns(null, EncryptedKey::data);
+	}
+
+	@EnumSource(KeyStatus.class)
+	@ParameterizedTest(name = "{0}")
+	@DisplayName("should only apply lifecycle operations to keys in a status accepted by that operation")
+	void shouldOnlyApplyLifecycleOperationsToAcceptedStatuses(KeyStatus status) throws IOException {
+		final Set<KeyStatus> pendingDestruction = Set.of(KeyStatus.PENDING_DESTRUCTION,
+			KeyStatus.COMPROMISED_PENDING_DESTRUCTION);
+
+		final Map<KeyStatus.Operation, Set<KeyStatus>> accepted = new LinkedHashMap<>();
+		accepted.put(KeyStatus.Operation.DISABLE, Set.of(KeyStatus.ENABLED));
+		accepted.put(KeyStatus.Operation.ENABLE, Set.of(KeyStatus.DISABLED));
+		accepted.put(KeyStatus.Operation.COMPROMISE,
+			Set.of(KeyStatus.ENABLED, KeyStatus.DISABLED, KeyStatus.PENDING_DESTRUCTION));
+		accepted.put(KeyStatus.Operation.SCHEDULE_DESTRUCTION, Set.of(KeyStatus.DISABLED, KeyStatus.COMPROMISED));
+		accepted.put(KeyStatus.Operation.CANCEL_DESTRUCTION, pendingDestruction);
+		accepted.put(KeyStatus.Operation.DESTROY, pendingDestruction);
+
+		final Map<KeyStatus.Operation, ThrowingCallable> operations = Map.of(
+			KeyStatus.Operation.DISABLE, () -> store.disable(definition.getName(), "key"),
+			KeyStatus.Operation.ENABLE, () -> store.enable(definition.getName(), "key"),
+			KeyStatus.Operation.COMPROMISE, () -> store.compromise(definition.getName(), "key"),
+			KeyStatus.Operation.SCHEDULE_DESTRUCTION, () -> store.scheduleDestruction(definition.getName(), "key"),
+			KeyStatus.Operation.CANCEL_DESTRUCTION, () -> store.cancelDestruction(definition.getName(), "key"),
+			KeyStatus.Operation.DESTROY, () -> store.destroy(definition.getName(), "key")
+		);
+
+		for (Map.Entry<KeyStatus.Operation, Set<KeyStatus>> entry : accepted.entrySet()) {
+			final Instant scheduledAt = pendingDestruction.contains(status) ? Instant.now().plusSeconds(60) : null;
+
+			repository.remove(definition.getName());
+			cache.evict(definition.getName());
+			repository.write(keysetWith(EncryptedKey.builder(encryptedKey("key", status))
+				.destructionScheduledAt(scheduledAt)
+				.build(ByteArray.fromString("key-material"))));
+
+			final ThrowingCallable operation = operations.get(entry.getKey());
+
+			if (entry.getValue().contains(status)) {
+				assertThatNoException()
+					.as("Expected %s to accept a %s key", entry.getKey(), status)
+					.isThrownBy(operation);
+			} else {
+				assertThatExceptionOfType(CryptoException.InvalidKeyStatusTransitionException.class)
+					.as("Expected %s to reject a %s key", entry.getKey(), status)
+					.isThrownBy(operation)
+					.returns(status, CryptoException.InvalidKeyStatusTransitionException::getCurrentStatus)
+					.returns(entry.getKey(), CryptoException.InvalidKeyStatusTransitionException::getOperation);
+
+				assertThat(lookupKey("key"))
+					.as("Expected %s to leave a %s key untouched", entry.getKey(), status)
+					.returns(status, EncryptedKey::status)
+					.returns(scheduledAt, EncryptedKey::destructionScheduledAt);
+			}
+		}
+	}
+
+	@Test
+	@DisplayName("should not cancel destruction or disable an ENABLED key through cancelDestruction")
+	void shouldRejectCancellingDestructionOfEnabledKey() throws IOException {
+		repository.write(keysetWith("enabled-key", KeyStatus.ENABLED));
+
+		assertThatExceptionOfType(CryptoException.InvalidKeyStatusTransitionException.class)
+			.isThrownBy(() -> store.cancelDestruction(definition.getName(), "enabled-key"))
+			.returns(KeyStatus.ENABLED, CryptoException.InvalidKeyStatusTransitionException::getCurrentStatus)
+			.returns(KeyStatus.Operation.CANCEL_DESTRUCTION, CryptoException.InvalidKeyStatusTransitionException::getOperation);
+
+		assertThat(lookupKey("enabled-key"))
+			.returns(KeyStatus.ENABLED, EncryptedKey::status);
+		verify(repository, never()).updateKeyStatus(any());
+	}
+
+	@Test
+	@DisplayName("should not cancel a scheduled destruction through disable")
+	void shouldRejectDisablingPendingDestructionKey() throws IOException {
+		final Instant destructionTime = Instant.now().plus(Duration.ofDays(7));
+		repository.write(keysetWith(EncryptedKey.builder(encryptedKey("pending-key", KeyStatus.PENDING_DESTRUCTION))
+			.destructionScheduledAt(destructionTime)
+			.build(ByteArray.fromString("key-material"))));
+
+		assertThatExceptionOfType(CryptoException.InvalidKeyStatusTransitionException.class)
+			.isThrownBy(() -> store.disable(definition.getName(), "pending-key"))
 			.returns(KeyStatus.PENDING_DESTRUCTION, CryptoException.InvalidKeyStatusTransitionException::getCurrentStatus)
-			.returns(KeyStatus.COMPROMISED, CryptoException.InvalidKeyStatusTransitionException::getAttemptedStatus);
+			.returns(KeyStatus.Operation.DISABLE, CryptoException.InvalidKeyStatusTransitionException::getOperation);
+
+		assertThat(lookupKey("pending-key"))
+			.returns(KeyStatus.PENDING_DESTRUCTION, EncryptedKey::status)
+			.returns(destructionTime, EncryptedKey::destructionScheduledAt);
+		verify(repository, never()).updateKeyStatus(any());
+	}
+
+	@Test
+	@DisplayName("should not enable a key that is still initializing")
+	void shouldRejectEnablingInitializingKey() throws IOException {
+		repository.write(keysetWith("initializing-key", KeyStatus.INITIALIZING));
+
+		assertThatExceptionOfType(CryptoException.InvalidKeyStatusTransitionException.class)
+			.isThrownBy(() -> store.enable(definition.getName(), "initializing-key"))
+			.returns(KeyStatus.INITIALIZING, CryptoException.InvalidKeyStatusTransitionException::getCurrentStatus)
+			.returns(KeyStatus.Operation.ENABLE, CryptoException.InvalidKeyStatusTransitionException::getOperation);
+
+		assertThat(lookupKey("initializing-key"))
+			.returns(KeyStatus.INITIALIZING, EncryptedKey::status);
+		verify(repository, never()).updateKeyStatus(any());
+	}
+
+	@Test
+	@DisplayName("should reject scheduling the destruction of an ENABLED key")
+	void shouldRejectSchedulingDestructionOfEnabledKey() throws IOException {
+		repository.write(keysetWith("enabled-key", KeyStatus.ENABLED));
+
+		assertThatExceptionOfType(CryptoException.InvalidKeyStatusTransitionException.class)
+			.isThrownBy(() -> store.scheduleDestruction(definition.getName(), "enabled-key"))
+			.returns(KeyStatus.ENABLED, CryptoException.InvalidKeyStatusTransitionException::getCurrentStatus)
+			.returns(KeyStatus.Operation.SCHEDULE_DESTRUCTION, CryptoException.InvalidKeyStatusTransitionException::getOperation);
+
+		assertThatExceptionOfType(CryptoException.InvalidKeyStatusTransitionException.class)
+			.isThrownBy(() -> store.scheduleDestruction(definition.getName(), "enabled-key",
+				Instant.now().plus(Duration.ofDays(1))))
+			.returns(KeyStatus.ENABLED, CryptoException.InvalidKeyStatusTransitionException::getCurrentStatus)
+			.returns(KeyStatus.Operation.SCHEDULE_DESTRUCTION, CryptoException.InvalidKeyStatusTransitionException::getOperation);
+
+		assertThat(lookupKey("enabled-key"))
+			.returns(KeyStatus.ENABLED, EncryptedKey::status)
+			.returns(null, EncryptedKey::destructionScheduledAt)
+			.extracting(EncryptedKey::data)
+			.isNotNull();
+		verify(repository, never()).updateKeyStatus(any());
+	}
+
+	@Test
+	@DisplayName("should reject immediately destroying an ENABLED key when no grace period is configured")
+	void shouldRejectImmediateDestructionOfEnabledKey() throws IOException {
+		repository.write(EncryptedKeyset.builder()
+			.name(definition.getName())
+			.purpose(definition.getPurpose())
+			.factory(definition.getAlgorithm().factory())
+			.provider(kek.getProvider())
+			.keyEncryptionKey(kek.getId())
+			.build(List.of(encryptedKey("enabled-key", KeyStatus.ENABLED))));
+
+		assertThatExceptionOfType(CryptoException.InvalidKeyStatusTransitionException.class)
+			.isThrownBy(() -> store.scheduleDestruction(definition.getName(), "enabled-key"))
+			.returns(KeyStatus.ENABLED, CryptoException.InvalidKeyStatusTransitionException::getCurrentStatus);
+
+		assertThat(lookupKey("enabled-key"))
+			.returns(KeyStatus.ENABLED, EncryptedKey::status)
+			.extracting(EncryptedKey::data)
+			.isNotNull();
+		verify(repository, never()).updateKeyStatus(any());
+	}
+
+	@Test
+	@DisplayName("should reject destroying a key that is not pending destruction")
+	void shouldRejectDestroyingKeyThatIsNotPendingDestruction() throws IOException {
+		final List<KeyStatus> statuses = List.of(KeyStatus.ENABLED, KeyStatus.DISABLED, KeyStatus.COMPROMISED);
+
+		for (KeyStatus status : statuses) {
+			repository.remove(definition.getName());
+			cache.evict(definition.getName());
+			repository.write(keysetWith("key", status));
+
+			assertThatExceptionOfType(CryptoException.InvalidKeyStatusTransitionException.class)
+				.as("Expected destroying a %s key to be rejected", status)
+				.isThrownBy(() -> store.destroy(definition.getName(), "key"))
+				.returns(status, CryptoException.InvalidKeyStatusTransitionException::getCurrentStatus)
+				.returns(KeyStatus.Operation.DESTROY, CryptoException.InvalidKeyStatusTransitionException::getOperation);
+
+			assertThat(lookupKey("key"))
+				.returns(status, EncryptedKey::status)
+				.extracting(EncryptedKey::data)
+				.isNotNull();
+		}
 	}
 
 	@Test
@@ -498,8 +829,12 @@ class RepositoryKeysetStoreTest {
 		assertThatNoException().isThrownBy(
 			() -> store.scheduleDestruction(definition.getName(), "compromised-key", destructionTime));
 
-		verify(repository).updateKeyStatus(
-			KeyTransition.scheduleDestruction(keysetWith("compromised-key", KeyStatus.COMPROMISED), "compromised-key", destructionTime));
+		verify(repository).updateKeyStatus(assertArg(t -> {
+			assertThat(t.keyId()).isEqualTo("compromised-key");
+			assertThat(t.status()).isEqualTo(KeyStatus.COMPROMISED_PENDING_DESTRUCTION);
+			assertThat(t.destructionScheduledAt()).isEqualTo(destructionTime);
+			assertThat(t.destroyedAt()).isNull();
+		}));
 		verify(cache).evict(definition.getName());
 	}
 
@@ -557,13 +892,22 @@ class RepositoryKeysetStoreTest {
 		assertThatNoException().isThrownBy(
 			() -> store.scheduleDestruction(definition.getName(), "disabled-key"));
 
-		verify(repository).updateKeyStatus(assertArg(t -> {
-			assertThat(t.keysetName()).isEqualTo(definition.getName());
-			assertThat(t.keyId()).isEqualTo("disabled-key");
-			assertThat(t.status()).isEqualTo(KeyStatus.DESTROYED);
-			assertThat(t.destructionScheduledAt()).isNull();
-			assertThat(t.destroyedAt()).isNotNull();
-		}));
+		final var transitions = ArgumentCaptor.forClass(KeyTransition.class);
+		verify(repository, times(2)).updateKeyStatus(transitions.capture());
+
+		assertThat(transitions.getAllValues())
+			.extracting(KeyTransition::keyId, KeyTransition::status)
+			.containsExactly(
+				tuple("disabled-key", KeyStatus.PENDING_DESTRUCTION),
+				tuple("disabled-key", KeyStatus.DESTROYED)
+			);
+
+		assertThat(lookupKey("disabled-key"))
+			.returns(KeyStatus.DESTROYED, EncryptedKey::status)
+			.returns(null, EncryptedKey::destructionScheduledAt)
+			.returns(null, EncryptedKey::data)
+			.extracting(EncryptedKey::destroyedAt)
+			.isNotNull();
 	}
 
 	@Test
@@ -605,8 +949,7 @@ class RepositoryKeysetStoreTest {
 			.returns(definition.getName(), CryptoException.KeysetException::getName)
 			.returns("pending-key", CryptoException.InvalidKeyStatusTransitionException::getKeyId)
 			.returns(KeyStatus.PENDING_DESTRUCTION, CryptoException.InvalidKeyStatusTransitionException::getCurrentStatus)
-			.returns(KeyStatus.PENDING_DESTRUCTION,
-				CryptoException.InvalidKeyStatusTransitionException::getAttemptedStatus);
+			.returns(KeyStatus.Operation.SCHEDULE_DESTRUCTION, CryptoException.InvalidKeyStatusTransitionException::getOperation);
 	}
 
 	@Test
@@ -782,10 +1125,20 @@ class RepositoryKeysetStoreTest {
 	}
 
 	private EncryptedKeyset keysetWith(String keyId, KeyStatus status) {
+		return keysetWith(encryptedKey(keyId, status));
+	}
+
+	private EncryptedKeyset keysetWith(EncryptedKey key) {
 		return EncryptedKeyset.builder(definition)
 			.provider(kek.getProvider())
 			.keyEncryptionKey(kek.getId())
-			.build(List.of(encryptedKey(keyId, status)));
+			.build(List.of(key));
+	}
+
+	private EncryptedKey lookupKey(String keyId) throws IOException {
+		return repository.read(definition.getName())
+			.flatMap(keyset -> keyset.getKey(keyId))
+			.orElseThrow();
 	}
 
 	private static EncryptedKey encryptedKey(String id, KeyStatus status) {

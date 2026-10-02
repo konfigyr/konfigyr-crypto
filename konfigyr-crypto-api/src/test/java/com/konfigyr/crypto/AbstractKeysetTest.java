@@ -256,6 +256,22 @@ class AbstractKeysetTest {
 			.isEqualTo("other-key");
 	}
 
+	@EnumSource(value = KeyStatus.class, names = { "INITIALIZING", "INITIALIZATION_FAILED", "DESTRUCTION_FAILED" })
+	@ParameterizedTest(name = "should expose the {0} status of the unavailable key")
+	@DisplayName("should expose the status of the key that is unavailable")
+	void shouldExposeUnavailableKeyStatus(KeyStatus status) {
+		final var keyset = createKeyset(createKey("primary-key", true, status), createKey("other-key", false, status));
+
+		assertThatExceptionOfType(CryptoException.KeysetUnavailableException.class)
+			.isThrownBy(keyset::requireActivePrimary)
+			.returns("test-keyset", CryptoException.KeysetException::getName)
+			.returns(status, CryptoException.KeysetUnavailableException::getStatus);
+
+		assertThatExceptionOfType(CryptoException.KeysetUnavailableException.class)
+			.isThrownBy(() -> keyset.requireUsableKey("other-key"))
+			.returns(status, CryptoException.KeysetUnavailableException::getStatus);
+	}
+
 	@Test
 	@DisplayName("should throw KeyNotFoundException when requiring a key that does not exist")
 	void shouldThrowWhenRequiredKeyDoesNotExist() {
@@ -280,6 +296,7 @@ class AbstractKeysetTest {
 	static Stream<Arguments> statusExceptions() {
 		return Stream.of(
 			Arguments.of(KeyStatus.COMPROMISED, CryptoException.KeysetCompromisedException.class),
+			Arguments.of(KeyStatus.COMPROMISED_PENDING_DESTRUCTION, CryptoException.KeysetCompromisedException.class),
 			Arguments.of(KeyStatus.DISABLED, CryptoException.KeysetDisabledException.class),
 			Arguments.of(KeyStatus.PENDING_DESTRUCTION, CryptoException.KeysetPendingDestructionException.class),
 			Arguments.of(KeyStatus.DESTROYED, CryptoException.KeysetDestroyedException.class)
@@ -288,9 +305,9 @@ class AbstractKeysetTest {
 
 	static Stream<Arguments> blockedStatuses() {
 		return Stream.concat(statusExceptions(), Stream.of(
-			Arguments.of(KeyStatus.INITIALIZING, CryptoException.KeysetException.class),
-			Arguments.of(KeyStatus.INITIALIZATION_FAILED, CryptoException.KeysetException.class),
-			Arguments.of(KeyStatus.DESTRUCTION_FAILED, CryptoException.KeysetException.class)
+			Arguments.of(KeyStatus.INITIALIZING, CryptoException.KeysetUnavailableException.class),
+			Arguments.of(KeyStatus.INITIALIZATION_FAILED, CryptoException.KeysetUnavailableException.class),
+			Arguments.of(KeyStatus.DESTRUCTION_FAILED, CryptoException.KeysetUnavailableException.class)
 		));
 	}
 

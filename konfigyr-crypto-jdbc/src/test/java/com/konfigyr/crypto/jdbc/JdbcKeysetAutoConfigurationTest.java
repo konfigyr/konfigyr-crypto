@@ -5,16 +5,22 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.sql.init.DatabaseInitializationMode;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.core.convert.ConversionService;
 import org.springframework.core.convert.support.GenericConversionService;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 
 import javax.sql.DataSource;
+import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -109,6 +115,56 @@ class JdbcKeysetAutoConfigurationTest {
 				.hasSingleBean(JdbcKeysetDataSourceScriptDatabaseInitializer.class)
 				.getBean(JdbcKeysetDataSourceScriptDatabaseInitializer.class)
 				.isEqualTo(initializer));
+	}
+
+	@ParameterizedTest
+	@CsvSource(delimiter = '|', value = {
+		"konfigyr.crypto.jdbc.platform=h2                          | KEYSETS",
+		"konfigyr.crypto.jdbc.keysets-table-name=my_schema.KEYSETS | my_schema.KEYSETS",
+		"konfigyr.crypto.jdbc.table-name=legacy_schema.KEYSETS     | legacy_schema.KEYSETS"
+	})
+	@SuppressWarnings("removal")
+	@DisplayName("should resolve the keysets table name from configuration properties")
+	void shouldResolveKeysetsTableName(String property, String expected) {
+		runner.withBean(DataSource.class, () -> dataSource)
+			.withBean(PlatformTransactionManager.class, () -> txManager)
+			.withBean(ConversionService.class, GenericConversionService::new)
+			.withPropertyValues(property, "konfigyr.crypto.jdbc.initialize-schema=never")
+			.run(ctx -> assertThat(ctx).hasNotFailed()
+				.getBean(JdbcKeysetProperties.class)
+				.returns(expected, JdbcKeysetProperties::keysetsTableName)
+				.returns(expected, JdbcKeysetProperties::tableName)
+				.returns("KEYSET_KEYS", JdbcKeysetProperties::keysTableName));
+	}
+
+	@Test
+	@SuppressWarnings("removal")
+	@DisplayName("should prefer the keysets table name over the deprecated table name property")
+	void shouldPreferKeysetsTableNameOverDeprecatedTableName() {
+		runner.withBean(DataSource.class, () -> dataSource)
+			.withBean(PlatformTransactionManager.class, () -> txManager)
+			.withBean(ConversionService.class, GenericConversionService::new)
+			.withPropertyValues(
+				"konfigyr.crypto.jdbc.table-name=legacy_schema.KEYSETS",
+				"konfigyr.crypto.jdbc.keysets-table-name=my_schema.KEYSETS",
+				"konfigyr.crypto.jdbc.initialize-schema=never"
+			)
+			.run(ctx -> assertThat(ctx).hasNotFailed()
+				.getBean(JdbcKeysetProperties.class)
+				.returns("my_schema.KEYSETS", JdbcKeysetProperties::keysetsTableName)
+				.returns("my_schema.KEYSETS", JdbcKeysetProperties::tableName));
+	}
+
+	@Test
+	@SuppressWarnings("removal")
+	@DisplayName("should create properties using the deprecated constructor")
+	void shouldCreatePropertiesUsingDeprecatedConstructor() {
+		final var properties = new JdbcKeysetProperties("schema.sql", "h2", DatabaseInitializationMode.NEVER,
+				"legacy_schema.KEYSETS", "KEYSET_KEYS", Isolation.DEFAULT, Propagation.REQUIRED, Duration.ofSeconds(30));
+
+		assertThat(properties)
+			.returns("legacy_schema.KEYSETS", JdbcKeysetProperties::keysetsTableName)
+			.returns("legacy_schema.KEYSETS", JdbcKeysetProperties::tableName);
 	}
 
 }

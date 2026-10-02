@@ -7,6 +7,8 @@ import org.assertj.core.api.InstanceOfAssertFactories;
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
@@ -27,6 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 @AutoConfigureTestDatabase
 @SpringBootTest(classes = JdbcKeysetRepositoryTest.Config.class)
@@ -198,6 +201,52 @@ class JdbcKeysetRepositoryTest {
 	}
 
 	@Test
+	@DisplayName("should return compromised keys whose scheduled destruction time has elapsed")
+	void shouldFindCompromisedKeysPendingDestruction() throws IOException {
+		final Instant t0 = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+
+		final EncryptedKey pendingKey = EncryptedKey.builder()
+			.id("pending-key")
+			.algorithm(TestAlgorithm.INSTANCE)
+			.status(KeyStatus.PENDING_DESTRUCTION)
+			.primary(true)
+			.createdAt(t0)
+			.destructionScheduledAt(t0.minus(Duration.ofDays(1)))
+			.build(ByteArray.fromString("secret"));
+
+		final EncryptedKey compromisedKey = EncryptedKey.builder()
+			.id("compromised-key")
+			.algorithm(TestAlgorithm.INSTANCE)
+			.status(KeyStatus.COMPROMISED_PENDING_DESTRUCTION)
+			.primary(false)
+			.createdAt(t0)
+			.destructionScheduledAt(t0.minus(Duration.ofDays(1)))
+			.build(ByteArray.fromString("secret"));
+
+		final EncryptedKey unscheduledKey = EncryptedKey.builder()
+			.id("unscheduled-key")
+			.algorithm(TestAlgorithm.INSTANCE)
+			.status(KeyStatus.COMPROMISED)
+			.primary(false)
+			.createdAt(t0)
+			.build(ByteArray.fromString("secret"));
+
+		repository.write(encryptedKeyset("lifecycle-compromised", pendingKey, compromisedKey, unscheduledKey));
+
+		assertThat(repository.findPendingDestruction())
+			.filteredOn(keyset -> keyset.name().equals("lifecycle-compromised"))
+			.singleElement()
+			.extracting(EncryptedKeyset::keys, InstanceOfAssertFactories.iterable(EncryptedKey.class))
+			.extracting(EncryptedKey::id, EncryptedKey::status)
+			.containsExactly(
+				tuple("compromised-key", KeyStatus.COMPROMISED_PENDING_DESTRUCTION),
+				tuple("pending-key", KeyStatus.PENDING_DESTRUCTION)
+			);
+
+		repository.remove("lifecycle-compromised");
+	}
+
+	@Test
 	@DisplayName("should return empty list when no keys have an elapsed destruction schedule")
 	void shouldNotFindFutureScheduledKeys() throws IOException {
 		final Instant t0 = Instant.now().truncatedTo(ChronoUnit.MILLIS);
@@ -312,7 +361,9 @@ class JdbcKeysetRepositoryTest {
 		final EncryptedKey oldKey = encryptedKey("old-key", false, instant, ByteArray.fromString("old material"));
 		final EncryptedKeyset written = repository.write(encryptedKeyset("keyset", primaryKey, oldKey));
 
-		repository.updateKeyStatus(KeyTransition.destroy(written, "old-key", destroyedAt));
+		// applied directly as the repository does not validate the key lifecycle
+		repository.updateKeyStatus(new KeyTransition(written.name(), "old-key", KeyStatus.DESTROYED,
+			null, destroyedAt, written.version()));
 
 		// Simulate the factory skipping the DESTROYED key: read the current state (version bumped
 		// by updateKeyStatus), then write a keyset containing only the primary key.
@@ -459,18 +510,92 @@ class JdbcKeysetRepositoryTest {
 	void shouldRejectInvalidTableNames() {
 		final var repo = new JdbcKeysetRepository(jdbcOperations, transactionOperations);
 
-		repo.setTableName("KEYSETS; DROP TABLE KEYSETS;--");
+		repo.setKeysetsTableName("KEYSETS; DROP TABLE KEYSETS;--");
 		assertThatIllegalArgumentException().isThrownBy(repo::afterPropertiesSet);
 
-		repo.setTableName("1INVALID");
+		repo.setKeysetsTableName("1INVALID");
 		assertThatIllegalArgumentException().isThrownBy(repo::afterPropertiesSet);
 
-		repo.setTableName("KEYSETS");
+		repo.setKeysetsTableName("KEYSETS");
 		repo.setKeysTableName("KEYSET_KEYS; DROP TABLE KEYSET_KEYS;--");
 		assertThatIllegalArgumentException().isThrownBy(repo::afterPropertiesSet);
 
 		repo.setKeysTableName("2INVALID");
 		assertThatIllegalArgumentException().isThrownBy(repo::afterPropertiesSet);
+
+		repo.setKeysTableName("my-schema.KEYSET_KEYS");
+		assertThatIllegalArgumentException().isThrownBy(repo::afterPropertiesSet);
+
+		repo.setKeysTableName("schema..KEYSET_KEYS");
+		assertThatIllegalArgumentException().isThrownBy(repo::afterPropertiesSet);
+
+		repo.setKeysTableName("\"schema\";DROP TABLE KEYSETS;--\".KEYSET_KEYS");
+		assertThatIllegalArgumentException().isThrownBy(repo::afterPropertiesSet);
+
+		repo.setKeysTableName("`schema`;--`.KEYSET_KEYS");
+		assertThatIllegalArgumentException().isThrownBy(repo::afterPropertiesSet);
+
+		repo.setKeysTableName("a.b.c.KEYSET_KEYS");
+		assertThatIllegalArgumentException().isThrownBy(repo::afterPropertiesSet);
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = {
+		"KEYSETS",
+		"my_schema.KEYSETS",
+		"catalog.my_schema.KEYSETS",
+		"\"my-schema\".\"table-name\"",
+		"`my-schema`.`table-name`"
+	})
+	@DisplayName("should accept table names qualified with a schema or catalog")
+	void shouldAcceptQualifiedTableNames(String tableName) {
+		final var repo = new JdbcKeysetRepository(jdbcOperations, transactionOperations);
+		repo.setKeysetsTableName(tableName);
+		repo.setKeysTableName(tableName);
+
+		assertThatNoException().isThrownBy(repo::afterPropertiesSet);
+	}
+
+	@Test
+	@SuppressWarnings("removal")
+	@DisplayName("should configure the keysets table name using the deprecated setter")
+	void shouldSupportDeprecatedTableNameSetter() {
+		final var repo = new JdbcKeysetRepository(jdbcOperations, transactionOperations);
+
+		repo.setTableName("KEYSETS; DROP TABLE KEYSETS;--");
+		assertThatIllegalArgumentException().isThrownBy(repo::afterPropertiesSet);
+
+		repo.setTableName(JdbcKeysetRepository.DEFAULT_TABLE_NAME);
+		repo.afterPropertiesSet();
+
+		assertThat(repo.read("non-existent")).isEmpty();
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = { "%KEYSETS_TABLE_NAME%", "%TABLE_NAME%" })
+	@DisplayName("should resolve keysets table name placeholders in custom SQL queries")
+	void shouldResolveKeysetsTableNamePlaceholders(String placeholder) throws IOException {
+		final String name = "custom-query-placeholder-keyset";
+		final var repo = new JdbcKeysetRepository(jdbcOperations, transactionOperations);
+		repo.setGetKeysetQuery("""
+				SELECT K.KEYSET_NAME, K.KEYSET_PURPOSE, K.KEYSET_FACTORY, K.KEYSET_PROVIDER, K.KEYSET_KEK,
+					K.ROTATION_INTERVAL, K.DESTRUCTION_GRACE_PERIOD, K.KEYSET_VERSION
+				FROM %s K
+				WHERE K.KEYSET_NAME = ?
+				""".formatted(placeholder));
+		repo.afterPropertiesSet();
+
+		repository.write(encryptedKeyset(name, encryptedKey("key-1", true, Instant.now(), ByteArray.fromString("material"))));
+
+		try {
+			assertThat(repo.read(name))
+				.isPresent()
+				.get()
+				.returns(name, EncryptedKeyset::name)
+				.returns(1, EncryptedKeyset::size);
+		} finally {
+			repository.remove(name);
+		}
 	}
 
 	@SpringBootApplication

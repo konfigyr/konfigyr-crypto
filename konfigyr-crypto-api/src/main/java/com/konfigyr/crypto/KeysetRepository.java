@@ -108,9 +108,9 @@ public interface KeysetRepository {
 	/**
 	 * Returns a list of partial {@link EncryptedKeyset} objects where each contains only
 	 * the {@link EncryptedKey keys} whose {@link KeyStatus} is
-	 * {@link KeyStatus#PENDING_DESTRUCTION} and whose
-	 * {@link EncryptedKey#destructionScheduledAt() scheduled destruction time} is in the
-	 * past (i.e., the grace period has elapsed).
+	 * {@link KeyStatus#PENDING_DESTRUCTION} or {@link KeyStatus#COMPROMISED_PENDING_DESTRUCTION}
+	 * and whose {@link EncryptedKey#destructionScheduledAt() scheduled destruction time}
+	 * is in the past (i.e., the grace period has elapsed).
 	 * <p>
 	 * Each returned {@link EncryptedKeyset} is a <em>partial view</em> — it carries the
 	 * keyset metadata but only the eligible pending-destruction keys. Callers typically

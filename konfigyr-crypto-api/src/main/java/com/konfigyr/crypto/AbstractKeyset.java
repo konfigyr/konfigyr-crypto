@@ -170,10 +170,11 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 	 *
 	 * @return the primary key, never {@literal null}
 	 * @throws CryptoException.KeysetCompromisedException       if the primary key status is {@link KeyStatus#COMPROMISED}
+	 *                                                          or {@link KeyStatus#COMPROMISED_PENDING_DESTRUCTION}
 	 * @throws CryptoException.KeysetDisabledException          if the primary key status is {@link KeyStatus#DISABLED}
 	 * @throws CryptoException.KeysetPendingDestructionException if the primary key status is {@link KeyStatus#PENDING_DESTRUCTION}
 	 * @throws CryptoException.KeysetDestroyedException         if the primary key status is {@link KeyStatus#DESTROYED}
-	 * @throws CryptoException.KeysetException                 if the primary key status is {@link KeyStatus#INITIALIZING},
+	 * @throws CryptoException.KeysetUnavailableException       if the primary key status is {@link KeyStatus#INITIALIZING},
 	 *                                                          {@link KeyStatus#INITIALIZATION_FAILED} or
 	 *                                                          {@link KeyStatus#DESTRUCTION_FAILED}
 	 * @see #requireUsableKey(Key)
@@ -215,10 +216,11 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 	 * @param key the key to check, can't be {@literal null}
 	 * @return the same key when it is usable, never {@literal null}
 	 * @throws CryptoException.KeysetCompromisedException       if the key status is {@link KeyStatus#COMPROMISED}
+	 *                                                          or {@link KeyStatus#COMPROMISED_PENDING_DESTRUCTION}
 	 * @throws CryptoException.KeysetDisabledException          if the key status is {@link KeyStatus#DISABLED}
 	 * @throws CryptoException.KeysetPendingDestructionException if the key status is {@link KeyStatus#PENDING_DESTRUCTION}
 	 * @throws CryptoException.KeysetDestroyedException         if the key status is {@link KeyStatus#DESTROYED}
-	 * @throws CryptoException.KeysetException                 if the key status is {@link KeyStatus#INITIALIZING},
+	 * @throws CryptoException.KeysetUnavailableException       if the key status is {@link KeyStatus#INITIALIZING},
 	 *                                                          {@link KeyStatus#INITIALIZATION_FAILED} or
 	 *                                                          {@link KeyStatus#DESTRUCTION_FAILED}
 	 */
@@ -226,14 +228,12 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 		// exhaustive switch without a default branch, new statuses must be explicitly handled here
 		return switch (key.getStatus()) {
 			case ENABLED -> key;
-			case COMPROMISED -> throw new CryptoException.KeysetCompromisedException(name, key);
+			case COMPROMISED, COMPROMISED_PENDING_DESTRUCTION -> throw new CryptoException.KeysetCompromisedException(name, key);
 			case DISABLED -> throw new CryptoException.KeysetDisabledException(name, key);
 			case PENDING_DESTRUCTION -> throw new CryptoException.KeysetPendingDestructionException(name, key);
 			case DESTROYED -> throw new CryptoException.KeysetDestroyedException(name, key);
-			case INITIALIZING, INITIALIZATION_FAILED, DESTRUCTION_FAILED -> throw new CryptoException.KeysetException(
-				name, (key.isPrimary() ? "Primary key '" : "Key '") + key.getId() + "' in keyset '" + name + "' is in " + key.getStatus()
-					+ " state and cannot perform cryptographic operations."
-			);
+			case INITIALIZING, INITIALIZATION_FAILED, DESTRUCTION_FAILED ->
+				throw new CryptoException.KeysetUnavailableException(name, key);
 		};
 	}
 
