@@ -73,8 +73,14 @@ class TinkKeyset extends AbstractKeyset<TinkKey> {
 		return cipher.transform(bytes -> {
 			final byte[] associatedData = context == null ? null : context.array();
 			GeneralSecurityException lastException = null;
+			TinkKey blocked = null;
 
 			for (TinkKey key : prefixMap.getAllWithMatchingPrefix(bytes)) {
+				if (!key.isEnabled()) {
+					blocked = blocked == null ? key : blocked;
+					continue;
+				}
+
 				try {
 					if (KeyType.OCTET == key.getType()) {
 						return primitive(key, Aead.class).decrypt(bytes, associatedData);
@@ -84,6 +90,10 @@ class TinkKeyset extends AbstractKeyset<TinkKey> {
 				} catch (GeneralSecurityException e) {
 					lastException = e;
 				}
+			}
+
+			if (blocked != null) {
+				requireUsableKey(blocked);
 			}
 
 			if (lastException != null) {
@@ -119,13 +129,24 @@ class TinkKeyset extends AbstractKeyset<TinkKey> {
 		// create only one byte array to avoid copying the data multiple times
 		final byte[] bytes = signature.array();
 
+		TinkKey blocked = null;
+
 		for (TinkKey key : prefixMap.getAllWithMatchingPrefix(bytes)) {
+			if (!key.isEnabled()) {
+				blocked = blocked == null ? key : blocked;
+				continue;
+			}
+
 			try {
 				primitive(key, PublicKeyVerify.class).verify(bytes, data.array());
 				return true;
 			} catch (GeneralSecurityException e) {
 				// try the next key in the chain...
 			}
+		}
+
+		if (blocked != null) {
+			requireUsableKey(blocked);
 		}
 
 		return false;
