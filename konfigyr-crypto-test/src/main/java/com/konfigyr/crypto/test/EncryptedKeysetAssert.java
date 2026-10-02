@@ -6,6 +6,7 @@ import com.konfigyr.crypto.KeyEncryptionKey;
 import com.konfigyr.crypto.Keyset;
 import com.konfigyr.crypto.KeysetDefinition;
 import com.konfigyr.crypto.KeysetPurpose;
+import com.konfigyr.crypto.RetirementPolicy;
 import org.assertj.core.api.*;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
@@ -64,8 +65,8 @@ public class EncryptedKeysetAssert extends AbstractObjectAssert<EncryptedKeysetA
 
 	/**
 	 * Verifies that the encrypted keyset's name, purpose, factory, KEK provider and identifier,
-	 * rotation interval, rotation lead time, and destruction grace period all match the corresponding
-	 * values of the given {@link Keyset}.
+	 * rotation interval, rotation lead time, destruction grace period, and retirement policy all match
+	 * the corresponding values of the given {@link Keyset}.
 	 *
 	 * @param keyset the keyset to match against, can't be {@literal null}
 	 * @return this assertion for chaining, never {@literal null}
@@ -75,6 +76,7 @@ public class EncryptedKeysetAssert extends AbstractObjectAssert<EncryptedKeysetA
 			.hasPurpose(keyset.getPurpose())
 			.createdByFactory(keyset.getFactory())
 			.hasKeyEncryptionKey(keyset.getKeyEncryptionKey())
+			.hasRetirementPolicy(keyset.getRetirementPolicy())
 			.hasRotationInterval(keyset.getRotationInterval().orElse(null))
 			.hasRotationLeadTime(keyset.getRotationLeadTime().orElse(null))
 			.hasDestructionGracePeriod(keyset.getDestructionGracePeriod().orElse(null));
@@ -82,7 +84,7 @@ public class EncryptedKeysetAssert extends AbstractObjectAssert<EncryptedKeysetA
 
 	/**
 	 * Verifies that the encrypted keyset's name, purpose, factory, rotation interval, rotation
-	 * lead time, and destruction grace period all match the corresponding values of the given
+	 * lead time, destruction grace period, and retirement policy all match the corresponding values of the given
 	 * {@link KeysetDefinition}.
 	 *
 	 * @param definition the definition to match against, can't be {@literal null}
@@ -94,7 +96,8 @@ public class EncryptedKeysetAssert extends AbstractObjectAssert<EncryptedKeysetA
 			.createdByFactory(definition.getAlgorithm().factory())
 			.hasRotationInterval(definition.getRotationInterval().orElse(null))
 			.hasRotationLeadTime(definition.getRotationLeadTime().orElse(null))
-			.hasDestructionGracePeriod(definition.getDestructionGracePeriod().orElse(null));
+			.hasDestructionGracePeriod(definition.getDestructionGracePeriod().orElse(null))
+			.hasRetirementPolicy(definition.getRetirementPolicy());
 	}
 
 	/**
@@ -224,6 +227,20 @@ public class EncryptedKeysetAssert extends AbstractObjectAssert<EncryptedKeysetA
 			.extracting(EncryptedKeyset::rotationLeadTime)
 			.as("keyset rotation lead time")
 			.isEqualTo(leadTime);
+		return myself;
+	}
+
+	/**
+	 * Verifies that the encrypted keyset has the expected retirement policy.
+	 *
+	 * @param policy the expected retirement policy, can't be {@literal null}
+	 * @return this assertion for chaining, never {@literal null}
+	 */
+	public EncryptedKeysetAssert hasRetirementPolicy(RetirementPolicy policy) {
+		assertThatKeyset()
+			.extracting(EncryptedKeyset::retirementPolicy)
+			.as("keyset retirement policy")
+			.isEqualTo(policy);
 		return myself;
 	}
 

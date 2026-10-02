@@ -44,6 +44,7 @@ class EncryptedKeysetTest {
 			.rotationInterval(Duration.ofDays(90))
 			.rotationLeadTime(Duration.ofDays(30))
 			.destructionGracePeriod(Duration.ofDays(30))
+			.retirementPolicy(RetirementPolicy.DESTROY)
 			.build(List.of(key));
 
 		EncryptedKeysetAssert.assertThat(keyset)
@@ -54,6 +55,7 @@ class EncryptedKeysetTest {
 			.hasRotationInterval(Duration.ofDays(90))
 			.hasRotationLeadTime(Duration.ofDays(30))
 			.hasDestructionGracePeriod(Duration.ofDays(30))
+			.hasRetirementPolicy(RetirementPolicy.DESTROY)
 			.hasSize(1);
 
 		EncryptedKeysetAssert.assertThat(keyset)
@@ -73,6 +75,7 @@ class EncryptedKeysetTest {
 			.rotationInterval(Duration.ofDays(90))
 			.rotationLeadTime(Duration.ofDays(30))
 			.destructionGracePeriod(Duration.ofDays(30))
+			.retirementPolicy(RetirementPolicy.DESTROY)
 			.build(List.of(key));
 
 		final var copy = EncryptedKeyset.builder(original).build(original.keys());
@@ -95,6 +98,7 @@ class EncryptedKeysetTest {
 			.hasRotationInterval(null)
 			.hasRotationLeadTime(null)
 			.hasDestructionGracePeriod(null)
+			.hasRetirementPolicy(RetirementPolicy.RETAIN)
 			.hasSize(0);
 
 		EncryptedKeysetAssert.assertThat(keyset)
@@ -159,10 +163,32 @@ class EncryptedKeysetTest {
 			.hasRotationInterval(Duration.ofDays(90))
 			.hasRotationLeadTime(null)
 			.hasDestructionGracePeriod(Duration.ofDays(30))
+			.hasRetirementPolicy(RetirementPolicy.RETAIN)
 			.hasSize(1);
 
 		assertThat(keyset.version())
 			.isEqualTo(3L);
+	}
+
+	@Test
+	@DisplayName("should set retirement policy from its name")
+	void shouldSetRetirementPolicyFromName() {
+		final var builder = EncryptedKeyset.builder()
+			.name("test-keyset")
+			.purpose(KeysetPurpose.ENCRYPTION)
+			.factory("test-factory")
+			.provider("test-provider")
+			.keyEncryptionKey("test-kek");
+
+		EncryptedKeysetAssert.assertThat(builder.retirementPolicy("SCHEDULE_DESTRUCTION").build())
+			.hasRetirementPolicy(RetirementPolicy.SCHEDULE_DESTRUCTION);
+
+		assertThatIllegalArgumentException()
+			.isThrownBy(() -> builder.retirementPolicy("UNKNOWN"));
+
+		assertThatIllegalArgumentException()
+			.isThrownBy(() -> builder.retirementPolicy(" "))
+			.withMessage("Keyset retirement policy can not be blank");
 	}
 
 	@Test
@@ -226,6 +252,7 @@ class EncryptedKeysetTest {
 		doReturn(Optional.of(Duration.ofDays(90))).when(source).getRotationInterval();
 		doReturn(Optional.of(Duration.ofDays(30))).when(source).getRotationLeadTime();
 		doReturn(Optional.of(Duration.ofDays(30))).when(source).getDestructionGracePeriod();
+		doReturn(RetirementPolicy.DESTROY).when(source).getRetirementPolicy();
 
 		final var keyset = EncryptedKeyset.from(source, List.of(key));
 
@@ -245,6 +272,7 @@ class EncryptedKeysetTest {
 		doReturn(kek).when(source).getKeyEncryptionKey();
 		doReturn(Optional.empty()).when(source).getRotationInterval();
 		doReturn(Optional.empty()).when(source).getDestructionGracePeriod();
+		doReturn(RetirementPolicy.RETAIN).when(source).getRetirementPolicy();
 
 		EncryptedKeysetAssert.assertThat(EncryptedKeyset.from(source, List.of()))
 			.matchesKeyset(source)

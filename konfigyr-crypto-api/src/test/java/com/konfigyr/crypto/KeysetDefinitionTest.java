@@ -253,6 +253,7 @@ class KeysetDefinitionTest {
 		doReturn(KeysetPurpose.ENCRYPTION).when(keyset).getPurpose();
 		doReturn(Optional.of(Duration.ofDays(180))).when(keyset).getRotationInterval();
 		doReturn(Optional.of(Duration.ofDays(60))).when(keyset).getDestructionGracePeriod();
+		doReturn(RetirementPolicy.RETAIN).when(keyset).getRetirementPolicy();
 
 		assertThat(KeysetDefinition.builder(keyset).algorithm(algorithm).build())
 			.returns("test-keyset", KeysetDefinition::getName)
@@ -270,6 +271,7 @@ class KeysetDefinitionTest {
 		doReturn(KeysetPurpose.ENCRYPTION).when(keyset).getPurpose();
 		doReturn(Optional.empty()).when(keyset).getRotationInterval();
 		doReturn(Optional.of(Duration.ofDays(30))).when(keyset).getDestructionGracePeriod();
+		doReturn(RetirementPolicy.RETAIN).when(keyset).getRetirementPolicy();
 
 		assertThat(KeysetDefinition.builder(keyset).algorithm(algorithm).build())
 			.returns("test-keyset", KeysetDefinition::getName)
@@ -287,6 +289,7 @@ class KeysetDefinitionTest {
 		doReturn(KeysetPurpose.ENCRYPTION).when(keyset).getPurpose();
 		doReturn(Optional.of(Duration.ofDays(90))).when(keyset).getRotationInterval();
 		doReturn(Optional.empty()).when(keyset).getDestructionGracePeriod();
+		doReturn(RetirementPolicy.RETAIN).when(keyset).getRetirementPolicy();
 
 		assertThat(KeysetDefinition.builder(keyset).algorithm(algorithm).build())
 			.returns("test-keyset", KeysetDefinition::getName)

@@ -77,6 +77,11 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 	protected final List<T> keys;
 
 	/**
+	 * The policy that defines what happens to the primary key once it is demoted by a rotation.
+	 */
+	protected final RetirementPolicy retirementPolicy;
+
+	/**
 	 * The interval at which key material should be automatically rotated to mitigate
 	 * cryptographic wear-out. May be {@literal null} if automatic rotation is disabled.
 	 */
@@ -119,6 +124,7 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 		this.purpose = builder.purpose;
 		this.keyEncryptionKey = builder.kek;
 		this.keys = Collections.unmodifiableList(builder.keys);
+		this.retirementPolicy = builder.retirementPolicy;
 		this.rotationInterval = builder.rotationInterval;
 		this.rotationLeadTime = builder.rotationLeadTime;
 		this.destructionGracePeriod = builder.destructionGracePeriod;
@@ -248,6 +254,11 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 	@Override
 	public Optional<? extends T> getKey(String id) {
 		return keys.stream().filter(key -> Objects.equals(key.getId(), id)).findFirst();
+	}
+
+	@Override
+	public RetirementPolicy getRetirementPolicy() {
+		return retirementPolicy;
 	}
 
 	@Override
@@ -420,6 +431,7 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 			&& Objects.equals(purpose, that.purpose)
 			&& Objects.equals(keyEncryptionKey, that.keyEncryptionKey)
 			&& Objects.equals(keys, that.keys)
+			&& Objects.equals(retirementPolicy, that.retirementPolicy)
 			&& Objects.equals(rotationInterval, that.rotationInterval)
 			&& Objects.equals(rotationLeadTime, that.rotationLeadTime)
 			&& Objects.equals(destructionGracePeriod, that.destructionGracePeriod);
@@ -432,6 +444,7 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 		result = 31 * result + Objects.hashCode(purpose);
 		result = 31 * result + Objects.hashCode(keyEncryptionKey);
 		result = 31 * result + Objects.hashCode(keys);
+		result = 31 * result + Objects.hashCode(retirementPolicy);
 		result = 31 * result + Objects.hashCode(rotationInterval);
 		result = 31 * result + Objects.hashCode(rotationLeadTime);
 		result = 31 * result + Objects.hashCode(destructionGracePeriod);
@@ -446,6 +459,7 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 			.add("purpose=" + purpose)
 			.add("kek=" + KeyEncryptionKey.format(keyEncryptionKey))
 			.add("keys=" + keys)
+			.add("retirementPolicy=" + retirementPolicy)
 			.add("rotationInterval=" + rotationInterval)
 			.add("rotationLeadTime=" + rotationLeadTime)
 			.add("destructionGracePeriod=" + destructionGracePeriod)
@@ -484,6 +498,7 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 		private @Nullable Duration rotationInterval;
 		private @Nullable Duration rotationLeadTime;
 		private @Nullable Duration destructionGracePeriod;
+		private RetirementPolicy retirementPolicy = RetirementPolicy.RETAIN;
 		private long version = 0L;
 		private final List<T> keys;
 
@@ -506,6 +521,7 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 			rotationInterval = definition.getRotationInterval().orElse(null);
 			rotationLeadTime = definition.getRotationLeadTime().orElse(null);
 			destructionGracePeriod = definition.getDestructionGracePeriod().orElse(null);
+			retirementPolicy = definition.getRetirementPolicy();
 			keys = new ArrayList<>();
 		}
 
@@ -522,6 +538,7 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 			rotationInterval = keyset.getRotationInterval().orElse(null);
 			rotationLeadTime = keyset.getRotationLeadTime().orElse(null);
 			destructionGracePeriod = keyset.getDestructionGracePeriod().orElse(null);
+			retirementPolicy = keyset.getRetirementPolicy();
 			version = keyset.getVersion();
 			keys = new ArrayList<>(keyset.size());
 		}
@@ -538,6 +555,7 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 			rotationInterval = keyset.rotationInterval();
 			rotationLeadTime = keyset.rotationLeadTime();
 			destructionGracePeriod = keyset.destructionGracePeriod();
+			retirementPolicy = keyset.retirementPolicy();
 			version = keyset.version();
 			keys = new ArrayList<>(keyset.size());
 		}
@@ -656,6 +674,19 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 		 */
 		public B destructionGracePeriod(@Nullable Duration destructionGracePeriod) {
 			this.destructionGracePeriod = destructionGracePeriod;
+			return self();
+		}
+
+		/**
+		 * Sets the policy that defines what happens to the primary key once it is demoted by a rotation.
+		 *
+		 * @param retirementPolicy the retirement policy, can't be {@literal null}
+		 * @return this builder instance for method chaining
+		 * @since 1.1.0
+		 */
+		public B retirementPolicy(RetirementPolicy retirementPolicy) {
+			Assert.notNull(retirementPolicy, "Keyset retirement policy can't be null");
+			this.retirementPolicy = retirementPolicy;
 			return self();
 		}
 

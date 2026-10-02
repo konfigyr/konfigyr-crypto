@@ -99,6 +99,7 @@ class AbstractKeysetTest {
 			.rotationInterval(Duration.ofDays(90))
 			.rotationLeadTime(Duration.ofDays(30))
 			.destructionGracePeriod(Duration.ofDays(30))
+			.retirementPolicy(RetirementPolicy.DESTROY)
 			.key(primaryKey)
 			.key(secondKey)
 			.build();
@@ -111,6 +112,7 @@ class AbstractKeysetTest {
 			.hasRotationInterval(Duration.ofDays(90))
 			.hasRotationLeadTime(Duration.ofDays(30))
 			.hasDestructionGracePeriod(Duration.ofDays(30))
+			.hasRetirementPolicy(RetirementPolicy.DESTROY)
 			.hasSize(2);
 	}
 
@@ -148,7 +150,8 @@ class AbstractKeysetTest {
 			.matchesDefinition(definition)
 			.hasNoRotationInterval()
 			.hasNoRotationLeadTime()
-			.hasNoDestructionGracePeriod();
+			.hasNoDestructionGracePeriod()
+			.hasRetirementPolicy(RetirementPolicy.RETAIN);
 	}
 
 	@Test
@@ -164,6 +167,7 @@ class AbstractKeysetTest {
 			.rotationInterval(Duration.ofDays(90))
 			.rotationLeadTime(Duration.ofDays(30))
 			.destructionGracePeriod(Duration.ofDays(30))
+			.retirementPolicy(RetirementPolicy.DESTROY)
 			.key(primaryKey)
 			.build();
 
@@ -186,6 +190,7 @@ class AbstractKeysetTest {
 			.rotationInterval(Duration.ofDays(90))
 			.rotationLeadTime(Duration.ofDays(30))
 			.destructionGracePeriod(Duration.ofDays(30))
+			.retirementPolicy(RetirementPolicy.SCHEDULE_DESTRUCTION)
 			.build(List.of());
 
 		final var keyset = TestKeyset.builder(encryptedKeyset)
@@ -200,7 +205,8 @@ class AbstractKeysetTest {
 			.hasKeyEncryptionKey(kek)
 			.hasRotationInterval(Duration.ofDays(90))
 			.hasRotationLeadTime(Duration.ofDays(30))
-			.hasDestructionGracePeriod(Duration.ofDays(30));
+			.hasDestructionGracePeriod(Duration.ofDays(30))
+			.hasRetirementPolicy(RetirementPolicy.SCHEDULE_DESTRUCTION);
 	}
 
 	@Test
@@ -673,6 +679,42 @@ class AbstractKeysetTest {
 		assertThat(keyset).isNotEqualTo(TestKeyset.builder()
 			.name("test-keyset").factory("test-factory").purpose(KeysetPurpose.ENCRYPTION)
 			.keyEncryptionKey(kek).rotationLeadTime(Duration.ofDays(30)).key(key).build());
+
+		assertThat(keyset).isNotEqualTo(TestKeyset.builder()
+			.name("test-keyset").factory("test-factory").purpose(KeysetPurpose.ENCRYPTION)
+			.keyEncryptionKey(kek).retirementPolicy(RetirementPolicy.DESTROY).key(key).build());
+	}
+
+	@Test
+	@DisplayName("should build a keyset from a definition with a retirement policy")
+	void shouldBuildKeysetFromDefinitionWithRetirementPolicy() {
+		final var definition = KeysetDefinition.builder()
+			.name("test-keyset")
+			.algorithm(TestAlgorithm.INSTANCE)
+			.retirementPolicy(RetirementPolicy.DESTROY)
+			.build();
+
+		final var keyset = TestKeyset.builder(definition)
+			.keyEncryptionKey(kek)
+			.key(createKey("primary-key", true))
+			.build();
+
+		KeysetAssert.assertThat(keyset)
+			.matchesDefinition(definition)
+			.hasRetirementPolicy(RetirementPolicy.DESTROY);
+
+		assertThat(KeysetDefinition.builder(keyset).algorithm(TestAlgorithm.INSTANCE).build())
+			.as("definition created from the keyset must retain the retirement policy")
+			.isEqualTo(definition);
+	}
+
+	@Test
+	@DisplayName("should reject a null retirement policy")
+	@SuppressWarnings("DataFlowIssue")
+	void shouldRejectNullRetirementPolicy() {
+		assertThatIllegalArgumentException()
+			.isThrownBy(() -> TestKeyset.builder().retirementPolicy(null))
+			.withMessage("Keyset retirement policy can't be null");
 	}
 
 	@Test
