@@ -583,6 +583,15 @@ public abstract class CryptoException extends RuntimeException {
 			this.keyId = keyId;
 		}
 
+		/**
+		 * Returns the identifier of the {@link Key} that is disabled.
+		 *
+		 * @return the key identifier, never {@literal null}
+		 */
+		public @NonNull String getKeyId() {
+			return keyId;
+		}
+
 	}
 
 	/**
@@ -637,6 +646,15 @@ public abstract class CryptoException extends RuntimeException {
 			this.keyId = keyId;
 		}
 
+		/**
+		 * Returns the identifier of the {@link Key} that is pending destruction.
+		 *
+		 * @return the key identifier, never {@literal null}
+		 */
+		public @NonNull String getKeyId() {
+			return keyId;
+		}
+
 	}
 
 	/**
@@ -685,6 +703,15 @@ public abstract class CryptoException extends RuntimeException {
 			super(name, (primary ? "Primary key '" : "Key '") + keyId + "' in keyset '" + name + "' "
 					+ "has been permanently destroyed. The key material cannot be recovered.");
 			this.keyId = keyId;
+		}
+
+		/**
+		 * Returns the identifier of the {@link Key} that has been destroyed.
+		 *
+		 * @return the key identifier, never {@literal null}
+		 */
+		public @NonNull String getKeyId() {
+			return keyId;
 		}
 
 	}
@@ -737,6 +764,15 @@ public abstract class CryptoException extends RuntimeException {
 			super(name, (primary ? "Primary key '" : "Key '") + keyId + "' in keyset '" + name + "' "
 					+ "is compromised and cannot perform cryptographic operations. The key has been marked as compromised and must not be used.");
 			this.keyId = keyId;
+		}
+
+		/**
+		 * Returns the identifier of the {@link Key} that has been compromised.
+		 *
+		 * @return the key identifier, never {@literal null}
+		 */
+		public @NonNull String getKeyId() {
+			return keyId;
 		}
 
 	}

@@ -244,16 +244,33 @@ class AbstractKeysetTest {
 			.contains(blocked);
 	}
 
-	@MethodSource("statusExceptions")
-	@ParameterizedTest(name = "should expose the key identifier in {1}")
+	@Test
 	@DisplayName("should expose the identifier of the key that is not usable")
-	void shouldExposeKeyIdentifier(KeyStatus status, Class<? extends CryptoException.KeysetException> type) {
-		final var keyset = createKeyset(createKey("primary-key", true), createKey("other-key", false, status));
+	void shouldExposeKeyIdentifier() {
+		assertThatExceptionOfType(CryptoException.KeysetCompromisedException.class)
+			.isThrownBy(() -> keysetWithKeyInStatus(KeyStatus.COMPROMISED).requireUsableKey("other-key"))
+			.withMessageStartingWith("Key 'other-key' in keyset 'test-keyset' is compromised")
+			.returns("other-key", CryptoException.KeysetCompromisedException::getKeyId);
 
-		assertThatExceptionOfType(type)
-			.isThrownBy(() -> keyset.requireUsableKey("other-key"))
-			.extracting("keyId")
-			.isEqualTo("other-key");
+		assertThatExceptionOfType(CryptoException.KeysetCompromisedException.class)
+			.isThrownBy(() -> keysetWithKeyInStatus(KeyStatus.COMPROMISED_PENDING_DESTRUCTION).requireUsableKey("other-key"))
+			.withMessageStartingWith("Key 'other-key' in keyset 'test-keyset' is compromised")
+			.returns("other-key", CryptoException.KeysetCompromisedException::getKeyId);
+
+		assertThatExceptionOfType(CryptoException.KeysetDisabledException.class)
+			.isThrownBy(() -> keysetWithKeyInStatus(KeyStatus.DISABLED).requireUsableKey("other-key"))
+			.withMessageStartingWith("Key 'other-key' in keyset 'test-keyset' is disabled")
+			.returns("other-key", CryptoException.KeysetDisabledException::getKeyId);
+
+		assertThatExceptionOfType(CryptoException.KeysetPendingDestructionException.class)
+			.isThrownBy(() -> keysetWithKeyInStatus(KeyStatus.PENDING_DESTRUCTION).requireUsableKey("other-key"))
+			.withMessageStartingWith("Key 'other-key' in keyset 'test-keyset' is pending destruction")
+			.returns("other-key", CryptoException.KeysetPendingDestructionException::getKeyId);
+
+		assertThatExceptionOfType(CryptoException.KeysetDestroyedException.class)
+			.isThrownBy(() -> keysetWithKeyInStatus(KeyStatus.DESTROYED).requireUsableKey("other-key"))
+			.withMessageStartingWith("Key 'other-key' in keyset 'test-keyset' has been permanently destroyed")
+			.returns("other-key", CryptoException.KeysetDestroyedException::getKeyId);
 	}
 
 	@EnumSource(value = KeyStatus.class, names = { "INITIALIZING", "INITIALIZATION_FAILED", "DESTRUCTION_FAILED" })
@@ -291,6 +308,10 @@ class AbstractKeysetTest {
 
 		assertThat(keyset.rotate(KeyDefinition.of(TestAlgorithm.INSTANCE)))
 			.isNotNull();
+	}
+
+	static TestKeyset keysetWithKeyInStatus(KeyStatus status) {
+		return createKeyset(createKey("primary-key", true), createKey("other-key", false, status));
 	}
 
 	static Stream<Arguments> statusExceptions() {
