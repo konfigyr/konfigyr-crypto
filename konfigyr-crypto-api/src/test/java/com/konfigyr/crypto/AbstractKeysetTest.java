@@ -470,7 +470,7 @@ class AbstractKeysetTest {
 
 		final var keyset = keyset(Duration.ofDays(90), previous, primary, next);
 
-		assertThat(keyset.findNextKey())
+		assertThat(keyset.getNextKey())
 			.hasValue(next);
 
 		final Keyset rotated = keyset.rotate();
@@ -534,7 +534,7 @@ class AbstractKeysetTest {
 			key("next", false, status, now.minus(Duration.ofDays(1)))
 		);
 
-		assertThat(keyset.findNextKey())
+		assertThat(keyset.getNextKey())
 			.isEmpty();
 
 		assertGeneratedNewPrimary(keyset, keyset.rotate());
@@ -548,7 +548,7 @@ class AbstractKeysetTest {
 			key("primary", true, KeyStatus.ENABLED, now.minus(Duration.ofDays(90)))
 		);
 
-		assertThat(keyset.findNextKey())
+		assertThat(keyset.getNextKey())
 			.isEmpty();
 
 		assertGeneratedNewPrimary(keyset, keyset.rotate());

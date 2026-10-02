@@ -223,6 +223,27 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 			ORDER BY K.KEYSET_NAME
 			""";
 
+	private static final String FIND_PENDING_PREPARATION_QUERY = """
+			SELECT K.KEYSET_NAME, K.KEYSET_PURPOSE, K.KEYSET_FACTORY, K.KEYSET_PROVIDER, K.KEYSET_KEK,
+				K.ROTATION_INTERVAL, K.ROTATION_LEAD_TIME, K.DESTRUCTION_GRACE_PERIOD, K.KEYSET_VERSION
+			FROM %KEYSETS_TABLE_NAME% K
+			INNER JOIN %KEYS_TABLE_NAME% E ON E.KEYSET_NAME = K.KEYSET_NAME
+			WHERE K.ROTATION_LEAD_TIME IS NOT NULL
+				AND E.EXPIRES_AT IS NOT NULL
+				AND E.EXPIRES_AT - K.ROTATION_LEAD_TIME <= ?
+				AND E.KEY_PRIMARY = ?
+				AND E.KEY_STATUS = 'ENABLED'
+				AND NOT EXISTS (
+					SELECT 1
+					FROM %KEYS_TABLE_NAME% N
+					WHERE N.KEYSET_NAME = E.KEYSET_NAME
+						AND N.KEY_PRIMARY = ?
+						AND N.KEY_STATUS = 'ENABLED'
+						AND N.CREATED_AT > E.CREATED_AT
+				)
+			ORDER BY K.KEYSET_NAME
+			""";
+
 	/* Configurable table names and query overrides */
 
 	private String keysetsTableName = DEFAULT_KEYSETS_TABLE_NAME;
@@ -256,6 +277,8 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 	private String findPendingDestructionQuery;
 
 	private String findPendingRotationQuery;
+
+	private String findPendingPreparationQuery;
 
 	private String bumpKeysetVersionQuery;
 
@@ -480,6 +503,26 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 	}
 
 	/**
+	 * Overrides the SQL query used to find keysets whose next key should be created ahead of the rotation
+	 * of their primary key. When {@literal null}, the built-in default query is used.
+	 * <p>
+	 * The query must select the same keysets table columns as the {@link #setGetKeysetQuery(String) keyset
+	 * query} and is executed with three bound parameters:
+	 * <ol>
+	 *     <li>the current time, in epoch milliseconds, compared against the {@code EXPIRES_AT} column of the
+	 *     primary key minus the {@code ROTATION_LEAD_TIME} column of the keyset</li>
+	 *     <li>the boolean {@literal true}, compared against the {@code KEY_PRIMARY} column of the primary key</li>
+	 *     <li>the boolean {@literal false}, compared against the {@code KEY_PRIMARY} column of the next key</li>
+	 * </ol>
+	 *
+	 * @param findPendingPreparationQuery custom SQL query, or {@literal null} to use the default
+	 * @since 1.1.0
+	 */
+	public void setFindPendingPreparationQuery(String findPendingPreparationQuery) {
+		this.findPendingPreparationQuery = findPendingPreparationQuery;
+	}
+
+	/**
 	 * Overrides the SQL statement used to increment the keyset version counter.
 	 * When {@literal null}, the built-in default statement is used.
 	 *
@@ -512,6 +555,7 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 		destroyKeyQuery = sql(destroyKeyQuery, DESTROY_KEY_QUERY);
 		findPendingDestructionQuery = sql(findPendingDestructionQuery, FIND_PENDING_DESTRUCTION_QUERY);
 		findPendingRotationQuery = sql(findPendingRotationQuery, FIND_PENDING_ROTATION_QUERY);
+		findPendingPreparationQuery = sql(findPendingPreparationQuery, FIND_PENDING_PREPARATION_QUERY);
 		bumpKeysetVersionQuery = sql(bumpKeysetVersionQuery, BUMP_KEYSET_VERSION_QUERY);
 	}
 
@@ -746,6 +790,22 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 				pss -> {
 					pss.setLong(1, Instant.now().toEpochMilli());
 					pss.setBoolean(2, true);
+				},
+				this::extractPendingRotation));
+	}
+
+	@NonNull
+	@Override
+	public List<EncryptedKeyset> findPendingPreparation() {
+		log.debug("Querying for keysets pending preparation");
+
+		return transactionOperations.execute(status ->
+			jdbcOperations.query(
+				findPendingPreparationQuery,
+				pss -> {
+					pss.setLong(1, Instant.now().toEpochMilli());
+					pss.setBoolean(2, true);
+					pss.setBoolean(3, false);
 				},
 				this::extractPendingRotation));
 	}

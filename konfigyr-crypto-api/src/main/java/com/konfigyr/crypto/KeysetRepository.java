@@ -166,4 +166,45 @@ public interface KeysetRepository {
 		return List.of();
 	}
 
+	/**
+	 * Returns a list of partial {@link EncryptedKeyset} objects for keysets whose next key should be created
+	 * ahead of the rotation of their primary key. A keyset is eligible for preparation when it defines a
+	 * {@link EncryptedKeyset#rotationLeadTime() rotation lead time}, its primary {@link KeyStatus#ENABLED}
+	 * key's {@link EncryptedKey#expiresAt() expiry time} is within that lead time, and it does not contain a
+	 * next key yet, i.e.:
+	 * <pre>
+	 *     primaryKey.expiresAt - keyset.rotationLeadTime &lt;= now
+	 *     AND no ENABLED non-primary key with createdAt &gt; primaryKey.createdAt
+	 * </pre>
+	 * <p>
+	 * Keysets whose primary key already expired are eligible as well, so the next key is still created when
+	 * the lead time elapsed without the keyset being prepared, for instance while the application was down.
+	 * <p>
+	 * Each returned {@link EncryptedKeyset} is a <em>metadata-only view</em>, it carries the full keyset
+	 * metadata but an <strong>empty key list</strong>. Callers use only the keyset name to read the keyset
+	 * and create the next, non-primary, key:
+	 * <pre>{@code
+	 * for (EncryptedKeyset pending : repository.findPendingPreparation()) {
+	 *     final Keyset keyset = store.read(pending.name());
+	 *     store.rotate(keyset, KeyDefinition.builder()
+	 *         .algorithm(keyset.getPrimary().getAlgorithm())
+	 *         .rotationInterval(keyset.getRotationInterval().orElse(null))
+	 *         .primary(false)
+	 *         .build());
+	 * }
+	 * }</pre>
+	 * <p>
+	 * The default implementation returns an empty list. Repositories that can scan all stored keysets
+	 * (e.g. {@link InMemoryKeysetRepository}) or issue an efficient query (e.g. {@code JdbcKeysetRepository})
+	 * should override this method.
+	 *
+	 * @return list of partial {@link EncryptedKeyset} objects with empty key lists for keysets pending
+	 *         preparation, never {@literal null}
+	 * @throws IOException if there is an issue while querying for keysets pending preparation
+	 * @since 1.1.0
+	 */
+	default List<EncryptedKeyset> findPendingPreparation() throws IOException {
+		return List.of();
+	}
+
 }

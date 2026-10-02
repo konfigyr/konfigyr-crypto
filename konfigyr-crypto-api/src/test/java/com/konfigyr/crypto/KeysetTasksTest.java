@@ -1,7 +1,5 @@
 package com.konfigyr.crypto;
 
-import com.konfigyr.crypto.KeysetTaskAutoConfiguration.KeysetDestructionTask;
-import com.konfigyr.crypto.KeysetTaskAutoConfiguration.KeysetRotationTask;
 import com.konfigyr.crypto.test.TestAlgorithm;
 import com.konfigyr.io.ByteArray;
 import org.junit.jupiter.api.BeforeEach;
@@ -9,6 +7,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.env.MockEnvironment;
@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
@@ -163,6 +164,120 @@ class KeysetTasksTest {
 
 			verify(store).rotate("ks-a");
 			verify(store).rotate("ks-b");
+		}
+
+
+		@Test
+		@DisplayName("should prepare the next key of pending keysets before rotating keysets")
+		void shouldPrepareKeysetsBeforeRotating() throws IOException {
+			final Keyset keyset = keyset(primaryKey(Instant.now().plus(Duration.ofDays(20))));
+
+			when(repository.findPendingPreparation()).thenReturn(List.of(metadataKeyset("ks-a")));
+			when(repository.findPendingRotation()).thenReturn(List.of(metadataKeyset("ks-b")));
+			when(store.read("ks-a")).thenReturn(keyset);
+
+			new KeysetRotationTask(store, repository).run();
+
+			final ArgumentCaptor<KeyDefinition> definition = ArgumentCaptor.forClass(KeyDefinition.class);
+			final InOrder order = inOrder(store);
+			order.verify(store).rotate(eq(keyset), definition.capture());
+			order.verify(store).rotate("ks-b");
+
+			assertThat(definition.getValue())
+				.returns(TestAlgorithm.INSTANCE, KeyDefinition::getAlgorithm)
+				.returns(false, KeyDefinition::isPrimary)
+				.returns(Optional.of(Duration.ofDays(90)), KeyDefinition::getRotationInterval);
+		}
+
+		@Test
+		@DisplayName("should prepare the next key of a keyset whose primary key already expired")
+		void shouldPrepareKeysetWithExpiredPrimaryKey() throws IOException {
+			final Keyset keyset = keyset(primaryKey(Instant.now().minus(Duration.ofDays(1))));
+
+			when(repository.findPendingPreparation()).thenReturn(List.of(metadataKeyset("ks-a")));
+			when(store.read("ks-a")).thenReturn(keyset);
+
+			new KeysetRotationTask(store, repository).run();
+
+			verify(store).rotate(eq(keyset), argThat(definition -> !definition.isPrimary()));
+		}
+
+		@Test
+		@DisplayName("should not prepare a keyset that already contains a next key")
+		void shouldNotPrepareKeysetWithNextKey() throws IOException {
+			final Keyset keyset = mock(Keyset.class);
+			final Key primary = mock(Key.class);
+			doReturn(primary).when(keyset).getPrimary();
+			doReturn(Optional.of(mock(Key.class))).when(keyset).getNextKey();
+
+			when(repository.findPendingPreparation()).thenReturn(List.of(metadataKeyset("ks-a")));
+			when(store.read("ks-a")).thenReturn(keyset);
+
+			new KeysetRotationTask(store, repository).run();
+
+			verify(store, never()).rotate(any(Keyset.class), any(KeyDefinition.class));
+		}
+
+		@Test
+		@DisplayName("should not prepare a keyset whose primary key is not enabled")
+		void shouldNotPrepareKeysetWithDisabledPrimaryKey() throws IOException {
+			final Keyset keyset = mock(Keyset.class);
+			final Key primary = mock(Key.class);
+			doReturn(primary).when(keyset).getPrimary();
+			doReturn(false).when(primary).isEnabled();
+
+			when(repository.findPendingPreparation()).thenReturn(List.of(metadataKeyset("ks-a")));
+			when(store.read("ks-a")).thenReturn(keyset);
+
+			new KeysetRotationTask(store, repository).run();
+
+			verify(store, never()).rotate(any(Keyset.class), any(KeyDefinition.class));
+		}
+
+		@Test
+		@DisplayName("should continue preparing and rotating keysets after a concurrent modification")
+		void shouldContinueAfterConcurrentPreparation() throws IOException {
+			final Keyset first = keyset(primaryKey(Instant.now().plus(Duration.ofDays(20))));
+			final Keyset second = keyset(primaryKey(Instant.now().plus(Duration.ofDays(20))));
+
+			when(repository.findPendingPreparation()).thenReturn(List.of(metadataKeyset("ks-a"), metadataKeyset("ks-b")));
+			when(repository.findPendingRotation()).thenReturn(List.of(metadataKeyset("ks-c")));
+			when(store.read("ks-a")).thenReturn(first);
+			when(store.read("ks-b")).thenReturn(second);
+			doThrow(new CryptoException.KeysetConcurrentModificationException("ks-a"))
+				.when(store).rotate(eq(first), any(KeyDefinition.class));
+
+			assertThatNoException().isThrownBy(() -> new KeysetRotationTask(store, repository).run());
+
+			verify(store).rotate(eq(second), any(KeyDefinition.class));
+			verify(store).rotate("ks-c");
+		}
+
+		@Test
+		@DisplayName("should rotate keysets when querying for keysets pending preparation fails")
+		void shouldRotateWhenPreparationQueryFails() throws IOException {
+			when(repository.findPendingPreparation()).thenThrow(new IOException("db error"));
+			when(repository.findPendingRotation()).thenReturn(List.of(metadataKeyset("ks-a")));
+
+			assertThatNoException().isThrownBy(() -> new KeysetRotationTask(store, repository).run());
+
+			verify(store).rotate("ks-a");
+			verify(store, never()).read(anyString());
+		}
+
+		private Keyset keyset(Key primary) {
+			final Keyset keyset = mock(Keyset.class);
+			doReturn(primary).when(keyset).getPrimary();
+			doReturn(Optional.of(Duration.ofDays(90))).when(keyset).getRotationInterval();
+			return keyset;
+		}
+
+		private Key primaryKey(Instant expiresAt) {
+			final Key key = mock(Key.class);
+			doReturn(true).when(key).isEnabled();
+			doReturn(TestAlgorithm.INSTANCE).when(key).getAlgorithm();
+			doReturn(expiresAt).when(key).getExpiresAt();
+			return key;
 		}
 
 	}

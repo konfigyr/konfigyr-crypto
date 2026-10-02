@@ -112,6 +112,22 @@ public interface Keyset extends Iterable<Key> {
 	}
 
 	/**
+	 * Retrieves the next {@link Key} of this {@link Keyset}, the key that is promoted to be the primary key
+	 * on the next {@link #rotate() rotation}.
+	 * <p>
+	 * The next key is created ahead of the rotation, as defined by the {@link #getRotationLeadTime() rotation
+	 * lead time}, so third parties that cache the public key material can obtain it before it is used. It is a
+	 * non-primary {@link KeyStatus#ENABLED} key that was created after the current primary key. When more than
+	 * one key matches, the most recently created key is returned.
+	 *
+	 * @return the next key or an empty {@link Optional} when there is none
+	 * @since 1.1.0
+	 */
+	default Optional<? extends Key> getNextKey() {
+		return Optional.empty();
+	}
+
+	/**
 	 * Encrypts the given byte buffer wrapped inside a {@link ByteArray}. Only supported when
 	 * {@link Algorithm#purpose()} is {@link KeysetPurpose#ENCRYPTION}.
 	 *

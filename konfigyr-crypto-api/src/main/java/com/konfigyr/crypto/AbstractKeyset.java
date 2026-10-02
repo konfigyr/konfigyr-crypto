@@ -310,7 +310,7 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 	 * Rotates the primary key of this keyset, or adds a new non-primary key when
 	 * {@link KeyDefinition#isPrimary()} is {@literal false}.
 	 * <p>
-	 * When a primary key is requested and this keyset contains a {@link #findNextKey() next key}, the next
+	 * When a primary key is requested and this keyset contains a {@link #getNextKey() next key}, the next
 	 * key is promoted to be the primary key instead of generating a new one. The next key was created
 	 * ahead of the rotation, as defined by the {@link #getRotationLeadTime() rotation lead time}, so third
 	 * parties that cache the public key material could already obtain it. The promoted key expires after
@@ -337,7 +337,7 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 		}
 
 		if (definition.isPrimary()) {
-			final Optional<T> next = findNextKey();
+			final Optional<T> next = getNextKey();
 
 			if (next.isPresent() && isPromotable(next.get(), definition)) {
 				final Instant expiresAt = definition.getRotationInterval()
@@ -352,17 +352,14 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 	}
 
 	/**
-	 * Attempts to find the next key of this keyset, the key that would be promoted to be the primary key on
-	 * the next {@link #rotate(KeyDefinition) rotation}.
+	 * {@inheritDoc}
 	 * <p>
-	 * The next key is a non-primary {@link KeyStatus#ENABLED} key that was created after the current primary
-	 * key. Previous primary keys were all created before the current one, so they never match. When more than
-	 * one key matches, which may happen when non-primary keys are added manually, the most recently created
-	 * key is returned.
-	 *
-	 * @return the next key, or empty when there is none, never {@literal null}
+	 * Previous primary keys were all created before the current one, so they never match. More than one key
+	 * may match when non-primary keys are added manually, in which case the most recently created key, or the
+	 * one with the greatest identifier when they were created at the same time, is returned.
 	 */
-	protected final Optional<T> findNextKey() {
+	@Override
+	public final Optional<T> getNextKey() {
 		final Optional<T> primary = keys.stream().filter(Key::isPrimary).findFirst();
 
 		if (primary.isEmpty()) {
@@ -404,7 +401,7 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 	 * current primary key exactly like {@link #doRotate(KeyDefinition, String)} does, retain all other keys,
 	 * and return a new keyset containing the updated key set.
 	 * <p>
-	 * Implementations do not need to validate the key, it is selected by {@link #findNextKey()} and checked
+	 * Implementations do not need to validate the key, it is selected by {@link #getNextKey()} and checked
 	 * by the caller ({@link #rotate(KeyDefinition)}).
 	 *
 	 * @param key       the key of this keyset that should become the primary key, can't be {@literal null}
