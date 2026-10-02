@@ -292,6 +292,54 @@ class JdbcKeysetRepositoryTest {
 	}
 
 	@Test
+	@DisplayName("should return retired keys whose scheduled destruction time has elapsed, with the retirement policy")
+	void shouldFindRetiredKeysPendingDestruction() throws IOException {
+		final Instant t0 = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+
+		final EncryptedKey primary = EncryptedKey.builder()
+			.id("primary-key")
+			.algorithm(TestAlgorithm.INSTANCE)
+			.status(KeyStatus.ENABLED)
+			.primary(true)
+			.createdAt(t0)
+			.build(ByteArray.fromString("secret"));
+
+		final EncryptedKey due = EncryptedKey.builder()
+			.id("retired-due")
+			.algorithm(TestAlgorithm.INSTANCE)
+			.status(KeyStatus.RETIRED)
+			.primary(false)
+			.createdAt(t0.minus(Duration.ofDays(120)))
+			.destructionScheduledAt(t0.minus(Duration.ofMinutes(1)))
+			.build(ByteArray.fromString("secret"));
+
+		final EncryptedKey later = EncryptedKey.builder()
+			.id("retired-later")
+			.algorithm(TestAlgorithm.INSTANCE)
+			.status(KeyStatus.RETIRED)
+			.primary(false)
+			.createdAt(t0.minus(Duration.ofDays(60)))
+			.destructionScheduledAt(t0.plus(Duration.ofDays(1)))
+			.build(ByteArray.fromString("secret"));
+
+		repository.write(EncryptedKeyset.builder(encryptedKeyset("lifecycle-retired"))
+			.retirementPolicy(RetirementPolicy.SCHEDULE_DESTRUCTION)
+			.build(primary, due, later));
+
+		try {
+			assertThat(repository.findPendingDestruction())
+				.filteredOn(keyset -> keyset.name().equals("lifecycle-retired"))
+				.singleElement()
+				.returns(RetirementPolicy.SCHEDULE_DESTRUCTION, EncryptedKeyset::retirementPolicy)
+				.extracting(EncryptedKeyset::keys, InstanceOfAssertFactories.iterable(EncryptedKey.class))
+				.extracting(EncryptedKey::id, EncryptedKey::status)
+				.containsExactly(tuple("retired-due", KeyStatus.RETIRED));
+		} finally {
+			repository.remove("lifecycle-retired");
+		}
+	}
+
+	@Test
 	@DisplayName("should return compromised keys whose scheduled destruction time has elapsed")
 	void shouldFindCompromisedKeysPendingDestruction() throws IOException {
 		final Instant t0 = Instant.now().truncatedTo(ChronoUnit.MILLIS);

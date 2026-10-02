@@ -206,7 +206,7 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 				E.CREATED_AT, E.INITIALIZED_AT, E.EXPIRES_AT, E.DESTRUCTION_SCHEDULED_AT, E.DESTROYED_AT
 			FROM %KEYSETS_TABLE_NAME% K
 			INNER JOIN %KEYS_TABLE_NAME% E ON E.KEYSET_NAME = K.KEYSET_NAME
-			WHERE E.KEY_STATUS IN ('PENDING_DESTRUCTION', 'COMPROMISED_PENDING_DESTRUCTION')
+			WHERE E.KEY_STATUS IN ('RETIRED', 'PENDING_DESTRUCTION', 'COMPROMISED_PENDING_DESTRUCTION')
 				AND E.DESTRUCTION_SCHEDULED_AT IS NOT NULL
 				AND E.DESTRUCTION_SCHEDULED_AT <= ?
 			ORDER BY K.KEYSET_NAME, E.KEY_ID
@@ -479,6 +479,10 @@ public class JdbcKeysetRepository implements KeysetRepository, InitializingBean 
 	/**
 	 * Overrides the SQL query used to find keysets that have keys pending destruction.
 	 * When {@literal null}, the built-in default query is used.
+	 * <p>
+	 * The query should return the retired, pending destruction and compromised pending
+	 * destruction keys whose scheduled destruction time, bound as the only parameter in
+	 * epoch milliseconds, has elapsed.
 	 *
 	 * @param findPendingDestructionQuery custom SQL query, or {@literal null} to use the default
 	 */
