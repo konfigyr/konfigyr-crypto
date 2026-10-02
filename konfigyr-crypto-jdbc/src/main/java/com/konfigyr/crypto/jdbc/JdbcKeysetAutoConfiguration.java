@@ -58,7 +58,7 @@ public class JdbcKeysetAutoConfiguration {
 		final JdbcKeysetRepository repository = new JdbcKeysetRepository(createJdbcOperations(dataSource),
 				createTransactionOperations(txManager, properties));
 
-		repository.setTableName(properties.tableName());
+		repository.setKeysetsTableName(properties.keysetsTableName());
 		repository.setKeysTableName(properties.keysTableName());
 
 		return repository;
