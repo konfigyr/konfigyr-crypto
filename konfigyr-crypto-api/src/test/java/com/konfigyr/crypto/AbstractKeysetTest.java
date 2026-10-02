@@ -52,6 +52,19 @@ class AbstractKeysetTest {
 			.build();
 	}
 
+	static TestKeyset retiringKeyset(RetirementPolicy policy, TestKey... keys) {
+		return TestKeyset.builder()
+			.name("test-keyset")
+			.factory("test-factory")
+			.purpose(KeysetPurpose.ENCRYPTION)
+			.keyEncryptionKey(kek)
+			.rotationInterval(Duration.ofDays(90))
+			.destructionGracePeriod(Duration.ofDays(30))
+			.retirementPolicy(policy)
+			.keys(List.of(keys))
+			.build();
+	}
+
 	static TestKeyset keyset(Duration rotationInterval, TestKey... keys) {
 		return TestKeyset.builder()
 			.name("test-keyset")
@@ -669,6 +682,84 @@ class AbstractKeysetTest {
 			.build();
 
 		assertGeneratedNewPrimary(keyset, keyset.rotate());
+	}
+
+	@Test
+	@DisplayName("should keep the demoted key enabled when retaining demoted keys")
+	void shouldRetainDemotedKey() {
+		final Keyset rotated = retiringKeyset(RetirementPolicy.RETAIN,
+			key("primary", true, KeyStatus.ENABLED, now.minus(Duration.ofDays(90)))
+		).rotate();
+
+		assertThat(rotated.getKey("primary"))
+			.hasValueSatisfying(demoted -> KeyAssert.assertThat(demoted)
+				.isNotPrimary()
+				.isEnabled()
+				.destructionScheduledAt(null));
+	}
+
+	@EnumSource(value = RetirementPolicy.class, names = "RETAIN", mode = EnumSource.Mode.EXCLUDE)
+	@ParameterizedTest(name = "retirement policy: {0}")
+	@DisplayName("should retire the demoted key for the destruction grace period when rotating the keyset")
+	void shouldRetireDemotedKeyOnRotation(RetirementPolicy policy) {
+		final Keyset rotated = retiringKeyset(policy,
+			key("primary", true, KeyStatus.ENABLED, now.minus(Duration.ofDays(90)))
+		).rotate();
+
+		assertThat(rotated.getKey("primary"))
+			.hasValueSatisfying(demoted -> KeyAssert.assertThat(demoted)
+				.isNotPrimary()
+				.hasStatus(KeyStatus.RETIRED)
+				.destructionScheduledAt(Instant.now().plus(Duration.ofDays(30)), Duration.ofSeconds(5)));
+
+		KeyAssert.assertThat(rotated.getPrimary())
+			.isEnabled();
+	}
+
+	@EnumSource(value = RetirementPolicy.class, names = "RETAIN", mode = EnumSource.Mode.EXCLUDE)
+	@ParameterizedTest(name = "retirement policy: {0}")
+	@DisplayName("should retire the demoted key when promoting the next key")
+	void shouldRetireDemotedKeyOnPromotion(RetirementPolicy policy) {
+		final Keyset rotated = retiringKeyset(policy,
+			key("primary", true, KeyStatus.ENABLED, now.minus(Duration.ofDays(90))),
+			key("next", false, KeyStatus.ENABLED, now.minus(Duration.ofDays(1)))
+		).rotate();
+
+		KeyAssert.assertThat(rotated.getPrimary())
+			.hasId("next")
+			.isEnabled();
+
+		assertThat(rotated.getKey("primary"))
+			.hasValueSatisfying(demoted -> KeyAssert.assertThat(demoted)
+				.isNotPrimary()
+				.hasStatus(KeyStatus.RETIRED)
+				.destructionScheduledAt(Instant.now().plus(Duration.ofDays(30)), Duration.ofSeconds(5)));
+	}
+
+	@EnumSource(value = KeyStatus.class, names = "ENABLED", mode = EnumSource.Mode.EXCLUDE)
+	@ParameterizedTest(name = "primary key status: {0}")
+	@DisplayName("should not retire a demoted primary key that is not enabled")
+	void shouldNotRetireDemotedKeyThatIsNotEnabled(KeyStatus status) {
+		final Keyset rotated = retiringKeyset(RetirementPolicy.DESTROY,
+			key("primary", true, status, now.minus(Duration.ofDays(90)))
+		).rotate();
+
+		assertThat(rotated.getKey("primary"))
+			.hasValueSatisfying(demoted -> KeyAssert.assertThat(demoted)
+				.isNotPrimary()
+				.hasStatus(status));
+	}
+
+	@Test
+	@DisplayName("should not retire existing non-primary keys when rotating the keyset")
+	void shouldNotRetireNonPrimaryKeys() {
+		final Keyset rotated = retiringKeyset(RetirementPolicy.DESTROY,
+			key("previous", false, KeyStatus.ENABLED, now.minus(Duration.ofDays(200))),
+			key("primary", true, KeyStatus.ENABLED, now.minus(Duration.ofDays(90)))
+		).rotate();
+
+		assertThat(rotated.getKey("previous"))
+			.hasValueSatisfying(previous -> KeyAssert.assertThat(previous).isEnabled());
 	}
 
 	@Test

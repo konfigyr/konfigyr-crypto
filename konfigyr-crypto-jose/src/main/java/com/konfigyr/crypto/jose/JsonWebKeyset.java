@@ -158,7 +158,7 @@ class JsonWebKeyset extends AbstractKeyset<JsonWebKey> implements JWKSource<Secu
 
 		stream().map(JsonWebKey.class::cast).forEach(existing -> {
 			if (existing.isPrimary() && definition.isPrimary()) {
-				builder.key(demote(existing));
+				builder.key(demoteKey(existing));
 			} else {
 				builder.key(existing);
 			}
@@ -175,7 +175,7 @@ class JsonWebKeyset extends AbstractKeyset<JsonWebKey> implements JWKSource<Secu
 			if (existing.getId().equals(key.getId())) {
 				builder.key(promote(existing, expiresAt));
 			} else if (existing.isPrimary()) {
-				builder.key(demote(existing));
+				builder.key(demoteKey(existing));
 			} else {
 				builder.key(existing);
 			}
@@ -279,7 +279,7 @@ class JsonWebKeyset extends AbstractKeyset<JsonWebKey> implements JWKSource<Secu
 
 	/**
 	 * Promotes the given key to be the primary key, restoring all the key operations permitted by the
-	 * purpose of its algorithm, as these are removed when a key is {@link #demote(JsonWebKey) demoted}.
+	 * purpose of its algorithm, as these are removed when a key is {@link #demoteKey(JsonWebKey) demoted}.
 	 *
 	 * @param key       the key to be promoted
 	 * @param expiresAt the new expiration time of the promoted key
@@ -311,7 +311,7 @@ class JsonWebKeyset extends AbstractKeyset<JsonWebKey> implements JWKSource<Secu
 	 * @param key the existing primary key to be demoted
 	 * @return the demoted key
 	 */
-	private static JsonWebKey demote(JsonWebKey key) {
+	private JsonWebKey demoteKey(JsonWebKey key) {
 		final Set<KeyOperation> operations = key.getValue()
 			.getKeyOperations()
 			.stream()
@@ -331,7 +331,7 @@ class JsonWebKeyset extends AbstractKeyset<JsonWebKey> implements JWKSource<Secu
 			default -> throw new IllegalStateException("Unsupported JWK type: " + key.getValue().getKeyType());
 		};
 
-		return new JsonWebKey.Builder(key, jwk).demote().build();
+		return demote(key, new JsonWebKey.Builder(key, jwk)).build();
 	}
 
 	static final class Builder extends AbstractKeyset.Builder<JsonWebKey, JsonWebKeyset, Builder> {

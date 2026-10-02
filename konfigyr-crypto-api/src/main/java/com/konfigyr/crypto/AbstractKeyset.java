@@ -456,6 +456,34 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 	 */
 	protected abstract Keyset doPromote(T key, @Nullable Instant expiresAt);
 
+	/**
+	 * Demotes the given primary {@link Key} using the given builder, which is created from that key, and
+	 * applies the {@link #getRetirementPolicy() retirement policy} of this keyset.
+	 * <p>
+	 * Implementations must use this method in {@link #doRotate(KeyDefinition, String)} and
+	 * {@link #doPromote(Key, Instant)} whenever they demote the current primary key. The key is always demoted,
+	 * and when the policy is not {@link RetirementPolicy#RETAIN} it is also {@link KeyStatus#RETIRED retired}
+	 * until the {@link #getDestructionGracePeriod() destruction grace period} elapses. Only
+	 * {@link KeyStatus#ENABLED} keys are retired, a primary key in any other status, for instance one that
+	 * was compromised, keeps its status.
+	 *
+	 * @param key     the primary key that is demoted, can't be {@literal null}
+	 * @param builder the key builder created from the demoted key, can't be {@literal null}
+	 * @param <B>     the type of the key builder
+	 * @return the given key builder, never {@literal null}
+	 * @since 1.1.0
+	 */
+	protected final <B extends AbstractKey.Builder<?, ?, B>> B demote(Key key, B builder) {
+		builder.demote();
+
+		if (retirementPolicy != RetirementPolicy.RETAIN && key.getStatus().next(KeyStatus.Operation.RETIRE).isPresent()) {
+			final Instant now = Instant.now();
+			builder.retire(destructionGracePeriod == null ? now : now.plus(destructionGracePeriod));
+		}
+
+		return builder;
+	}
+
 	@Override
 	public final boolean equals(Object object) {
 		if (!(object instanceof AbstractKeyset<?> that)) return false;
