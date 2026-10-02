@@ -14,6 +14,8 @@ import com.konfigyr.io.ByteArray;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.security.PrivateKey;
 import java.security.Signature;
@@ -145,20 +147,20 @@ class X509MaterialSelectorTest {
 			.isTrue();
 	}
 
-	@Test
+	@EnumSource(value = KeyStatus.class, names = { "COMPROMISED", "COMPROMISED_PENDING_DESTRUCTION", "DESTROYED" })
+	@ParameterizedTest(name = "status: {0}")
 	@DisplayName("should not hand over the private key of compromised or destroyed keys")
-	void shouldNotConvertUnusableKeys() {
-		final X509Material compromised = new X509Key.Builder(retired).status(KeyStatus.COMPROMISED).build();
-		final X509Material destroyed = new X509Key.Builder(retired).status(KeyStatus.DESTROYED).build();
+	void shouldNotConvertUnusableKeys(KeyStatus status) {
+		final X509Material material = new X509Key.Builder(retired).status(status).build();
 
 		assertThatExceptionOfType(CryptoException.KeysetException.class)
-			.isThrownBy(() -> compromised.convert(PrivateKey::getAlgorithm))
-			.withMessage("X509 key '%s' is COMPROMISED and its private key material can not be used.", retired.getId());
+			.isThrownBy(() -> material.convert(PrivateKey::getAlgorithm))
+			.withMessage("X509 key '%s' is %s and its private key material can not be used.", retired.getId(), status);
+	}
 
-		assertThatExceptionOfType(CryptoException.KeysetException.class)
-			.isThrownBy(() -> destroyed.convert(PrivateKey::getAlgorithm))
-			.withMessage("X509 key '%s' is DESTROYED and its private key material can not be used.", retired.getId());
-
+	@Test
+	@DisplayName("should reject a null private key converter")
+	void shouldRejectNullConverter() {
 		assertThatIllegalArgumentException()
 			.isThrownBy(() -> primary.convert(null));
 	}

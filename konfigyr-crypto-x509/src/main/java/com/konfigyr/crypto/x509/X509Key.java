@@ -106,7 +106,11 @@ final class X509Key extends AbstractKey<X509Algorithm> implements X509Material {
 	 * Key material of compromised or destroyed keys must never be handed over.
 	 */
 	boolean isUsable() {
-		return status != KeyStatus.COMPROMISED && status != KeyStatus.DESTROYED;
+		return switch (status) {
+			case COMPROMISED, COMPROMISED_PENDING_DESTRUCTION, DESTROYED -> false;
+			case INITIALIZING, INITIALIZATION_FAILED, ENABLED, DISABLED, PENDING_DESTRUCTION,
+				DESTRUCTION_FAILED -> true;
+		};
 	}
 
 	private void assertUsable() {
