@@ -7,12 +7,16 @@ import java.util.Optional;
 /**
  * Defines the lifecycle status of a {@link Key}.
  * <p>
- * Keys transition through statuses over their lifetime. Only {@link #ENABLED} keys
- * participate in cryptographic operations. The full lifecycle is:
+ * Keys transition through statuses over their lifetime. Only {@link #ENABLED} keys participate in
+ * all cryptographic operations, {@link #RETIRED} keys may only verify signatures and decrypt data.
+ * The full lifecycle is:
  * <pre>
  * INITIALIZING ──► ENABLED | INITIALIZATION_FAILED
  *
  * ENABLED ◄──► DISABLED
+ *
+ * ENABLED ◄──► RETIRED ──► PENDING_DESTRUCTION | DESTROYED
+ *                 └──► COMPROMISED_PENDING_DESTRUCTION (compromised while retired)
  *
  * DISABLED ──► PENDING_DESTRUCTION ──► DESTROYED
  *                    └──► DISABLED (cancel)
@@ -29,8 +33,9 @@ import java.util.Optional;
  * Once a key has been marked {@link #COMPROMISED} it can never return to {@link #ENABLED} or
  * {@link #DISABLED}: scheduling and cancelling its destruction only toggles between
  * {@link #COMPROMISED} and {@link #COMPROMISED_PENDING_DESTRUCTION}. Key material may only be
- * {@link #DESTROYED destroyed} from one of the two pending destruction statuses, an {@link #ENABLED}
- * key must always be deactivated before its destruction can be scheduled.
+ * {@link #DESTROYED destroyed} from one of the two pending destruction statuses or from
+ * {@link #RETIRED}. An {@link #ENABLED} key must always be deactivated, or retired when it is demoted
+ * by a rotation, before its destruction can be scheduled.
  *
  * @author Vladimir Spasic
  * @since 1.0.0
@@ -48,6 +53,18 @@ public enum KeyStatus {
 	 * {@link Algorithm}.
 	 */
 	ENABLED,
+
+	/**
+	 * Key was the primary key of its {@link Keyset} and was demoted by a rotation, as defined by the
+	 * {@link Keyset#getRetirementPolicy() retirement policy}. The key may still verify signatures and decrypt
+	 * data it produced, but may no longer sign or encrypt. It remains retired for the
+	 * {@link Keyset#getDestructionGracePeriod() destruction grace period}, after which it is either destroyed
+	 * or scheduled for destruction. The key may be re-enabled while it is retired.
+	 *
+	 * @see RetirementPolicy
+	 * @since 1.1.0
+	 */
+	RETIRED,
 
 	/**
 	 * Key material is suspected or confirmed to have been compromised. All cryptographic
@@ -103,7 +120,15 @@ public enum KeyStatus {
 		));
 		TRANSITIONS.put(ENABLED, Map.of(
 			Operation.DISABLE, DISABLED,
-			Operation.COMPROMISE, COMPROMISED
+			Operation.COMPROMISE, COMPROMISED,
+			Operation.RETIRE, RETIRED
+		));
+		TRANSITIONS.put(RETIRED, Map.of(
+			Operation.ENABLE, ENABLED,
+			Operation.COMPROMISE, COMPROMISED_PENDING_DESTRUCTION,
+			Operation.SCHEDULE_DESTRUCTION, PENDING_DESTRUCTION,
+			Operation.DESTROY, DESTROYED,
+			Operation.FAIL_DESTRUCTION, DESTRUCTION_FAILED
 		));
 		TRANSITIONS.put(DISABLED, Map.of(
 			Operation.ENABLE, ENABLED,
@@ -136,7 +161,13 @@ public enum KeyStatus {
 	 *   <li>{@link #INITIALIZING}: {@link Operation#ACTIVATE} → {@link #ENABLED},
 	 *       {@link Operation#FAIL_INITIALIZATION} → {@link #INITIALIZATION_FAILED}</li>
 	 *   <li>{@link #ENABLED}: {@link Operation#DISABLE} → {@link #DISABLED},
-	 *       {@link Operation#COMPROMISE} → {@link #COMPROMISED}</li>
+	 *       {@link Operation#COMPROMISE} → {@link #COMPROMISED},
+	 *       {@link Operation#RETIRE} → {@link #RETIRED}</li>
+	 *   <li>{@link #RETIRED}: {@link Operation#ENABLE} → {@link #ENABLED},
+	 *       {@link Operation#COMPROMISE} → {@link #COMPROMISED_PENDING_DESTRUCTION},
+	 *       {@link Operation#SCHEDULE_DESTRUCTION} → {@link #PENDING_DESTRUCTION},
+	 *       {@link Operation#DESTROY} → {@link #DESTROYED},
+	 *       {@link Operation#FAIL_DESTRUCTION} → {@link #DESTRUCTION_FAILED}</li>
 	 *   <li>{@link #DISABLED}: {@link Operation#ENABLE} → {@link #ENABLED},
 	 *       {@link Operation#COMPROMISE} → {@link #COMPROMISED},
 	 *       {@link Operation#SCHEDULE_DESTRUCTION} → {@link #PENDING_DESTRUCTION}</li>
@@ -151,9 +182,9 @@ public enum KeyStatus {
 	 *       {@link Operation#FAIL_DESTRUCTION} → {@link #DESTRUCTION_FAILED}</li>
 	 * </ul>
 	 * No status reachable from {@link #COMPROMISED} leads back to {@link #ENABLED} or
-	 * {@link #DISABLED}. An {@link #ENABLED} key must be deactivated, either disabled or marked as
-	 * compromised, before its destruction can be scheduled, and {@link #DESTROYED} is only reachable
-	 * from {@link #PENDING_DESTRUCTION} or {@link #COMPROMISED_PENDING_DESTRUCTION}.
+	 * {@link #DISABLED}. An {@link #ENABLED} key must be deactivated, either disabled, retired or marked
+	 * as compromised, before its destruction can be scheduled, and {@link #DESTROYED} is only reachable
+	 * from {@link #RETIRED}, {@link #PENDING_DESTRUCTION} or {@link #COMPROMISED_PENDING_DESTRUCTION}.
 	 * <p>
 	 * {@link #DESTROYED}, {@link #INITIALIZATION_FAILED}, and {@link #DESTRUCTION_FAILED} are
 	 * terminal statuses, they do not permit any operation and always return an empty result.
@@ -214,11 +245,20 @@ public enum KeyStatus {
 		DISABLE,
 
 		/**
-		 * Re-activates a previously disabled key.
+		 * Re-activates a previously disabled or retired key.
 		 *
 		 * @see KeysetStore#enable(String, String)
 		 */
 		ENABLE,
+
+		/**
+		 * Retires the primary key once it is demoted by a rotation, as defined by the
+		 * {@link Keyset#getRetirementPolicy() retirement policy} of its keyset.
+		 *
+		 * @see RetirementPolicy
+		 * @since 1.1.0
+		 */
+		RETIRE,
 
 		/**
 		 * Marks the key as compromised. This operation is irreversible.
@@ -228,7 +268,7 @@ public enum KeyStatus {
 		COMPROMISE,
 
 		/**
-		 * Schedules the destruction of a deactivated key.
+		 * Schedules the destruction of a deactivated or retired key.
 		 *
 		 * @see KeysetStore#scheduleDestruction(String, String)
 		 */
@@ -242,14 +282,14 @@ public enum KeyStatus {
 		CANCEL_DESTRUCTION,
 
 		/**
-		 * Erases the key material of a key that is pending destruction.
+		 * Erases the key material of a key that is pending destruction or retired.
 		 *
 		 * @see KeysetStore#destroy(String, String)
 		 */
 		DESTROY,
 
 		/**
-		 * Marks that the key material of a key that is pending destruction could not be erased.
+		 * Marks that the key material of a key that is pending destruction or retired could not be erased.
 		 */
 		FAIL_DESTRUCTION
 

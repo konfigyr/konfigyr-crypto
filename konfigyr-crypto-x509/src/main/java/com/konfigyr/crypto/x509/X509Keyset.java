@@ -161,7 +161,7 @@ final class X509Keyset extends AbstractKeyset<X509Key> implements X509MaterialSe
 
 		return stream()
 			.map(X509Key.class::cast)
-			.filter(X509Key::isEnabled)
+			.filter(AbstractKeyset::isReadable)
 			.filter(matcher::matches)
 			.sorted(SELECTION_ORDER)
 			.map(X509Material.class::cast)
@@ -207,13 +207,13 @@ final class X509Keyset extends AbstractKeyset<X509Key> implements X509MaterialSe
 	}
 
 	/**
-	 * Resolves the key that produced the cipher text or signature. Only enabled keys are used to decrypt
-	 * or verify, a key in any other status fails with a status specific exception.
+	 * Resolves the key that produced the cipher text or signature. Only enabled and retired keys are used
+	 * to decrypt or verify, a key in any other status fails with a status-specific exception.
 	 */
 	private Optional<X509Key> resolveKey(Prefixed prefixed) {
 		return getKey(prefixed.keyId())
 			.map(X509Key.class::cast)
-			.map(this::requireUsableKey);
+			.map(this::requireReadableKey);
 	}
 
 	private void assertKeysetOperation(KeysetOperation operation) {

@@ -49,16 +49,19 @@ class JsonWebKeyset extends AbstractKeyset<JsonWebKey> implements JWKSource<Secu
 	}
 
 	/**
-	 * Selects the matching JSON Web Keys that are {@link Key#isEnabled() enabled}. Keys in any other
-	 * {@link KeyStatus} are never returned by this method, regardless of the given selector.
+	 * Selects the matching JSON Web Keys that are {@link KeyStatus#ENABLED enabled} or
+	 * {@link KeyStatus#RETIRED retired}. Retired keys are still returned, so third parties can verify
+	 * signatures, and send data encrypted, before the keys were retired. Their key operations are limited
+	 * to verification and decryption. Keys in any other {@link KeyStatus} are never returned by this method,
+	 * regardless of the given selector.
 	 *
 	 * @param selector the JWK selector, can't be {@literal null}
 	 * @param context the optional security context, can be {@literal null}
-	 * @return the matching enabled keys, never {@literal null}
+	 * @return the matching enabled and retired keys, never {@literal null}
 	 */
 	@Override
 	public List<JWK> get(JWKSelector selector, @Nullable SecurityContext context) {
-		return select(selector, Key::isEnabled);
+		return select(selector, AbstractKeyset::isReadable);
 	}
 
 	@Override
@@ -246,7 +249,7 @@ class JsonWebKeyset extends AbstractKeyset<JsonWebKey> implements JWKSource<Secu
 			throw new KeySourceException("Found multiple keys for JWK matcher: " + matcher);
 		}
 
-		return requireUsableKey(keys.getFirst().getKeyID());
+		return requireReadableKey(keys.getFirst().getKeyID());
 	}
 
 	private java.security.Key resolveCryptographicKey(

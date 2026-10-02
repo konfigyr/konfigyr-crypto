@@ -200,28 +200,59 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 
 	/**
 	 * Looks up the {@link Key} with the given identifier within this keyset and asserts that it can
-	 * be used for cryptographic operations.
+	 * be used for cryptographic read operations.
 	 * <p>
 	 * This method is intended for cryptographic read operations ({@code decrypt}, {@code verify})
 	 * where the key is resolved from the identifier carried by the ciphertext or signature.
 	 *
 	 * @param keyId the identifier of the key to resolve, can't be {@literal null}
-	 * @return the usable key, never {@literal null}
+	 * @return the readable key, never {@literal null}
 	 * @throws CryptoException.KeyNotFoundException if no key with the given identifier exists in this keyset
-	 * @throws CryptoException.KeysetException      if the key is not usable, see {@link #requireUsableKey(Key)}
+	 * @throws CryptoException.KeysetException      if the key is not readable, see {@link #requireReadableKey(Key)}
+	 * @since 1.1.0
 	 */
-	protected final T requireUsableKey(String keyId) {
+	protected final T requireReadableKey(String keyId) {
 		final T key = getKey(keyId).orElseThrow(() -> new CryptoException.KeyNotFoundException(name, keyId));
-		return requireUsableKey(key);
+		return requireReadableKey(key);
 	}
 
 	/**
-	 * Asserts that the given {@link Key} is in a state where it can be used for cryptographic
+	 * Asserts that the given {@link Key} is in a state where it can be used for cryptographic read
+	 * operations ({@code decrypt}, {@code verify}), as defined by {@link #isReadable(Key)}.
+	 * <p>
+	 * Besides {@link KeyStatus#ENABLED} keys, {@link KeyStatus#RETIRED} keys may still verify signatures
+	 * and decrypt data they produced while they were the primary key. Keys in any other status fail with
+	 * the same status-specific exceptions as {@link #requireUsableKey(Key)}.
+	 *
+	 * @param key the key to check, can't be {@literal null}
+	 * @return the same key when it is readable, never {@literal null}
+	 * @throws CryptoException.KeysetException if the key is not readable, see {@link #requireUsableKey(Key)}
+	 * @since 1.1.0
+	 */
+	protected final T requireReadableKey(T key) {
+		return key.getStatus() == KeyStatus.RETIRED ? key : requireUsableKey(key);
+	}
+
+	/**
+	 * Checks if the given {@link Key} can be used for cryptographic read operations ({@code decrypt},
+	 * {@code verify}). This is the case for {@link KeyStatus#ENABLED} and {@link KeyStatus#RETIRED} keys.
+	 *
+	 * @param key the key to check, can't be {@literal null}
+	 * @return {@literal true} when the key can verify signatures and decrypt data
+	 * @since 1.1.0
+	 */
+	protected static boolean isReadable(Key key) {
+		return key.isEnabled() || key.getStatus() == KeyStatus.RETIRED;
+	}
+
+	/**
+	 * Asserts that the given {@link Key} is in a state where it can be used for all cryptographic
 	 * operations, as defined by {@link Key#isEnabled()}.
 	 * <p>
-	 * This method is the guard that every cryptographic operation must pass before key material
-	 * is used, both write operations ({@code encrypt}, {@code sign}) and read operations
-	 * ({@code decrypt}, {@code verify}). It deliberately evaluates the {@link KeyStatus} directly,
+	 * This method is the guard that every cryptographic write operation ({@code encrypt}, {@code sign})
+	 * must pass before key material is used. Read operations ({@code decrypt}, {@code verify}) use the
+	 * {@link #requireReadableKey(Key)} guard instead, which also accepts {@link KeyStatus#RETIRED} keys.
+	 * It deliberately evaluates the {@link KeyStatus} directly,
 	 * instead of relying on {@link Key#isEnabled()}, so that a {@link Key} implementation can't
 	 * weaken it and each blocked status results in its own exception type.
 	 * <p>
@@ -232,6 +263,7 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 	 * @throws CryptoException.KeysetCompromisedException       if the key status is {@link KeyStatus#COMPROMISED}
 	 *                                                          or {@link KeyStatus#COMPROMISED_PENDING_DESTRUCTION}
 	 * @throws CryptoException.KeysetDisabledException          if the key status is {@link KeyStatus#DISABLED}
+	 * @throws CryptoException.KeysetRetiredException           if the key status is {@link KeyStatus#RETIRED}
 	 * @throws CryptoException.KeysetPendingDestructionException if the key status is {@link KeyStatus#PENDING_DESTRUCTION}
 	 * @throws CryptoException.KeysetDestroyedException         if the key status is {@link KeyStatus#DESTROYED}
 	 * @throws CryptoException.KeysetUnavailableException       if the key status is {@link KeyStatus#INITIALIZING},
@@ -244,6 +276,7 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 			case ENABLED -> key;
 			case COMPROMISED, COMPROMISED_PENDING_DESTRUCTION -> throw new CryptoException.KeysetCompromisedException(name, key);
 			case DISABLED -> throw new CryptoException.KeysetDisabledException(name, key);
+			case RETIRED -> throw new CryptoException.KeysetRetiredException(name, key);
 			case PENDING_DESTRUCTION -> throw new CryptoException.KeysetPendingDestructionException(name, key);
 			case DESTROYED -> throw new CryptoException.KeysetDestroyedException(name, key);
 			case INITIALIZING, INITIALIZATION_FAILED, DESTRUCTION_FAILED ->

@@ -595,6 +595,60 @@ public abstract class CryptoException extends RuntimeException {
 	}
 
 	/**
+	 * Exception thrown when a {@link Key} in {@link KeyStatus#RETIRED} state is about to be used to perform
+	 * a cryptographic operation that it is no longer permitted to perform.
+	 * <p>
+	 * A retired key was the primary key of its {@link Keyset} until it was demoted by a rotation. It may still
+	 * verify signatures and decrypt data it produced, but it may no longer sign or encrypt.
+	 *
+	 * @since 1.1.0
+	 */
+	public static class KeysetRetiredException extends KeysetException {
+
+		@Serial
+		private static final long serialVersionUID = SERIAL;
+
+		/**
+		 * The identifier of the {@link Key} that is retired.
+		 */
+		private final String keyId;
+
+		/**
+		 * Creates a new {@link KeysetRetiredException} for the given keyset name and the {@link Key} that
+		 * is in {@link KeyStatus#RETIRED} state.
+		 *
+		 * @param name the name of the {@link Keyset} containing the retired key, can't be {@literal null}
+		 * @param key the retired {@link Key}, can't be {@literal null}
+		 */
+		public KeysetRetiredException(String name, Key key) {
+			this(name, key.getId());
+		}
+
+		/**
+		 * Creates a new {@link KeysetRetiredException} for the given keyset name and the identifier of the
+		 * {@link Key} that is in {@link KeyStatus#RETIRED} state.
+		 *
+		 * @param name the name of the {@link Keyset} containing the retired key, can't be {@literal null}
+		 * @param keyId the identifier of the retired {@link Key}, can't be {@literal null}
+		 */
+		public KeysetRetiredException(String name, String keyId) {
+			super(name, "Key '" + keyId + "' in keyset '" + name + "' is retired and can only verify "
+					+ "signatures or decrypt data. Call enable to restore it.");
+			this.keyId = keyId;
+		}
+
+		/**
+		 * Returns the identifier of the {@link Key} that is retired.
+		 *
+		 * @return the key identifier, never {@literal null}
+		 */
+		public @NonNull String getKeyId() {
+			return keyId;
+		}
+
+	}
+
+	/**
 	 * Exception thrown when a {@link Key} in {@link KeyStatus#PENDING_DESTRUCTION} state is about
 	 * to be used to perform a cryptographic operation.
 	 * <p>
