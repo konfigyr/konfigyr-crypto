@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
@@ -263,6 +264,37 @@ public abstract class AbstractKeysetFactoryTest {
 		KeysetAssert.assertThat(keyset.rotate())
 			.matchesDefinition(definition)
 			.hasRotationLeadTime(Duration.ofDays(30));
+	}
+
+	@ParameterizedTest(name = "retirement policy: {0}")
+	@EnumSource(RetirementPolicy.class)
+	@DisplayName("should retain the retirement policy when wrapping, unwrapping and rotating the keyset")
+	void shouldRetainRetirementPolicy(RetirementPolicy policy) throws IOException {
+		final KeysetDefinition definition = KeysetDefinition.builder()
+			.name(definition().getName())
+			.algorithm(definition().getAlgorithm())
+			.retirementPolicy(policy)
+			.build();
+
+		final Keyset keyset = createKeyset(definition);
+
+		KeysetAssert.assertThat(keyset)
+			.matchesDefinition(definition)
+			.hasRetirementPolicy(policy);
+
+		final EncryptedKeyset encrypted = encryptKeyset(keyset);
+
+		EncryptedKeysetAssert.assertThat(encrypted)
+			.matchesKeyset(keyset)
+			.hasRetirementPolicy(policy);
+
+		KeysetAssert.assertThat(decryptKeyset(encrypted))
+			.matchesDefinition(definition)
+			.hasRetirementPolicy(policy);
+
+		KeysetAssert.assertThat(keyset.rotate())
+			.matchesDefinition(definition)
+			.hasRetirementPolicy(policy);
 	}
 
 	@Test

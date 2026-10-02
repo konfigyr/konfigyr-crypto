@@ -215,6 +215,7 @@ public interface KeysetDefinition {
 	 * <ul>
 	 *     <li>Name</li>
 	 *     <li>Keyset purpose</li>
+	 *     <li>Retirement policy</li>
 	 *     <li>Key rotation interval</li>
 	 *     <li>Key rotation lead time</li>
 	 *     <li>Destruction grace period</li>
@@ -226,7 +227,8 @@ public interface KeysetDefinition {
 	static Builder builder(Keyset keyset) {
 		final Builder builder = builder()
 			.name(keyset.getName())
-			.purpose(keyset.getPurpose());
+			.purpose(keyset.getPurpose())
+			.retirementPolicy(keyset.getRetirementPolicy());
 
 		keyset.getRotationInterval().ifPresentOrElse(
 			builder::rotationInterval, builder::disableAutomaticKeyRotation

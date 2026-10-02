@@ -323,6 +323,18 @@ public interface Keyset extends Iterable<Key> {
 	}
 
 	/**
+	 * Retrieves the policy that defines what happens to the primary {@link Key} once it is demoted by a
+	 * {@link #rotate() rotation}.
+	 *
+	 * @return the retirement policy, never {@literal null}.
+	 * @see KeysetDefinition#getRetirementPolicy()
+	 * @since 1.1.0
+	 */
+	default RetirementPolicy getRetirementPolicy() {
+		return RetirementPolicy.RETAIN;
+	}
+
+	/**
 	 * Retrieves the currently configured interval for automatic key material rotation.
 	 * <p>
 	 * This value determines the lifespan of a specific version of key material before the system automatically
