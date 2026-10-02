@@ -21,6 +21,15 @@ import java.io.Serializable;
  * {@link KeysetFactory} to resolve the correct implementation at runtime. It must
  * therefore be unique across all registered algorithms and must not change once
  * key material has been encrypted with it.
+ * <p>
+ * Implementations must override {@link Object#equals(Object)} and {@link Object#hashCode()}.
+ * Two algorithms are equal when they produce the same kind of key material and perform the
+ * same cryptographic operations, which is usually the case when they are of the same type and
+ * share the same {@link #name()}. Equality is used to compare {@link KeysetDefinition keyset
+ * definitions}, and by {@link Key#isUsing(Algorithm)} to decide whether an existing key can be
+ * promoted to be the primary key during a {@link Keyset#rotate(KeyDefinition) rotation}.
+ * Implementations relying on identity equality are still safe, but cause a new primary key to
+ * be generated instead of promoting an equivalent key.
  *
  * @author Vladimir Spasic
  * @since 1.0.0

@@ -5,7 +5,7 @@ import com.konfigyr.crypto.CryptoException;
 import com.konfigyr.crypto.KeyDefinition;
 import com.konfigyr.crypto.KeyStatus;
 import com.nimbusds.jose.JOSEException;
-import com.nimbusds.jose.jwk.JWK;
+import com.nimbusds.jose.jwk.*;
 import org.jspecify.annotations.NullMarked;
 
 @NullMarked

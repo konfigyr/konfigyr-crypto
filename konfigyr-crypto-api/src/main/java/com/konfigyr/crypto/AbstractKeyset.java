@@ -5,6 +5,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.util.Assert;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
 
 /**
@@ -305,12 +306,80 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 		return id;
 	}
 
+	/**
+	 * Rotates the primary key of this keyset, or adds a new non-primary key when
+	 * {@link KeyDefinition#isPrimary()} is {@literal false}.
+	 * <p>
+	 * When a primary key is requested and this keyset contains a {@link #findNextKey() next key}, the next
+	 * key is promoted to be the primary key instead of generating a new one. The next key was created
+	 * ahead of the rotation, as defined by the {@link #getRotationLeadTime() rotation lead time}, so third
+	 * parties that cache the public key material could already obtain it. The promoted key expires after
+	 * the {@link KeyDefinition#getRotationInterval() rotation interval} of the given definition, counted
+	 * from the moment of promotion.
+	 * <p>
+	 * A new primary key is generated instead when:
+	 * <ul>
+	 *     <li>there is no next key,</li>
+	 *     <li>the current primary key is not {@link KeyStatus#ENABLED}, for instance when it was compromised,
+	 *     as the next key may have been exposed as well,</li>
+	 *     <li>the next key uses a different {@link Algorithm} than the requested one.</li>
+	 * </ul>
+	 *
+	 * @param definition parameters for the new key, can't be {@literal null}
+	 * @return new keyset with the rotated keys, never {@literal null}
+	 * @throws CryptoException.UnsupportedAlgorithmException when the definition's
+	 *         algorithm purpose does not match this keyset's purpose
+	 */
 	@Override
 	public final Keyset rotate(KeyDefinition definition) {
 		if (purpose != definition.getAlgorithm().purpose()) {
 			throw new CryptoException.UnsupportedAlgorithmException(definition.getAlgorithm());
 		}
+
+		if (definition.isPrimary()) {
+			final Optional<T> next = findNextKey();
+
+			if (next.isPresent() && isPromotable(next.get(), definition)) {
+				final Instant expiresAt = definition.getRotationInterval()
+					.map(Instant.now()::plus)
+					.orElse(null);
+
+				return doPromote(next.get(), expiresAt);
+			}
+		}
+
 		return doRotate(definition, generateUniqueId());
+	}
+
+	/**
+	 * Attempts to find the next key of this keyset, the key that would be promoted to be the primary key on
+	 * the next {@link #rotate(KeyDefinition) rotation}.
+	 * <p>
+	 * The next key is a non-primary {@link KeyStatus#ENABLED} key that was created after the current primary
+	 * key. Previous primary keys were all created before the current one, so they never match. When more than
+	 * one key matches, which may happen when non-primary keys are added manually, the most recently created
+	 * key is returned.
+	 *
+	 * @return the next key, or empty when there is none, never {@literal null}
+	 */
+	protected final Optional<T> findNextKey() {
+		final Optional<T> primary = keys.stream().filter(Key::isPrimary).findFirst();
+
+		if (primary.isEmpty()) {
+			return Optional.empty();
+		}
+
+		final Instant primaryCreatedAt = primary.get().getCreatedAt();
+
+		return keys.stream()
+			.filter(key -> !key.isPrimary())
+			.filter(key -> key.getStatus() == KeyStatus.ENABLED)
+			.filter(key -> key.getCreatedAt().isAfter(primaryCreatedAt))
+			.max(Comparator.comparing(Key::getCreatedAt).thenComparing(Key::getId));
+	}
+
+	private boolean isPromotable(T next, KeyDefinition definition) {
+		return getPrimary().isEnabled() && next.isUsing(definition.getAlgorithm());
 	}
 
 	/**
@@ -320,9 +389,6 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 	 * {@code uniqueId} as the key identifier, promote it to primary (if
 	 * {@link KeyDefinition#isPrimary()} is {@literal true}), demote or retain the
 	 * existing keys as appropriate, and return a new keyset containing the updated key set.
-	 * <p>
-	 * Implementations do not need to check purpose compatibility or identifier uniqueness —
-	 * both are guaranteed by the caller ({@link #rotate(KeyDefinition)}).
 	 *
 	 * @param definition the parameters for the new key, can't be {@literal null}
 	 * @param uniqueId   a key identifier guaranteed not to clash with any existing
@@ -330,6 +396,24 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 	 * @return new keyset with the rotated keys, never {@literal null}
 	 */
 	protected abstract Keyset doRotate(KeyDefinition definition, String uniqueId);
+
+	/**
+	 * Promotes the given existing key to be the primary key of this keyset.
+	 * <p>
+	 * Implementations should make the given key the primary key, with the given expiration time, demote the
+	 * current primary key exactly like {@link #doRotate(KeyDefinition, String)} does, retain all other keys,
+	 * and return a new keyset containing the updated key set.
+	 * <p>
+	 * Implementations do not need to validate the key, it is selected by {@link #findNextKey()} and checked
+	 * by the caller ({@link #rotate(KeyDefinition)}).
+	 *
+	 * @param key       the key of this keyset that should become the primary key, can't be {@literal null}
+	 * @param expiresAt the new expiration time of the promoted key, can be {@literal null} when automatic
+	 *                  key rotation is disabled
+	 * @return new keyset with the promoted key, never {@literal null}
+	 * @since 1.1.0
+	 */
+	protected abstract Keyset doPromote(T key, @Nullable Instant expiresAt);
 
 	@Override
 	public final boolean equals(Object object) {

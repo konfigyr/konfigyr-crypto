@@ -19,6 +19,8 @@ import java.util.List;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
 
 class AbstractKeysetTest {
 
@@ -37,6 +39,40 @@ class AbstractKeysetTest {
 			.primary(primary)
 			.createdAt(now)
 			.build();
+	}
+
+	static TestKey key(String id, boolean primary, KeyStatus status, Instant createdAt) {
+		return TestKey.builder()
+			.id(id)
+			.algorithm(TestAlgorithm.INSTANCE)
+			.status(status)
+			.primary(primary)
+			.createdAt(createdAt)
+			.expiresAt(createdAt.plus(Duration.ofDays(90)))
+			.build();
+	}
+
+	static TestKeyset keyset(Duration rotationInterval, TestKey... keys) {
+		return TestKeyset.builder()
+			.name("test-keyset")
+			.factory("test-factory")
+			.purpose(KeysetPurpose.ENCRYPTION)
+			.keyEncryptionKey(kek)
+			.rotationInterval(rotationInterval)
+			.keys(List.of(keys))
+			.build();
+	}
+
+	static void assertGeneratedNewPrimary(Keyset original, Keyset rotated) {
+		KeysetAssert.assertThat(rotated)
+			.hasSize(original.size() + 1);
+
+		assertThat(original.getKey(rotated.getPrimary().getId()))
+			.as("rotated keyset must have a newly generated primary key")
+			.isEmpty();
+
+		assertThat(rotated.getKey(original.getPrimary().getId()))
+			.hasValueSatisfying(demoted -> KeyAssert.assertThat(demoted).isNotPrimary());
 	}
 
 	static TestKeyset createKeyset(TestKey... keys) {
@@ -423,6 +459,171 @@ class AbstractKeysetTest {
 
 		KeysetAssert.assertThat(withGrace).hasDestructionGracePeriod(Duration.ofDays(30));
 		KeysetAssert.assertThat(withoutGrace).hasNoDestructionGracePeriod();
+	}
+
+	@Test
+	@DisplayName("should promote the next key to be the primary key when rotating the keyset")
+	void shouldPromoteNextKeyOnRotation() {
+		final TestKey previous = key("previous", false, KeyStatus.ENABLED, now.minus(Duration.ofDays(200)));
+		final TestKey primary = key("primary", true, KeyStatus.ENABLED, now.minus(Duration.ofDays(90)));
+		final TestKey next = key("next", false, KeyStatus.ENABLED, now.minus(Duration.ofDays(1)));
+
+		final var keyset = keyset(Duration.ofDays(90), previous, primary, next);
+
+		assertThat(keyset.findNextKey())
+			.hasValue(next);
+
+		final Keyset rotated = keyset.rotate();
+
+		KeysetAssert.assertThat(rotated)
+			.hasSize(3);
+
+		KeyAssert.assertThat(rotated.getPrimary())
+			.hasId("next")
+			.isPrimary()
+			.isEnabled();
+
+		assertThat(rotated.getPrimary().getExpiresAt())
+			.as("promoted key must expire one rotation interval after its promotion")
+			.isCloseTo(Instant.now().plus(Duration.ofDays(90)), within(Duration.ofSeconds(5)));
+
+		assertThat(rotated.getKey("primary"))
+			.hasValueSatisfying(demoted -> KeyAssert.assertThat(demoted).isNotPrimary().isEnabled());
+
+		assertThat(rotated.getKey("previous"))
+			.get()
+			.isEqualTo(previous);
+	}
+
+	@Test
+	@DisplayName("should promote the next key without an expiration time when automatic rotation is disabled")
+	void shouldPromoteNextKeyWithoutRotationInterval() {
+		final var keyset = keyset(null,
+			key("primary", true, KeyStatus.ENABLED, now.minus(Duration.ofDays(90))),
+			key("next", false, KeyStatus.ENABLED, now.minus(Duration.ofDays(1)))
+		);
+
+		final Key promoted = keyset.rotate(KeyDefinition.of(TestAlgorithm.INSTANCE)).getPrimary();
+
+		KeyAssert.assertThat(promoted)
+			.hasId("next");
+
+		assertThat(promoted.getExpiresAt())
+			.isNull();
+	}
+
+	@Test
+	@DisplayName("should promote the most recently created next key when there is more than one")
+	void shouldPromoteMostRecentNextKey() {
+		final var keyset = keyset(Duration.ofDays(90),
+			key("primary", true, KeyStatus.ENABLED, now.minus(Duration.ofDays(90))),
+			key("older-next", false, KeyStatus.ENABLED, now.minus(Duration.ofDays(20))),
+			key("newer-next", false, KeyStatus.ENABLED, now.minus(Duration.ofDays(10)))
+		);
+
+		KeyAssert.assertThat(keyset.rotate().getPrimary())
+			.hasId("newer-next");
+	}
+
+	@EnumSource(value = KeyStatus.class, names = "ENABLED", mode = EnumSource.Mode.EXCLUDE)
+	@ParameterizedTest(name = "next key status: {0}")
+	@DisplayName("should generate a new primary key when the next key is not enabled")
+	void shouldNotPromoteNextKeyThatIsNotEnabled(KeyStatus status) {
+		final var keyset = keyset(Duration.ofDays(90),
+			key("primary", true, KeyStatus.ENABLED, now.minus(Duration.ofDays(90))),
+			key("next", false, status, now.minus(Duration.ofDays(1)))
+		);
+
+		assertThat(keyset.findNextKey())
+			.isEmpty();
+
+		assertGeneratedNewPrimary(keyset, keyset.rotate());
+	}
+
+	@Test
+	@DisplayName("should generate a new primary key when the keyset only contains older keys")
+	void shouldNotPromoteKeysCreatedBeforePrimary() {
+		final var keyset = keyset(Duration.ofDays(90),
+			key("previous", false, KeyStatus.ENABLED, now.minus(Duration.ofDays(200))),
+			key("primary", true, KeyStatus.ENABLED, now.minus(Duration.ofDays(90)))
+		);
+
+		assertThat(keyset.findNextKey())
+			.isEmpty();
+
+		assertGeneratedNewPrimary(keyset, keyset.rotate());
+	}
+
+	@EnumSource(value = KeyStatus.class, names = "ENABLED", mode = EnumSource.Mode.EXCLUDE)
+	@ParameterizedTest(name = "primary key status: {0}")
+	@DisplayName("should generate a new primary key instead of promoting the next key when the primary is not enabled")
+	void shouldNotPromoteNextKeyWhenPrimaryIsNotEnabled(KeyStatus status) {
+		final var keyset = keyset(Duration.ofDays(90),
+			key("primary", true, status, now.minus(Duration.ofDays(90))),
+			key("next", false, KeyStatus.ENABLED, now.minus(Duration.ofDays(1)))
+		);
+
+		final Keyset rotated = keyset.rotate();
+
+		assertGeneratedNewPrimary(keyset, rotated);
+
+		assertThat(rotated.getKey("next"))
+			.hasValueSatisfying(next -> KeyAssert.assertThat(next).isNotPrimary().isEnabled());
+	}
+
+	@Test
+	@DisplayName("should generate a new primary key when the next key uses a different algorithm")
+	void shouldNotPromoteNextKeyWithDifferentAlgorithm() {
+		final Algorithm algorithm = mock(Algorithm.class);
+		doReturn(KeysetPurpose.ENCRYPTION).when(algorithm).purpose();
+
+		final var keyset = keyset(Duration.ofDays(90),
+			key("primary", true, KeyStatus.ENABLED, now.minus(Duration.ofDays(90))),
+			key("next", false, KeyStatus.ENABLED, now.minus(Duration.ofDays(1)))
+		);
+
+		final Keyset rotated = keyset.rotate(KeyDefinition.of(algorithm));
+
+		assertGeneratedNewPrimary(keyset, rotated);
+
+		KeyAssert.assertThat(rotated.getPrimary())
+			.hasAlgorithm(algorithm);
+	}
+
+	@Test
+	@DisplayName("should add a new non-primary key without promoting the next key")
+	void shouldNotPromoteNextKeyWhenAddingNonPrimaryKey() {
+		final var keyset = keyset(Duration.ofDays(90),
+			key("primary", true, KeyStatus.ENABLED, now.minus(Duration.ofDays(90))),
+			key("next", false, KeyStatus.ENABLED, now.minus(Duration.ofDays(1)))
+		);
+
+		final Keyset rotated = keyset.rotate(KeyDefinition.builder()
+			.algorithm(TestAlgorithm.INSTANCE)
+			.primary(false)
+			.build());
+
+		KeysetAssert.assertThat(rotated)
+			.hasSize(3);
+
+		KeyAssert.assertThat(rotated.getPrimary())
+			.hasId("primary");
+	}
+
+	@Test
+	@DisplayName("should rotate the keyset with a lead time when there is no next key")
+	void shouldRotateKeysetWithLeadTimeWithoutNextKey() {
+		final var keyset = TestKeyset.builder()
+			.name("test-keyset")
+			.factory("test-factory")
+			.purpose(KeysetPurpose.ENCRYPTION)
+			.keyEncryptionKey(kek)
+			.rotationInterval(Duration.ofDays(90))
+			.rotationLeadTime(Duration.ofDays(30))
+			.key(key("primary", true, KeyStatus.ENABLED, now.minus(Duration.ofDays(90))))
+			.build();
+
+		assertGeneratedNewPrimary(keyset, keyset.rotate());
 	}
 
 	@Test

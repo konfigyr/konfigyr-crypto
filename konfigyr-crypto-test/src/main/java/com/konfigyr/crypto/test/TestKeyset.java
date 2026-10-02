@@ -7,6 +7,8 @@ import com.konfigyr.crypto.Keyset;
 import com.konfigyr.crypto.KeysetDefinition;
 import org.jspecify.annotations.NullMarked;
 
+import org.jspecify.annotations.Nullable;
+import java.time.Instant;
 import java.util.UUID;
 
 /**
@@ -54,7 +56,24 @@ public final class TestKeyset extends AbstractKeyset<TestKey> {
 
 		stream().map(TestKey.class::cast).forEach(existing -> {
 			if (existing.isPrimary() && definition.isPrimary()) {
-				builder.key(TestKey.builder(existing).primary(false).build());
+				builder.key(TestKey.builder(existing).demote().build());
+			} else {
+				builder.key(existing);
+			}
+		});
+
+		return builder.build();
+	}
+
+	@Override
+	protected Keyset doPromote(TestKey key, @Nullable Instant expiresAt) {
+		final Builder builder = new Builder(this);
+
+		stream().map(TestKey.class::cast).forEach(existing -> {
+			if (existing.getId().equals(key.getId())) {
+				builder.key(TestKey.builder(existing).promote(expiresAt).build());
+			} else if (existing.isPrimary()) {
+				builder.key(TestKey.builder(existing).demote().build());
 			} else {
 				builder.key(existing);
 			}
