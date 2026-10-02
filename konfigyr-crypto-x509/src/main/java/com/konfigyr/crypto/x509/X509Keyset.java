@@ -180,7 +180,7 @@ final class X509Keyset extends AbstractKeyset<X509Key> implements X509MaterialSe
 
 		stream().map(X509Key.class::cast).forEach(existing -> {
 			if (existing.isPrimary() && definition.isPrimary()) {
-				builder.key(new X509Key.Builder(existing).demote().build());
+				builder.key(demote(existing, new X509Key.Builder(existing)).build());
 			} else {
 				builder.key(existing);
 			}
@@ -197,7 +197,7 @@ final class X509Keyset extends AbstractKeyset<X509Key> implements X509MaterialSe
 			if (existing.getId().equals(key.getId())) {
 				builder.key(new X509Key.Builder(existing).promote(expiresAt).build());
 			} else if (existing.isPrimary()) {
-				builder.key(new X509Key.Builder(existing).demote().build());
+				builder.key(demote(existing, new X509Key.Builder(existing)).build());
 			} else {
 				builder.key(existing);
 			}

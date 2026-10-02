@@ -99,6 +99,27 @@ class AbstractKeyTest {
 	}
 
 	@Test
+	@DisplayName("should retire the key until the given destruction time")
+	void shouldRetireKey() {
+		final var key = TestKey.builder()
+			.id("key-id")
+			.algorithm(TestAlgorithm.INSTANCE)
+			.status(KeyStatus.ENABLED)
+			.createdAt(now)
+			.build();
+
+		KeyAssert.assertThat(TestKey.builder(key).demote().retire(now.plus(Duration.ofDays(30))).build())
+			.hasId("key-id")
+			.hasStatus(KeyStatus.RETIRED)
+			.isNotPrimary()
+			.destructionScheduledAt(now.plus(Duration.ofDays(30)));
+
+		assertThatIllegalArgumentException()
+			.isThrownBy(() -> TestKey.builder(key).retire(null))
+			.withMessage("Retired key destruction time can't be null");
+	}
+
+	@Test
 	@DisplayName("should build a key with all fields populated")
 	void shouldBuildKeyWithAllFields() {
 		final var key = TestKey.builder()

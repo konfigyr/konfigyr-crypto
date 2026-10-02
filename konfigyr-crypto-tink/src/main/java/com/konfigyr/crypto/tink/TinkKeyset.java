@@ -165,7 +165,7 @@ class TinkKeyset extends AbstractKeyset<TinkKey> {
 
 		stream().map(TinkKey.class::cast).forEach(existing -> {
 			if (existing.isPrimary() && definition.isPrimary()) {
-				builder.key(new TinkKey.Builder(existing).demote().build());
+				builder.key(demote(existing, new TinkKey.Builder(existing)).build());
 			} else {
 				builder.key(existing);
 			}
@@ -182,7 +182,7 @@ class TinkKeyset extends AbstractKeyset<TinkKey> {
 			if (existing.getId().equals(key.getId())) {
 				builder.key(new TinkKey.Builder(existing).promote(expiresAt).build());
 			} else if (existing.isPrimary()) {
-				builder.key(new TinkKey.Builder(existing).demote().build());
+				builder.key(demote(existing, new TinkKey.Builder(existing)).build());
 			} else {
 				builder.key(existing);
 			}

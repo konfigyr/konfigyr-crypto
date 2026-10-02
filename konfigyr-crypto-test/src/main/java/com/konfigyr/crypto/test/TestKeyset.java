@@ -56,7 +56,7 @@ public final class TestKeyset extends AbstractKeyset<TestKey> {
 
 		stream().map(TestKey.class::cast).forEach(existing -> {
 			if (existing.isPrimary() && definition.isPrimary()) {
-				builder.key(TestKey.builder(existing).demote().build());
+				builder.key(demote(existing, TestKey.builder(existing)).build());
 			} else {
 				builder.key(existing);
 			}
@@ -73,7 +73,7 @@ public final class TestKeyset extends AbstractKeyset<TestKey> {
 			if (existing.getId().equals(key.getId())) {
 				builder.key(TestKey.builder(existing).promote(expiresAt).build());
 			} else if (existing.isPrimary()) {
-				builder.key(TestKey.builder(existing).demote().build());
+				builder.key(demote(existing, TestKey.builder(existing)).build());
 			} else {
 				builder.key(existing);
 			}

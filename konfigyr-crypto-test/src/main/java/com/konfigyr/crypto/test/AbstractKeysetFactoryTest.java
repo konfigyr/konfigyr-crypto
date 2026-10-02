@@ -595,6 +595,34 @@ public abstract class AbstractKeysetFactoryTest {
 			label + ": primary key must not be affected by the retired key");
 	}
 
+	@ParameterizedTest(name = "algorithm: {0}")
+	@MethodSource("definitions")
+	@DisplayName("should retire the demoted key and retain cryptographic access to data it produced")
+	void shouldRetireDemotedKey(String label, KeysetDefinition definition) throws IOException {
+		final ByteArray data = ByteArray.fromString("konfigyr-crypto-test-data");
+		final KeysetPurpose purpose = definition.getPurpose();
+
+		final Keyset keyset = createKeyset(KeysetDefinition.builder().name(definition.getName())
+			.algorithm(definition.getAlgorithm())
+			.destructionGracePeriod(Duration.ofDays(30))
+			.retirementPolicy(RetirementPolicy.DESTROY)
+			.build());
+
+		final Key original = keyset.getPrimary();
+		final ByteArray produced = produce(purpose, keyset, data);
+
+		final Keyset rotated = decryptKeyset(encryptKeyset(keyset.rotate()));
+
+		KeyAssert.assertThat(rotated.getKey(original.getId()).orElseThrow())
+			.as("%s: demoted key must be retired for the destruction grace period", label)
+			.hasStatus(KeyStatus.RETIRED)
+			.isNotPrimary()
+			.destructionScheduledAt(Instant.now().plus(Duration.ofDays(30)), Duration.ofSeconds(5));
+
+		assertCryptoAccess(purpose, rotated, produced, data,
+			label + ": retired key must still verify signatures and decrypt data it produced");
+	}
+
 	@Test
 	@DisplayName("should generate a new primary key instead of promoting the next key when the primary is compromised")
 	void shouldNotPromoteNextKeyWhenPrimaryIsCompromised() throws IOException {

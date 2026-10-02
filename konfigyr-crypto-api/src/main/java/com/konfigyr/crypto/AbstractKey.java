@@ -391,6 +391,24 @@ public abstract class AbstractKey<A extends Algorithm> implements Key {
 		}
 
 		/**
+		 * Retires the {@link Key}, so it can only verify signatures and decrypt data until the given time,
+		 * when it is either destroyed or scheduled for destruction.
+		 * <p>
+		 * Used when the primary key is demoted and the {@link RetirementPolicy} of its {@link Keyset} retires
+		 * demoted keys.
+		 *
+		 * @param destructionScheduledAt the time when the retired key is destroyed or scheduled for destruction,
+		 *                               can't be {@literal null}
+		 * @return the key builder instance.
+		 * @see KeyStatus#RETIRED
+		 * @since 1.1.0
+		 */
+		public B retire(Instant destructionScheduledAt) {
+			Assert.notNull(destructionScheduledAt, "Retired key destruction time can't be null");
+			return status(KeyStatus.RETIRED).destructionScheduledAt(destructionScheduledAt);
+		}
+
+		/**
 		 * Specify the timestamp when the {@link Key} was created.
 		 *
 		 * @param createdAt the timestamp when the key was created
