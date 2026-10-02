@@ -30,6 +30,7 @@ dependencies {
     implementation("com.konfigyr:konfigyr-crypto-api")
     implementation("com.konfigyr:konfigyr-crypto-tink")   // Google Tink implementation
     implementation("com.konfigyr:konfigyr-crypto-jose")   // Nimbus JOSE JWT implementation
+    implementation("com.konfigyr:konfigyr-crypto-x509")   // X.509 certificate implementation
     implementation("com.konfigyr:konfigyr-crypto-jdbc")   // JDBC KeysetRepository
 }
 ```
@@ -54,7 +55,7 @@ dependencies {
         <groupId>com.konfigyr</groupId>
         <artifactId>konfigyr-crypto-api</artifactId>
     </dependency>
-    <!-- add konfigyr-crypto-tink, konfigyr-crypto-jose, or konfigyr-crypto-jdbc as needed -->
+    <!-- add konfigyr-crypto-tink, konfigyr-crypto-jose, konfigyr-crypto-x509 or konfigyr-crypto-jdbc as needed -->
 </dependencies>
 ```
 
@@ -67,6 +68,7 @@ Check [Maven Central](https://central.sonatype.com/search?q=g%3Acom.konfigyr) fo
 | `konfigyr-crypto-api` | Core API — interfaces, autoconfiguration, and `KeysetStore` |
 | `konfigyr-crypto-tink` | [Google Tink](https://github.com/tink-crypto/tink-java) `KeysetFactory` and `KeyEncryptionKey` implementation |
 | `konfigyr-crypto-jose` | [Nimbus JOSE JWT](https://connect2id.com/products/nimbus-jose-jwt) `KeysetFactory` implementation |
+| `konfigyr-crypto-x509` | X.509 certificate `KeysetFactory` implementation, backed by [BouncyCastle](https://www.bouncycastle.org/documentation.html) |
 | `konfigyr-crypto-jdbc` | JDBC-backed `KeysetRepository` |
 | `konfigyr-crypto-test` | Test-support library — AssertJ assertions and base test classes for custom `KeysetFactory` implementations; use in `testImplementation` scope |
 | `konfigyr-crypto-dependencies` | BOM — import this to manage all module versions in one place |
@@ -119,6 +121,7 @@ Factories should be able to:
 Konfigyr Crypto comes with the following implementations of the `KeysetFactory` which you can use:
  * [Google Tink](konfigyr-crypto-tink)
  * [Nimbus JOSE JWT](konfigyr-crypto-jose)
+ * [X.509 certificates](konfigyr-crypto-x509)
 
 ### Algorithms
 
@@ -128,7 +131,7 @@ An `Algorithm` is an immutable value object that declares the identity and capab
 * `purpose()` — the `KeysetPurpose` (`SIGNING` or `ENCRYPTION`), which determines which operations the keyset supports.
 * `type()` — the `KeyType` of the underlying key material (`EC`, `RSA`, or `OCTET`).
 
-The built-in `TinkAlgorithm` and `JoseAlgorithm` constants follow a naming convention of prefixing names with the library family (`tink:` and `jose:` respectively). Use a similar stable prefix for any custom algorithms to avoid name collisions.
+The built-in `TinkAlgorithm`, `JoseAlgorithm` and `X509Algorithm` constants follow a naming convention of prefixing names with the library family (`tink:`, `jose:` and `x509:` respectively). Use a similar stable prefix for any custom algorithms to avoid name collisions.
 
 #### AlgorithmRegistry
 
