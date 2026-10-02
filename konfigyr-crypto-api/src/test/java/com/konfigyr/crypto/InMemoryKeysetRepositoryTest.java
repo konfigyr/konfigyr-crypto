@@ -2,6 +2,7 @@ package com.konfigyr.crypto;
 
 import com.konfigyr.crypto.test.TestAlgorithm;
 import com.konfigyr.io.ByteArray;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -13,6 +14,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 class InMemoryKeysetRepositoryTest {
 
@@ -122,6 +124,25 @@ class InMemoryKeysetRepositoryTest {
 	}
 
 	@Test
+	@DisplayName("should return compromised keys pending destruction with an elapsed schedule")
+	void shouldFindCompromisedKeysPendingDestruction() throws IOException {
+		final EncryptedKey compromisedKey = encryptedKey("key-1", KeyStatus.COMPROMISED_PENDING_DESTRUCTION, true,
+			ByteArray.fromString("key-material"), NOW.minus(Duration.ofHours(1)));
+		final EncryptedKey futureKey = encryptedKey("key-2", KeyStatus.COMPROMISED_PENDING_DESTRUCTION, false,
+			ByteArray.fromString("key-material"), Instant.now().plus(Duration.ofDays(7)));
+		final EncryptedKey unscheduledKey = encryptedKey("key-3", KeyStatus.COMPROMISED, false,
+			ByteArray.fromString("key-material"), null);
+		repository.write(encryptedKeyset("test-keyset", compromisedKey, futureKey, unscheduledKey));
+
+		assertThat(repository.findPendingDestruction())
+			.hasSize(1)
+			.first()
+			.extracting(EncryptedKeyset::keys, InstanceOfAssertFactories.list(EncryptedKey.class))
+			.extracting(EncryptedKey::id, EncryptedKey::status)
+			.containsExactly(tuple("key-1", KeyStatus.COMPROMISED_PENDING_DESTRUCTION));
+	}
+
+	@Test
 	@DisplayName("should not return keys whose destruction schedule is in the future")
 	void shouldNotFindFutureScheduledDestructionKeys() throws IOException {
 		final Instant futureSchedule = Instant.now().plus(Duration.ofDays(7));
@@ -147,7 +168,8 @@ class InMemoryKeysetRepositoryTest {
 	void shouldSkipUpdateForMissingKeyset() {
 		final EncryptedKeyset missing = encryptedKeyset("missing-keyset");
 		assertThatNoException().isThrownBy(() ->
-			repository.updateKeyStatus(KeyTransition.disable(missing, "key-1")));
+			repository.updateKeyStatus(new KeyTransition(missing.name(), "key-1", KeyStatus.DISABLED,
+				null, null, missing.version())));
 	}
 
 	@Test

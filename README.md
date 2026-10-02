@@ -262,17 +262,22 @@ Each `EncryptedKey` within a keyset carries a `KeyStatus` that describes its pos
 | `DISABLED` | Administratively deactivated; no cryptographic operations permitted |
 | `COMPROMISED` | Key material suspected or confirmed exposed; permanently blocked |
 | `PENDING_DESTRUCTION` | Scheduled for erasure; currently in its grace period |
+| `COMPROMISED_PENDING_DESTRUCTION` | Compromised key scheduled for erasure; permanently blocked, currently in its grace period |
 | `DESTROYED` | Key material permanently erased; row retained for audit |
 
 `KeysetStore` exposes methods to drive each transition:
 
 - `disable(keysetName, keyId)` — `ENABLED` → `DISABLED`
 - `enable(keysetName, keyId)` — `DISABLED` → `ENABLED`
-- `compromise(keysetName, keyId)` — emergency transition; permanently blocks the key for all cryptographic operations
-- `scheduleDestruction(keysetName, keyId)` — `DISABLED` or `COMPROMISED` → `PENDING_DESTRUCTION`, using the keyset's configured grace period (destroys immediately when no grace period is set)
+- `compromise(keysetName, keyId)` — `ENABLED` or `DISABLED` → `COMPROMISED`, `PENDING_DESTRUCTION` → `COMPROMISED_PENDING_DESTRUCTION` (keeps the scheduled destruction time); emergency transition that permanently blocks the key for all cryptographic operations
+- `scheduleDestruction(keysetName, keyId)` — `DISABLED` → `PENDING_DESTRUCTION` or `COMPROMISED` → `COMPROMISED_PENDING_DESTRUCTION`, using the keyset's configured grace period (destroys immediately when no grace period is set)
 - `scheduleDestruction(keysetName, keyId, Instant)` — same, with an explicit destruction time
-- `cancelDestruction(keysetName, keyId)` — `PENDING_DESTRUCTION` → `DISABLED`
-- `destroy(keysetName, keyId)` — `PENDING_DESTRUCTION` → `DESTROYED`; erases key material but retains the row for audit
+- `cancelDestruction(keysetName, keyId)` — `PENDING_DESTRUCTION` → `DISABLED` or `COMPROMISED_PENDING_DESTRUCTION` → `COMPROMISED`
+- `destroy(keysetName, keyId)` — `PENDING_DESTRUCTION` or `COMPROMISED_PENDING_DESTRUCTION` → `DESTROYED`; erases key material but retains the row for audit
+
+An `ENABLED` key can never be scheduled for destruction or destroyed directly, it must first be disabled or marked as compromised. Once a key is compromised it can never be disabled or re-enabled again.
+
+> **Warning:** `compromise` updates the repository and evicts the keyset only from the `KeysetCache` of the instance that performed the call. Other application instances with their own, non-shared cache, as well as any `Keyset` obtained before the call, keep using the compromised key until their cached entry expires or is evicted. Make sure the keyset is evicted on every instance as part of your incident response.
 
 ```java
 // disable the old primary key after rotating to a new one

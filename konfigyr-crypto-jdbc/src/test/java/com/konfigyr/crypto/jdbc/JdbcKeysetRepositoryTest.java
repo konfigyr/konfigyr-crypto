@@ -29,6 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 @AutoConfigureTestDatabase
 @SpringBootTest(classes = JdbcKeysetRepositoryTest.Config.class)
@@ -200,6 +201,52 @@ class JdbcKeysetRepositoryTest {
 	}
 
 	@Test
+	@DisplayName("should return compromised keys whose scheduled destruction time has elapsed")
+	void shouldFindCompromisedKeysPendingDestruction() throws IOException {
+		final Instant t0 = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+
+		final EncryptedKey pendingKey = EncryptedKey.builder()
+			.id("pending-key")
+			.algorithm(TestAlgorithm.INSTANCE)
+			.status(KeyStatus.PENDING_DESTRUCTION)
+			.primary(true)
+			.createdAt(t0)
+			.destructionScheduledAt(t0.minus(Duration.ofDays(1)))
+			.build(ByteArray.fromString("secret"));
+
+		final EncryptedKey compromisedKey = EncryptedKey.builder()
+			.id("compromised-key")
+			.algorithm(TestAlgorithm.INSTANCE)
+			.status(KeyStatus.COMPROMISED_PENDING_DESTRUCTION)
+			.primary(false)
+			.createdAt(t0)
+			.destructionScheduledAt(t0.minus(Duration.ofDays(1)))
+			.build(ByteArray.fromString("secret"));
+
+		final EncryptedKey unscheduledKey = EncryptedKey.builder()
+			.id("unscheduled-key")
+			.algorithm(TestAlgorithm.INSTANCE)
+			.status(KeyStatus.COMPROMISED)
+			.primary(false)
+			.createdAt(t0)
+			.build(ByteArray.fromString("secret"));
+
+		repository.write(encryptedKeyset("lifecycle-compromised", pendingKey, compromisedKey, unscheduledKey));
+
+		assertThat(repository.findPendingDestruction())
+			.filteredOn(keyset -> keyset.name().equals("lifecycle-compromised"))
+			.singleElement()
+			.extracting(EncryptedKeyset::keys, InstanceOfAssertFactories.iterable(EncryptedKey.class))
+			.extracting(EncryptedKey::id, EncryptedKey::status)
+			.containsExactly(
+				tuple("compromised-key", KeyStatus.COMPROMISED_PENDING_DESTRUCTION),
+				tuple("pending-key", KeyStatus.PENDING_DESTRUCTION)
+			);
+
+		repository.remove("lifecycle-compromised");
+	}
+
+	@Test
 	@DisplayName("should return empty list when no keys have an elapsed destruction schedule")
 	void shouldNotFindFutureScheduledKeys() throws IOException {
 		final Instant t0 = Instant.now().truncatedTo(ChronoUnit.MILLIS);
@@ -314,7 +361,9 @@ class JdbcKeysetRepositoryTest {
 		final EncryptedKey oldKey = encryptedKey("old-key", false, instant, ByteArray.fromString("old material"));
 		final EncryptedKeyset written = repository.write(encryptedKeyset("keyset", primaryKey, oldKey));
 
-		repository.updateKeyStatus(KeyTransition.destroy(written, "old-key", destroyedAt));
+		// applied directly as the repository does not validate the key lifecycle
+		repository.updateKeyStatus(new KeyTransition(written.name(), "old-key", KeyStatus.DESTROYED,
+			null, destroyedAt, written.version()));
 
 		// Simulate the factory skipping the DESTROYED key: read the current state (version bumped
 		// by updateKeyStatus), then write a keyset containing only the primary key.
