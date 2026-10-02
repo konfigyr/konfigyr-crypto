@@ -58,6 +58,41 @@ public interface Key {
 	boolean isPrimary();
 
 	/**
+	 * Checks if this key is in a state where it can be used for cryptographic operations.
+	 * <p>
+	 * This is the single rule that decides whether the key material may be used by any
+	 * {@link KeysetOperation}. Certain operations additionally require the key to be
+	 * {@link #isPrimary() primary}. Keys handed out to third-party libraries, such as through a
+	 * Nimbus {@code JWKSource}, must also pass this check.
+	 * <p>
+	 * Currently only keys in the {@link KeyStatus#ENABLED} status are usable. Keys in any other
+	 * status must not take part in cryptographic operations:
+	 * <ul>
+	 * 		<li>{@link KeyStatus#INITIALIZING} and {@link KeyStatus#INITIALIZATION_FAILED}: key material
+	 * 		is not, or will never be, ready for use.</li>
+	 * 		<li>{@link KeyStatus#COMPROMISED}: key material can't be trusted anymore, data or signatures
+	 * 		produced by it must not be accepted.</li>
+	 * 		<li>{@link KeyStatus#DISABLED}: key was administratively suspended and may be re-enabled.</li>
+	 * 		<li>{@link KeyStatus#PENDING_DESTRUCTION}, {@link KeyStatus#DESTROYED} and
+	 * 		{@link KeyStatus#DESTRUCTION_FAILED}: key is being, or has been, removed.</li>
+	 * </ul>
+	 * <p>
+	 * This method only affects which keys may perform cryptographic operations. It does not affect
+	 * listing: {@link Keyset#getKeys()} returns every key in the {@link Keyset} regardless of its
+	 * status, so the key metadata always remains readable.
+	 * <p>
+	 * Implementations should not override this method. Weakening this check would allow blocked
+	 * key material to be used in cryptographic operations.
+	 *
+	 * @return {@literal true} if this key is in {@link KeyStatus#ENABLED} state, {@literal false} otherwise.
+	 * @see KeyStatus
+	 * @see #getStatus()
+	 */
+	default boolean isEnabled() {
+		return getStatus() == KeyStatus.ENABLED;
+	}
+
+	/**
 	 * Timestamp when this key was created. This should not mean that the key material has been
 	 * generated yet.
 	 *

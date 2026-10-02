@@ -536,12 +536,11 @@ public abstract class CryptoException extends RuntimeException {
 	}
 
 	/**
-	 * Exception thrown when a {@link Keyset} is accessed but its primary {@link Key} is
-	 * in {@link KeyStatus#DISABLED} state and cannot perform any cryptographic operations.
+	 * Exception thrown when a {@link Key} in {@link KeyStatus#DISABLED} state is about to be used
+	 * to perform a cryptographic operation.
 	 * <p>
-	 * This exception is thrown by the keyset construction path (e.g. {@link AbstractKeyset})
-	 * before any key material is unwrapped, ensuring no sensitive data is touched for
-	 * disabled keysets.
+	 * The status of the key is checked when the operation is invoked, before the key material is
+	 * used by the cryptographic primitive. A disabled key may be re-enabled.
 	 */
 	public static class KeysetDisabledException extends KeysetException {
 
@@ -549,25 +548,51 @@ public abstract class CryptoException extends RuntimeException {
 		private static final long serialVersionUID = SERIAL;
 
 		/**
-		 * Creates a new {@link KeysetDisabledException} for the given keyset name.
-		 *
-		 * @param name the name of the disabled {@link Keyset}, can't be {@literal null}
+		 * The identifier of the {@link Key} that is disabled.
 		 */
-		public KeysetDisabledException(String name) {
-			super(name, "Keyset '" + name + "' is disabled and cannot perform cryptographic operations. "
-					+ "Enable the primary key before attempting to use this keyset.");
+		private final String keyId;
+
+		/**
+		 * Creates a new {@link KeysetDisabledException} for the given keyset name and the
+		 * {@link Key} that is in {@link KeyStatus#DISABLED} state.
+		 * <p>
+		 * When the given key is the {@link Key#isPrimary() primary key} of the keyset, the exception
+		 * message states so.
+		 *
+		 * @param name the name of the {@link Keyset} containing the disabled key, can't be {@literal null}
+		 * @param key the disabled {@link Key}, can't be {@literal null}
+		 */
+		public KeysetDisabledException(String name, Key key) {
+			this(name, key.getId(), key.isPrimary());
+		}
+
+		/**
+		 * Creates a new {@link KeysetDisabledException} for the given keyset name and the identifier
+		 * of the {@link Key} that is in {@link KeyStatus#DISABLED} state.
+		 *
+		 * @param name the name of the {@link Keyset} containing the disabled key, can't be {@literal null}
+		 * @param keyId the identifier of the disabled {@link Key}, can't be {@literal null}
+		 */
+		public KeysetDisabledException(String name, String keyId) {
+			this(name, keyId, false);
+		}
+
+		private KeysetDisabledException(String name, String keyId, boolean primary) {
+			super(name, (primary ? "Primary key '" : "Key '") + keyId + "' in keyset '" + name + "' "
+					+ "is disabled and cannot perform cryptographic operations. Enable the key before attempting to use it.");
+			this.keyId = keyId;
 		}
 
 	}
 
 	/**
-	 * Exception thrown when a {@link Keyset} is accessed but its primary {@link Key} is
-	 * in {@link KeyStatus#PENDING_DESTRUCTION} state.
+	 * Exception thrown when a {@link Key} in {@link KeyStatus#PENDING_DESTRUCTION} state is about
+	 * to be used to perform a cryptographic operation.
 	 * <p>
-	 * A keyset in this state has been scheduled for destruction and is waiting for the
-	 * configured grace period to elapse. No cryptographic operations are permitted.
-	 * Call {@code KeysetStore.cancelDestruction} to restore the key to
-	 * {@link KeyStatus#DISABLED} if the destruction was unintended.
+	 * A key in this state has been scheduled for destruction and is waiting for the configured
+	 * grace period to elapse. No cryptographic operations are permitted. Call
+	 * {@code KeysetStore.cancelDestruction} to restore the key to {@link KeyStatus#DISABLED} if
+	 * the destruction was unintended.
 	 */
 	public static class KeysetPendingDestructionException extends KeysetException {
 
@@ -575,20 +600,48 @@ public abstract class CryptoException extends RuntimeException {
 		private static final long serialVersionUID = SERIAL;
 
 		/**
-		 * Creates a new {@link KeysetPendingDestructionException} for the given keyset name.
-		 *
-		 * @param name the name of the {@link Keyset} pending destruction, can't be {@literal null}
+		 * The identifier of the {@link Key} that is pending destruction.
 		 */
-		public KeysetPendingDestructionException(String name) {
-			super(name, "Keyset '" + name + "' is pending destruction and cannot perform cryptographic "
-					+ "operations. Call cancelDestruction to restore it to a disabled state.");
+		private final String keyId;
+
+		/**
+		 * Creates a new {@link KeysetPendingDestructionException} for the given keyset name and the
+		 * {@link Key} that is in {@link KeyStatus#PENDING_DESTRUCTION} state.
+		 * <p>
+		 * When the given key is the {@link Key#isPrimary() primary key} of the keyset, the exception
+		 * message states so.
+		 *
+		 * @param name the name of the {@link Keyset} containing the key pending destruction,
+		 *             can't be {@literal null}
+		 * @param key the {@link Key} pending destruction, can't be {@literal null}
+		 */
+		public KeysetPendingDestructionException(String name, Key key) {
+			this(name, key.getId(), key.isPrimary());
+		}
+
+		/**
+		 * Creates a new {@link KeysetPendingDestructionException} for the given keyset name and the
+		 * identifier of the {@link Key} that is in {@link KeyStatus#PENDING_DESTRUCTION} state.
+		 *
+		 * @param name the name of the {@link Keyset} containing the key pending destruction,
+		 *             can't be {@literal null}
+		 * @param keyId the identifier of the {@link Key} pending destruction, can't be {@literal null}
+		 */
+		public KeysetPendingDestructionException(String name, String keyId) {
+			this(name, keyId, false);
+		}
+
+		private KeysetPendingDestructionException(String name, String keyId, boolean primary) {
+			super(name, (primary ? "Primary key '" : "Key '") + keyId + "' in keyset '" + name + "' "
+					+ "is pending destruction and cannot perform cryptographic operations. Call cancelDestruction to restore it to a disabled state.");
+			this.keyId = keyId;
 		}
 
 	}
 
 	/**
-	 * Exception thrown when a {@link Keyset} is accessed but its primary {@link Key} has
-	 * been permanently destroyed ({@link KeyStatus#DESTROYED}).
+	 * Exception thrown when a {@link Key} that has been permanently destroyed
+	 * ({@link KeyStatus#DESTROYED}) is about to be used to perform a cryptographic operation.
 	 * <p>
 	 * A destroyed key's material has been erased and cannot be recovered. If the keyset
 	 * has no remaining {@link KeyStatus#ENABLED} key, it is permanently inoperable.
@@ -599,29 +652,50 @@ public abstract class CryptoException extends RuntimeException {
 		private static final long serialVersionUID = SERIAL;
 
 		/**
-		 * Creates a new {@link KeysetDestroyedException} for the given keyset name.
-		 *
-		 * @param name the name of the {@link Keyset} whose primary key has been destroyed,
-		 *             can't be {@literal null}
+		 * The identifier of the {@link Key} that has been destroyed.
 		 */
-		public KeysetDestroyedException(String name) {
-			super(name, "Keyset '" + name + "' primary key has been permanently destroyed. "
-					+ "The key material cannot be recovered.");
+		private final String keyId;
+
+		/**
+		 * Creates a new {@link KeysetDestroyedException} for the given keyset name and the
+		 * {@link Key} that has been permanently destroyed.
+		 * <p>
+		 * When the given key is the {@link Key#isPrimary() primary key} of the keyset, the exception
+		 * message states so.
+		 *
+		 * @param name the name of the {@link Keyset} containing the destroyed key, can't be {@literal null}
+		 * @param key the destroyed {@link Key}, can't be {@literal null}
+		 */
+		public KeysetDestroyedException(String name, Key key) {
+			this(name, key.getId(), key.isPrimary());
+		}
+
+		/**
+		 * Creates a new {@link KeysetDestroyedException} for the given keyset name and the identifier
+		 * of the {@link Key} that has been permanently destroyed.
+		 *
+		 * @param name the name of the {@link Keyset} containing the destroyed key, can't be {@literal null}
+		 * @param keyId the identifier of the destroyed {@link Key}, can't be {@literal null}
+		 */
+		public KeysetDestroyedException(String name, String keyId) {
+			this(name, keyId, false);
+		}
+
+		private KeysetDestroyedException(String name, String keyId, boolean primary) {
+			super(name, (primary ? "Primary key '" : "Key '") + keyId + "' in keyset '" + name + "' "
+					+ "has been permanently destroyed. The key material cannot be recovered.");
+			this.keyId = keyId;
 		}
 
 	}
 
 	/**
-	 * Exception thrown when a {@link Keyset} is accessed but its primary {@link Key} is
-	 * in {@link KeyStatus#COMPROMISED} state.
+	 * Exception thrown when a {@link Key} in {@link KeyStatus#COMPROMISED} state is about to be
+	 * used to perform a cryptographic operation.
 	 * <p>
 	 * A compromised key's material is suspected or confirmed to have been exposed. All
 	 * cryptographic operations are permanently hard-blocked regardless of any other key state.
 	 * This is a terminal condition, a compromised key cannot be re-enabled.
-	 * <p>
-	 * This exception is thrown by the keyset construction path (e.g. {@link AbstractKeyset})
-	 * before any key material is unwrapped, ensuring no sensitive data is touched for
-	 * compromised keysets.
 	 */
 	public static class KeysetCompromisedException extends KeysetException {
 
@@ -629,13 +703,39 @@ public abstract class CryptoException extends RuntimeException {
 		private static final long serialVersionUID = SERIAL;
 
 		/**
-		 * Creates a new {@link KeysetCompromisedException} for the given keyset name.
-		 *
-		 * @param name the name of the compromised {@link Keyset}, can't be {@literal null}
+		 * The identifier of the {@link Key} that has been compromised.
 		 */
-		public KeysetCompromisedException(String name) {
-			super(name, "Keyset '" + name + "' is compromised and cannot perform cryptographic operations. "
-					+ "The primary key has been marked as compromised and must not be used.");
+		private final String keyId;
+
+		/**
+		 * Creates a new {@link KeysetCompromisedException} for the given keyset name and the
+		 * {@link Key} that has been marked as {@link KeyStatus#COMPROMISED}.
+		 * <p>
+		 * When the given key is the {@link Key#isPrimary() primary key} of the keyset, the exception
+		 * message states so.
+		 *
+		 * @param name the name of the {@link Keyset} containing the compromised key, can't be {@literal null}
+		 * @param key the compromised {@link Key}, can't be {@literal null}
+		 */
+		public KeysetCompromisedException(String name, Key key) {
+			this(name, key.getId(), key.isPrimary());
+		}
+
+		/**
+		 * Creates a new {@link KeysetCompromisedException} for the given keyset name and the identifier
+		 * of the {@link Key} that has been marked as {@link KeyStatus#COMPROMISED}.
+		 *
+		 * @param name the name of the {@link Keyset} containing the compromised key, can't be {@literal null}
+		 * @param keyId the identifier of the compromised {@link Key}, can't be {@literal null}
+		 */
+		public KeysetCompromisedException(String name, String keyId) {
+			this(name, keyId, false);
+		}
+
+		private KeysetCompromisedException(String name, String keyId, boolean primary) {
+			super(name, (primary ? "Primary key '" : "Key '") + keyId + "' in keyset '" + name + "' "
+					+ "is compromised and cannot perform cryptographic operations. The key has been marked as compromised and must not be used.");
+			this.keyId = keyId;
 		}
 
 	}
