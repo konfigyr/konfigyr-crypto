@@ -30,6 +30,8 @@ import java.util.*;
  * @param keyEncryptionKey       The identifier of the {@link KeyEncryptionKey} used to wrap and unwrap this keyset.
  * @param keys                   Per-key encrypted material with lifecycle metadata.
  * @param rotationInterval       Rotation frequency for the keyset. {@literal null} when automatic rotation is disabled.
+ * @param rotationLeadTime       How long before the scheduled rotation the next key is created. {@literal null} when
+ *                               the next key is created at the moment of rotation.
  * @param destructionGracePeriod Grace period between scheduling key destruction and the actual removal of key material.
  *                               {@literal null} when the destruction grace period is disabled.
  * @param version                Optimistic-locking version counter. Zero for keysets not yet persisted; incremented
@@ -51,9 +53,33 @@ public record EncryptedKeyset(
 	String keyEncryptionKey,
 	List<EncryptedKey> keys,
 	@Nullable Duration rotationInterval,
+	@Nullable Duration rotationLeadTime,
 	@Nullable Duration destructionGracePeriod,
 	long version
 ) implements Iterable<EncryptedKey> {
+
+	/**
+	 * Creates a new {@link EncryptedKeyset} without a rotation lead time.
+	 *
+	 * @param name                   Unique keyset name.
+	 * @param purpose                The purpose of the key material in this keyset, stored as the enum name.
+	 * @param factory                The name of the {@link KeysetFactory} that manages this keyset.
+	 * @param provider               {@link KeyEncryptionKeyProvider} name that supplied the {@link KeyEncryptionKey}.
+	 * @param keyEncryptionKey       The identifier of the {@link KeyEncryptionKey} used to wrap and unwrap this keyset.
+	 * @param keys                   Per-key encrypted material with lifecycle metadata.
+	 * @param rotationInterval       Rotation frequency for the keyset, {@literal null} when automatic rotation is disabled.
+	 * @param destructionGracePeriod Grace period between scheduling key destruction and the actual removal of key material.
+	 * @param version                Optimistic-locking version counter.
+	 * @deprecated since 1.1.0, use the {@link #builder() builder} or the canonical constructor, which also accepts
+	 * the rotation lead time
+	 */
+	@Deprecated(since = "1.1.0", forRemoval = true)
+	public EncryptedKeyset(String name, String purpose, String factory, String provider, String keyEncryptionKey,
+			List<EncryptedKey> keys, @Nullable Duration rotationInterval, @Nullable Duration destructionGracePeriod,
+			long version) {
+		this(name, purpose, factory, provider, keyEncryptionKey, keys, rotationInterval, null,
+			destructionGracePeriod, version);
+	}
 
 	/**
 	 * Attempts to find the {@link EncryptedKey} with the given identifier.
@@ -91,13 +117,14 @@ public record EncryptedKeyset(
 			&& Objects.equals(keyEncryptionKey, that.keyEncryptionKey)
 			&& Objects.equals(keys, that.keys)
 			&& Objects.equals(rotationInterval, that.rotationInterval)
+			&& Objects.equals(rotationLeadTime, that.rotationLeadTime)
 			&& Objects.equals(destructionGracePeriod, that.destructionGracePeriod);
 	}
 
 	@Override
 	public int hashCode() {
 		return Objects.hash(name, purpose, factory, provider, keyEncryptionKey, keys,
-			rotationInterval, destructionGracePeriod);
+			rotationInterval, rotationLeadTime, destructionGracePeriod);
 	}
 
 	/**
@@ -122,6 +149,7 @@ public record EncryptedKeyset(
 			.purpose(definition.getPurpose())
 			.factory(definition.getAlgorithm().factory())
 			.rotationInterval(definition.getRotationInterval().orElse(null))
+			.rotationLeadTime(definition.getRotationLeadTime().orElse(null))
 			.destructionGracePeriod(definition.getDestructionGracePeriod().orElse(null));
 	}
 
@@ -144,6 +172,7 @@ public record EncryptedKeyset(
 			.provider(existing.provider())
 			.keyEncryptionKey(existing.keyEncryptionKey())
 			.rotationInterval(existing.rotationInterval())
+			.rotationLeadTime(existing.rotationLeadTime())
 			.destructionGracePeriod(existing.destructionGracePeriod())
 			.version(existing.version());
 	}
@@ -165,6 +194,7 @@ public record EncryptedKeyset(
 			.version(keyset.getVersion());
 
 		keyset.getRotationInterval().ifPresent(builder::rotationInterval);
+		keyset.getRotationLeadTime().ifPresent(builder::rotationLeadTime);
 		keyset.getDestructionGracePeriod().ifPresent(builder::destructionGracePeriod);
 
 		return builder.build(keys);
@@ -185,6 +215,7 @@ public record EncryptedKeyset(
 		private String provider;
 		private String kek;
 		private Duration rotationInterval;
+		private Duration rotationLeadTime;
 		private Duration destructionGracePeriod;
 		private long version = 0L;
 
@@ -277,6 +308,29 @@ public record EncryptedKeyset(
 		}
 
 		/**
+		 * Specify the rotation lead time of the {@link EncryptedKeyset} in milliseconds.
+		 *
+		 * @param rotationLeadTime rotation lead time in milliseconds
+		 * @return builder
+		 * @since 1.1.0
+		 */
+		public Builder rotationLeadTime(long rotationLeadTime) {
+			return rotationLeadTime(Duration.ofMillis(rotationLeadTime));
+		}
+
+		/**
+		 * Specify how long before the scheduled rotation the next key of the {@link EncryptedKeyset} is created.
+		 *
+		 * @param rotationLeadTime rotation lead time, can be {@literal null} to disable
+		 * @return builder
+		 * @since 1.1.0
+		 */
+		public Builder rotationLeadTime(@Nullable Duration rotationLeadTime) {
+			this.rotationLeadTime = rotationLeadTime;
+			return this;
+		}
+
+		/**
 		 * Specify the destruction grace period of the {@link EncryptedKeyset} in milliseconds.
 		 *
 		 * @param destructionGracePeriod destruction grace period, can be {@literal null} to disable
@@ -334,7 +388,7 @@ public record EncryptedKeyset(
 			Assert.notNull(keys, "Encrypted keys can not be null");
 
 			return new EncryptedKeyset(name, purpose, factory, provider, kek,
-				List.copyOf(keys), rotationInterval, destructionGracePeriod, version);
+				List.copyOf(keys), rotationInterval, rotationLeadTime, destructionGracePeriod, version);
 		}
 
 	}

@@ -61,6 +61,7 @@ class AbstractKeysetTest {
 			.purpose(KeysetPurpose.ENCRYPTION)
 			.keyEncryptionKey(kek)
 			.rotationInterval(Duration.ofDays(90))
+			.rotationLeadTime(Duration.ofDays(30))
 			.destructionGracePeriod(Duration.ofDays(30))
 			.key(primaryKey)
 			.key(secondKey)
@@ -72,6 +73,7 @@ class AbstractKeysetTest {
 			.hasPurpose(KeysetPurpose.ENCRYPTION)
 			.hasKeyEncryptionKey(kek)
 			.hasRotationInterval(Duration.ofDays(90))
+			.hasRotationLeadTime(Duration.ofDays(30))
 			.hasDestructionGracePeriod(Duration.ofDays(30))
 			.hasSize(2);
 	}
@@ -109,6 +111,7 @@ class AbstractKeysetTest {
 		KeysetAssert.assertThat(keyset)
 			.matchesDefinition(definition)
 			.hasNoRotationInterval()
+			.hasNoRotationLeadTime()
 			.hasNoDestructionGracePeriod();
 	}
 
@@ -123,6 +126,7 @@ class AbstractKeysetTest {
 			.purpose(KeysetPurpose.ENCRYPTION)
 			.keyEncryptionKey(kek)
 			.rotationInterval(Duration.ofDays(90))
+			.rotationLeadTime(Duration.ofDays(30))
 			.destructionGracePeriod(Duration.ofDays(30))
 			.key(primaryKey)
 			.build();
@@ -144,6 +148,7 @@ class AbstractKeysetTest {
 			.factory("test-factory")
 			.keyEncryptionKey(kek)
 			.rotationInterval(Duration.ofDays(90))
+			.rotationLeadTime(Duration.ofDays(30))
 			.destructionGracePeriod(Duration.ofDays(30))
 			.build(List.of());
 
@@ -158,6 +163,7 @@ class AbstractKeysetTest {
 			.createdByFactory("test-factory")
 			.hasKeyEncryptionKey(kek)
 			.hasRotationInterval(Duration.ofDays(90))
+			.hasRotationLeadTime(Duration.ofDays(30))
 			.hasDestructionGracePeriod(Duration.ofDays(30));
 	}
 
@@ -382,6 +388,29 @@ class AbstractKeysetTest {
 	}
 
 	@Test
+	@DisplayName("should build a keyset from a definition with rotation lead time")
+	void shouldBuildKeysetFromDefinitionWithRotationLeadTime() {
+		final var definition = KeysetDefinition.builder()
+			.name("test-keyset")
+			.algorithm(TestAlgorithm.INSTANCE)
+			.rotationLeadTime(Duration.ofDays(30))
+			.build();
+
+		final var keyset = TestKeyset.builder(definition)
+			.keyEncryptionKey(kek)
+			.key(createKey("primary-key", true))
+			.build();
+
+		KeysetAssert.assertThat(keyset)
+			.matchesDefinition(definition)
+			.hasRotationLeadTime(Duration.ofDays(30));
+
+		assertThat(KeysetDefinition.builder(keyset).algorithm(TestAlgorithm.INSTANCE).build())
+			.as("definition created from the keyset must retain the rotation lead time")
+			.isEqualTo(definition);
+	}
+
+	@Test
 	@DisplayName("should return destruction grace period wrapped in an optional")
 	void shouldReturnDestructionGracePeriodAsOptional() {
 		final var withGrace = TestKeyset.builder()
@@ -439,6 +468,10 @@ class AbstractKeysetTest {
 		assertThat(keyset).isNotEqualTo(TestKeyset.builder()
 			.name("test-keyset").factory("test-factory").purpose(KeysetPurpose.ENCRYPTION)
 			.keyEncryptionKey(kek).rotationInterval(Duration.ofDays(90)).key(key).build());
+
+		assertThat(keyset).isNotEqualTo(TestKeyset.builder()
+			.name("test-keyset").factory("test-factory").purpose(KeysetPurpose.ENCRYPTION)
+			.keyEncryptionKey(kek).rotationLeadTime(Duration.ofDays(30)).key(key).build());
 	}
 
 	@Test

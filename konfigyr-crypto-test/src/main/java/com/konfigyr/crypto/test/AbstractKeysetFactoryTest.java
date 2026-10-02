@@ -235,6 +235,37 @@ public abstract class AbstractKeysetFactoryTest {
 	}
 
 	@Test
+	@DisplayName("should retain the rotation lead time when wrapping, unwrapping and rotating the keyset")
+	void shouldRetainRotationLeadTime() throws IOException {
+		final KeysetDefinition definition = KeysetDefinition.builder()
+			.name(definition().getName())
+			.algorithm(definition().getAlgorithm())
+			.rotationInterval(Duration.ofDays(90))
+			.rotationLeadTime(Duration.ofDays(30))
+			.build();
+
+		final Keyset keyset = createKeyset(definition);
+
+		KeysetAssert.assertThat(keyset)
+			.matchesDefinition(definition)
+			.hasRotationLeadTime(Duration.ofDays(30));
+
+		final EncryptedKeyset encrypted = encryptKeyset(keyset);
+
+		EncryptedKeysetAssert.assertThat(encrypted)
+			.matchesKeyset(keyset)
+			.hasRotationLeadTime(Duration.ofDays(30));
+
+		KeysetAssert.assertThat(decryptKeyset(encrypted))
+			.matchesDefinition(definition)
+			.hasRotationLeadTime(Duration.ofDays(30));
+
+		KeysetAssert.assertThat(keyset.rotate())
+			.matchesDefinition(definition)
+			.hasRotationLeadTime(Duration.ofDays(30));
+	}
+
+	@Test
 	@DisplayName("should rotate the keyset and promote a new primary key while demoting the previous one")
 	void shouldRotateAndPromoteNewPrimaryKey() throws IOException {
 		final Keyset original = createKeyset(definition());

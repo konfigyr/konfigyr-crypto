@@ -64,8 +64,8 @@ public class EncryptedKeysetAssert extends AbstractObjectAssert<EncryptedKeysetA
 
 	/**
 	 * Verifies that the encrypted keyset's name, purpose, factory, KEK provider and identifier,
-	 * rotation interval, and destruction grace period all match the corresponding values of the
-	 * given {@link Keyset}.
+	 * rotation interval, rotation lead time, and destruction grace period all match the corresponding
+	 * values of the given {@link Keyset}.
 	 *
 	 * @param keyset the keyset to match against, can't be {@literal null}
 	 * @return this assertion for chaining, never {@literal null}
@@ -76,12 +76,13 @@ public class EncryptedKeysetAssert extends AbstractObjectAssert<EncryptedKeysetA
 			.createdByFactory(keyset.getFactory())
 			.hasKeyEncryptionKey(keyset.getKeyEncryptionKey())
 			.hasRotationInterval(keyset.getRotationInterval().orElse(null))
+			.hasRotationLeadTime(keyset.getRotationLeadTime().orElse(null))
 			.hasDestructionGracePeriod(keyset.getDestructionGracePeriod().orElse(null));
 	}
 
 	/**
-	 * Verifies that the encrypted keyset's name, purpose, factory, rotation interval, and
-	 * destruction grace period all match the corresponding values of the given
+	 * Verifies that the encrypted keyset's name, purpose, factory, rotation interval, rotation
+	 * lead time, and destruction grace period all match the corresponding values of the given
 	 * {@link KeysetDefinition}.
 	 *
 	 * @param definition the definition to match against, can't be {@literal null}
@@ -92,6 +93,7 @@ public class EncryptedKeysetAssert extends AbstractObjectAssert<EncryptedKeysetA
 			.hasPurpose(definition.getPurpose())
 			.createdByFactory(definition.getAlgorithm().factory())
 			.hasRotationInterval(definition.getRotationInterval().orElse(null))
+			.hasRotationLeadTime(definition.getRotationLeadTime().orElse(null))
 			.hasDestructionGracePeriod(definition.getDestructionGracePeriod().orElse(null));
 	}
 
@@ -207,6 +209,21 @@ public class EncryptedKeysetAssert extends AbstractObjectAssert<EncryptedKeysetA
 			.extracting(EncryptedKeyset::rotationInterval)
 			.as("keyset rotation interval")
 			.isEqualTo(interval);
+		return myself;
+	}
+
+	/**
+	 * Verifies that the encrypted keyset has the expected rotation lead time. Pass {@literal null}
+	 * to assert that no rotation lead time is configured.
+	 *
+	 * @param leadTime the expected rotation lead time, can be {@literal null}
+	 * @return this assertion for chaining, never {@literal null}
+	 */
+	public EncryptedKeysetAssert hasRotationLeadTime(@Nullable Duration leadTime) {
+		assertThatKeyset()
+			.extracting(EncryptedKeyset::rotationLeadTime)
+			.as("keyset rotation lead time")
+			.isEqualTo(leadTime);
 		return myself;
 	}
 

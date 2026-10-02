@@ -323,6 +323,22 @@ public interface Keyset extends Iterable<Key> {
 	Optional<Duration> getRotationInterval();
 
 	/**
+	 * Retrieves how long before the scheduled rotation of the primary key the next key should be created.
+	 * <p>
+	 * The next key is created as a non-primary key, so third parties that cache the public key material,
+	 * like the consumers of a JSON Web Key Set or SAML metadata, can obtain it before it becomes the
+	 * primary key.
+	 *
+	 * @return rotation lead time, it may return an {@link Optional#empty()} if the next key should be
+	 * created at the moment of rotation.
+	 * @see KeysetDefinition#getRotationLeadTime()
+	 * @since 1.1.0
+	 */
+	default Optional<Duration> getRotationLeadTime() {
+		return Optional.empty();
+	}
+
+	/**
 	 * Retrieves the grace period duration that will be applied if the {@link Key} is scheduled for destruction.
 	 * <p>
 	 * This represents the safety buffer or cooling-off period. Once a key is marked for deletion, it will remain

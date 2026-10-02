@@ -42,6 +42,7 @@ class EncryptedKeysetTest {
 			.provider("test-provider")
 			.keyEncryptionKey("test-kek")
 			.rotationInterval(Duration.ofDays(90))
+			.rotationLeadTime(Duration.ofDays(30))
 			.destructionGracePeriod(Duration.ofDays(30))
 			.build(List.of(key));
 
@@ -51,6 +52,7 @@ class EncryptedKeysetTest {
 			.createdByFactory("test-factory")
 			.hasKeyEncryptionKey("test-provider", "test-kek")
 			.hasRotationInterval(Duration.ofDays(90))
+			.hasRotationLeadTime(Duration.ofDays(30))
 			.hasDestructionGracePeriod(Duration.ofDays(30))
 			.hasSize(1);
 
@@ -69,6 +71,7 @@ class EncryptedKeysetTest {
 			.provider("test-provider")
 			.keyEncryptionKey("test-kek")
 			.rotationInterval(Duration.ofDays(90))
+			.rotationLeadTime(Duration.ofDays(30))
 			.destructionGracePeriod(Duration.ofDays(30))
 			.build(List.of(key));
 
@@ -90,6 +93,7 @@ class EncryptedKeysetTest {
 
 		EncryptedKeysetAssert.assertThat(keyset)
 			.hasRotationInterval(null)
+			.hasRotationLeadTime(null)
 			.hasDestructionGracePeriod(null)
 			.hasSize(0);
 
@@ -126,6 +130,39 @@ class EncryptedKeysetTest {
 
 		EncryptedKeysetAssert.assertThat(keyset)
 			.hasRotationInterval(Duration.ofDays(90));
+	}
+
+	@Test
+	@DisplayName("should set rotation lead time from milliseconds")
+	void shouldSetRotationLeadTimeFromMilliseconds() {
+		final var keyset = EncryptedKeyset.builder()
+			.name("test-keyset")
+			.purpose(KeysetPurpose.ENCRYPTION)
+			.factory("test-factory")
+			.provider("test-provider")
+			.keyEncryptionKey("test-kek")
+			.rotationLeadTime(Duration.ofDays(30).toMillis())
+			.build();
+
+		EncryptedKeysetAssert.assertThat(keyset)
+			.hasRotationLeadTime(Duration.ofDays(30));
+	}
+
+	@Test
+	@SuppressWarnings("removal")
+	@DisplayName("should create an encrypted keyset without rotation lead time using the 1.0 constructor")
+	void shouldCreateEncryptedKeysetUsingLegacyConstructor() {
+		final var keyset = new EncryptedKeyset("test-keyset", KeysetPurpose.ENCRYPTION.name(), "test-factory",
+			"test-provider", "test-kek", List.of(key), Duration.ofDays(90), Duration.ofDays(30), 3L);
+
+		EncryptedKeysetAssert.assertThat(keyset)
+			.hasRotationInterval(Duration.ofDays(90))
+			.hasRotationLeadTime(null)
+			.hasDestructionGracePeriod(Duration.ofDays(30))
+			.hasSize(1);
+
+		assertThat(keyset.version())
+			.isEqualTo(3L);
 	}
 
 	@Test
@@ -187,6 +224,7 @@ class EncryptedKeysetTest {
 		doReturn("test-factory").when(source).getFactory();
 		doReturn(kek).when(source).getKeyEncryptionKey();
 		doReturn(Optional.of(Duration.ofDays(90))).when(source).getRotationInterval();
+		doReturn(Optional.of(Duration.ofDays(30))).when(source).getRotationLeadTime();
 		doReturn(Optional.of(Duration.ofDays(30))).when(source).getDestructionGracePeriod();
 
 		final var keyset = EncryptedKeyset.from(source, List.of(key));

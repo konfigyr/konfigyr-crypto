@@ -194,6 +194,7 @@ public interface KeysetDefinition {
 	 *     <li>Name</li>
 	 *     <li>Keyset purpose</li>
 	 *     <li>Key rotation interval</li>
+	 *     <li>Key rotation lead time</li>
 	 *     <li>Destruction grace period</li>
 	 * </ul>
 	 *
@@ -207,6 +208,9 @@ public interface KeysetDefinition {
 
 		keyset.getRotationInterval().ifPresentOrElse(
 			builder::rotationInterval, builder::disableAutomaticKeyRotation
+		);
+		keyset.getRotationLeadTime().ifPresentOrElse(
+			builder::rotationLeadTime, builder::disableRotationLeadTime
 		);
 		keyset.getDestructionGracePeriod().ifPresentOrElse(
 			builder::destructionGracePeriod, builder::disableDestructionGracePeriod
