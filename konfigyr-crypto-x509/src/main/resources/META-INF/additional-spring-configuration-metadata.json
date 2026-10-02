@@ -1,0 +1,17 @@
+{
+  "groups": [
+    {
+      "name": "konfigyr.crypto.x509",
+      "sourceType": "com.konfigyr.crypto.x509.X509AutoConfiguration"
+    }
+  ],
+  "properties": [
+    {
+      "name": "konfigyr.crypto.x509.register-legacy-algorithms",
+      "type": "java.lang.Boolean",
+      "description": "Whether to register RSA 2048-bit algorithms (x509:RSA-2048-SIGNING, x509:RSA-2048-ENCRYPTION) for interoperability with counterparties that do not accept larger RSA keys. RSA 2048 meets the NIST SP 800-131A Rev 2 minimum but is below the preferred key size and must not be used in new designs. Prefer the 3072 or 4096-bit variants instead. Defaults to false.",
+      "sourceType": "com.konfigyr.crypto.x509.X509AutoConfiguration",
+      "defaultValue": false
+    }
+  ]
+}
