@@ -274,6 +274,44 @@ public abstract class AbstractKeysetFactoryTest {
 	}
 
 	@Test
+	@DisplayName("should wrap and unwrap a keyset that was rotated after its primary key was compromised")
+	void shouldPersistKeysetRotatedAfterPrimaryKeyCompromise() throws IOException {
+		final Keyset original = createKeyset(definition());
+		final Key compromisedPrimary = original.getPrimary();
+
+		final Keyset compromised = withKeyStatus(original, compromisedPrimary.getId(), KeyStatus.COMPROMISED);
+
+		KeyAssert.assertThat(compromised.getPrimary())
+			.hasId(compromisedPrimary.getId())
+			.hasStatus(KeyStatus.COMPROMISED);
+
+		final Keyset rotated = compromised.rotate();
+		final EncryptedKeyset encrypted = encryptKeyset(rotated);
+
+		EncryptedKeysetAssert.assertThat(encrypted)
+			.matchesKeyset(rotated)
+			.hasSize(2);
+
+		final Keyset restored = decryptKeyset(encrypted);
+
+		KeysetAssert.assertThat(restored)
+			.hasSize(2);
+
+		KeyAssert.assertThat(restored.getPrimary())
+			.hasId(rotated.getPrimary().getId())
+			.isEnabled()
+			.isPrimary();
+
+		final Key restoredCompromised = restored.getKey(compromisedPrimary.getId())
+			.orElseThrow(() -> new AssertionError(
+				"Compromised key '" + compromisedPrimary.getId() + "' must still be present in the restored keyset"));
+
+		KeyAssert.assertThat(restoredCompromised)
+			.hasStatus(KeyStatus.COMPROMISED)
+			.isNotPrimary();
+	}
+
+	@Test
 	@DisplayName("should fail to decrypt an encrypted keyset when the wrong key encryption key is used")
 	void shouldFailToDecryptWithWrongKek() throws IOException {
 		final EncryptedKeyset encrypted = encryptKeyset(createKeyset(definition()));
@@ -474,6 +512,25 @@ public abstract class AbstractKeysetFactoryTest {
 	 */
 	protected final Keyset decryptKeyset(EncryptedKeyset encryptedKeyset) throws IOException {
 		return factory().create(kek(), encryptedKeyset);
+	}
+
+	/**
+	 * Creates a copy of the given {@link Keyset} where the key with the given identifier is in the
+	 * given {@link KeyStatus}, by round-tripping the keyset through its {@link EncryptedKeyset} form.
+	 *
+	 * @param keyset keyset that contains the key, can't be {@literal null}
+	 * @param keyId identifier of the key whose status should be changed, can't be {@literal null}
+	 * @param status the new status of the key, can't be {@literal null}
+	 * @return keyset with the updated key status, never {@literal null}
+	 * @throws IOException when wrapping or unwrapping fails
+	 */
+	protected final Keyset withKeyStatus(Keyset keyset, String keyId, KeyStatus status) throws IOException {
+		final EncryptedKeyset encrypted = encryptKeyset(keyset);
+		final List<EncryptedKey> keys = encrypted.keys().stream()
+			.map(key -> keyId.equals(key.id()) ? EncryptedKey.builder(key).status(status).build(key.data()) : key)
+			.toList();
+
+		return decryptKeyset(EncryptedKeyset.builder(encrypted).build(keys));
 	}
 
 	private void assertCryptoAccess(

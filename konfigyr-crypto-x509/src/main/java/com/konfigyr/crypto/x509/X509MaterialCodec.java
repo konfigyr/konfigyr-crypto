@@ -9,7 +9,6 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
-import java.security.Key;
 import java.security.KeyFactory;
 import java.security.PrivateKey;
 import java.security.cert.CertificateFactory;
@@ -47,17 +46,21 @@ final class X509MaterialCodec {
 
 	/**
 	 * Encodes the private key and the certificate chain of the given key.
+	 * <p>
+	 * The private key is read directly, bypassing the status check of {@link X509Material#convert}, as
+	 * persisting a key must not depend on its status. The status only gates the cryptographic use of
+	 * the key, keys that are not enabled still need to be stored with their key material.
 	 *
-	 * @param material the X509 material to encode
+	 * @param key the X509 key to encode
 	 * @return the encoded plaintext key material
 	 * @throws GeneralSecurityException when the private key or a certificate can not be encoded
 	 */
-	static ByteArray encode(X509Material material) throws GeneralSecurityException {
-		final List<X509Certificate> chain = material.getCertificateChain();
-		final byte[] encodedPrivateKey = material.convert(Key::getEncoded);
+	static ByteArray encode(X509Key key) throws GeneralSecurityException {
+		final List<X509Certificate> chain = key.getCertificateChain();
+		final byte[] encodedPrivateKey = key.privateKey().getEncoded();
 
 		if (encodedPrivateKey == null) {
-			throw new GeneralSecurityException("Private key of X509 key '" + material.getId() + "' does not support encoding");
+			throw new GeneralSecurityException("Private key of X509 key '" + key.getId() + "' does not support encoding");
 		}
 
 		final ByteArrayOutputStream buffer = new ByteArrayOutputStream(encodedPrivateKey.length + 1024 * chain.size());
@@ -74,7 +77,7 @@ final class X509MaterialCodec {
 			output.flush();
 			return new ByteArray(buffer.toByteArray());
 		} catch (IOException ex) {
-			throw new GeneralSecurityException("Failed to encode X509 key material for key: " + material.getId(), ex);
+			throw new GeneralSecurityException("Failed to encode X509 key material for key: " + key.getId(), ex);
 		} finally {
 			Arrays.fill(encodedPrivateKey, (byte) 0);
 		}
