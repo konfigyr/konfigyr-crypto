@@ -26,8 +26,8 @@ import java.util.StringJoiner;
  *     .validAt(Instant.now())
  *     .build();
  * }</pre>
- * Matchers can only narrow down the selection. Keys that are not {@link KeyStatus#ENABLED enabled} are
- * never selected, even when the matcher would match them.
+ * Matchers can only narrow down the selection. Keys that are neither {@link KeyStatus#ENABLED enabled} nor
+ * {@link KeyStatus#RETIRED retired} are never selected, even when the matcher would match them.
  *
  * @author Vladimir Spasic
  * @since 1.0.0
