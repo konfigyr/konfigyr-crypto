@@ -1,6 +1,5 @@
 package com.konfigyr.crypto.x509;
 
-import com.konfigyr.crypto.KeyDefinition;
 import com.konfigyr.crypto.KeysetDefinition;
 import com.konfigyr.crypto.KeysetPurpose;
 import org.bouncycastle.asn1.x500.X500Name;
