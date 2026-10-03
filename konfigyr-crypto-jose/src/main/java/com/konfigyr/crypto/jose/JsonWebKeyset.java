@@ -31,11 +31,13 @@ import java.util.stream.Collectors;
  * Internally, it wraps a {@link JWKSet} to manage the JSON Web Key (JWK) representation and
  * facilitates key selection via a {@link JWKSource}.
  * <p>
- * Only {@link Key#isEnabled() enabled} keys take part in cryptographic operations. This applies
- * to the {@link JWKSource#get(JWKSelector, SecurityContext)} method as well, which only exposes
- * enabled keys. This prevents disabled or compromised keys from being used by Nimbus processors,
- * such as the {@code DefaultJWTProcessor}, or from being published as part of a public JWK set.
- * The {@link #getKeys()} method still lists every key in this keyset, regardless of its status.
+ * Only {@link KeyStatus#ENABLED enabled} keys take part in all cryptographic operations, while
+ * {@link KeyStatus#RETIRED retired} keys may only verify signatures and decrypt data. The same applies
+ * to the {@link JWKSource#get(JWKSelector, SecurityContext)} method, which only exposes enabled and
+ * retired keys, the latter limited to their verification and decryption key operations. This prevents
+ * disabled or compromised keys from being used by Nimbus processors, such as the
+ * {@code DefaultJWTProcessor}, or from being published as part of a public JWK set. The
+ * {@link #getKeys()} method still lists every key in this keyset, regardless of its status.
  *
  * @author Vladimir Spasic
  * @since 1.0.0
