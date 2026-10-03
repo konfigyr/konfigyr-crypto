@@ -90,23 +90,31 @@ class KeyStatusSanityTest {
 	}
 
 	@Test
-	@DisplayName("should only allow destruction from one of the pending destruction statuses")
+	@DisplayName("should only allow destruction from retired or one of the pending destruction statuses")
 	void shouldOnlyDestroyFromPendingDestruction() {
 		assertThat(EnumSet.allOf(KeyStatus.class))
 			.filteredOn(status -> status.canTransitionTo(DESTROYED))
-			.containsExactlyInAnyOrder(PENDING_DESTRUCTION, COMPROMISED_PENDING_DESTRUCTION);
+			.containsExactlyInAnyOrder(RETIRED, PENDING_DESTRUCTION, COMPROMISED_PENDING_DESTRUCTION);
 	}
 
 	@Test
-	@DisplayName("should only schedule destruction of keys that have been deactivated")
+	@DisplayName("should only schedule destruction of keys that have been deactivated or retired")
 	void shouldOnlyScheduleDestructionOfDeactivatedKeys() {
 		assertThat(EnumSet.allOf(KeyStatus.class))
 			.filteredOn(status -> status.canTransitionTo(PENDING_DESTRUCTION))
-			.containsExactly(DISABLED);
+			.containsExactlyInAnyOrder(RETIRED, DISABLED);
 
 		assertThat(EnumSet.allOf(KeyStatus.class))
 			.filteredOn(status -> status.canTransitionTo(COMPROMISED_PENDING_DESTRUCTION))
-			.containsExactlyInAnyOrder(COMPROMISED, PENDING_DESTRUCTION);
+			.containsExactlyInAnyOrder(RETIRED, COMPROMISED, PENDING_DESTRUCTION);
+	}
+
+	@Test
+	@DisplayName("should only retire enabled keys")
+	void shouldOnlyRetireEnabledKeys() {
+		assertThat(EnumSet.allOf(KeyStatus.class))
+			.filteredOn(status -> status.canTransitionTo(RETIRED))
+			.containsExactly(ENABLED);
 	}
 
 	static Stream<Arguments> supportedOperations() {
@@ -115,6 +123,12 @@ class KeyStatusSanityTest {
 			Arguments.of(INITIALIZING, KeyStatus.Operation.FAIL_INITIALIZATION, INITIALIZATION_FAILED),
 			Arguments.of(ENABLED, KeyStatus.Operation.DISABLE, DISABLED),
 			Arguments.of(ENABLED, KeyStatus.Operation.COMPROMISE, COMPROMISED),
+			Arguments.of(ENABLED, KeyStatus.Operation.RETIRE, RETIRED),
+			Arguments.of(RETIRED, KeyStatus.Operation.ENABLE, ENABLED),
+			Arguments.of(RETIRED, KeyStatus.Operation.COMPROMISE, COMPROMISED_PENDING_DESTRUCTION),
+			Arguments.of(RETIRED, KeyStatus.Operation.SCHEDULE_DESTRUCTION, PENDING_DESTRUCTION),
+			Arguments.of(RETIRED, KeyStatus.Operation.DESTROY, DESTROYED),
+			Arguments.of(RETIRED, KeyStatus.Operation.FAIL_DESTRUCTION, DESTRUCTION_FAILED),
 			Arguments.of(DISABLED, KeyStatus.Operation.ENABLE, ENABLED),
 			Arguments.of(DISABLED, KeyStatus.Operation.COMPROMISE, COMPROMISED),
 			Arguments.of(DISABLED, KeyStatus.Operation.SCHEDULE_DESTRUCTION, PENDING_DESTRUCTION),
@@ -142,6 +156,12 @@ class KeyStatusSanityTest {
 			Arguments.of(INITIALIZING, INITIALIZATION_FAILED),
 			Arguments.of(ENABLED, COMPROMISED),
 			Arguments.of(ENABLED, DISABLED),
+			Arguments.of(ENABLED, RETIRED),
+			Arguments.of(RETIRED, ENABLED),
+			Arguments.of(RETIRED, COMPROMISED_PENDING_DESTRUCTION),
+			Arguments.of(RETIRED, PENDING_DESTRUCTION),
+			Arguments.of(RETIRED, DESTROYED),
+			Arguments.of(RETIRED, DESTRUCTION_FAILED),
 			Arguments.of(DISABLED, ENABLED),
 			Arguments.of(DISABLED, COMPROMISED),
 			Arguments.of(DISABLED, PENDING_DESTRUCTION),
@@ -173,7 +193,7 @@ class KeyStatusSanityTest {
 			// ENABLED keys must be deactivated before their destruction can be scheduled
 			Arguments.of(ENABLED, PENDING_DESTRUCTION),
 			Arguments.of(ENABLED, COMPROMISED_PENDING_DESTRUCTION),
-			// Key material may only be destroyed from one of the pending destruction statuses
+			// Key material may only be destroyed from retired or one of the pending destruction statuses
 			Arguments.of(ENABLED, DESTROYED),
 			Arguments.of(DISABLED, DESTROYED),
 			Arguments.of(COMPROMISED, DESTROYED),
@@ -184,7 +204,15 @@ class KeyStatusSanityTest {
 			Arguments.of(COMPROMISED_PENDING_DESTRUCTION, ENABLED),
 			Arguments.of(COMPROMISED_PENDING_DESTRUCTION, DISABLED),
 			Arguments.of(COMPROMISED_PENDING_DESTRUCTION, PENDING_DESTRUCTION),
+			// RETIRED keys may only be re-enabled, compromised or destroyed, they can not be disabled
+			Arguments.of(RETIRED, DISABLED),
+			Arguments.of(RETIRED, COMPROMISED),
+			// only ENABLED keys may be retired
+			Arguments.of(DISABLED, RETIRED),
+			Arguments.of(PENDING_DESTRUCTION, RETIRED),
+			Arguments.of(COMPROMISED, RETIRED),
 			// No self-loops
+			Arguments.of(RETIRED, RETIRED),
 			Arguments.of(ENABLED, ENABLED),
 			Arguments.of(DISABLED, DISABLED),
 			Arguments.of(COMPROMISED, COMPROMISED),

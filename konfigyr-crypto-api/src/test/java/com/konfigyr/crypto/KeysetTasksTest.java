@@ -302,6 +302,66 @@ class KeysetTasksTest {
 		}
 
 		@Test
+		@DisplayName("should destroy retired keys of keysets that destroy demoted keys")
+		void shouldDestroyRetiredKeys() throws IOException {
+			when(repository.findPendingDestruction()).thenReturn(List.of(
+					retiringKeyset("ks-a", RetirementPolicy.DESTROY, retiredKey("k1"))));
+
+			new KeysetDestructionTask(store, repository).run();
+
+			verify(store).destroy("ks-a", "k1");
+			verify(store, never()).scheduleDestruction(anyString(), anyString());
+		}
+
+		@Test
+		@DisplayName("should schedule the destruction of retired keys of keysets that schedule their destruction")
+		void shouldScheduleDestructionOfRetiredKeys() throws IOException {
+			when(repository.findPendingDestruction()).thenReturn(List.of(
+					retiringKeyset("ks-a", RetirementPolicy.SCHEDULE_DESTRUCTION, retiredKey("k1"))));
+
+			new KeysetDestructionTask(store, repository).run();
+
+			verify(store).scheduleDestruction("ks-a", "k1");
+			verify(store, never()).destroy(anyString(), anyString());
+		}
+
+		@Test
+		@DisplayName("should leave retired keys untouched when the keyset retains demoted keys")
+		void shouldRetainRetiredKeys() throws IOException {
+			when(repository.findPendingDestruction()).thenReturn(List.of(
+					retiringKeyset("ks-a", RetirementPolicy.RETAIN, retiredKey("k1"))));
+
+			new KeysetDestructionTask(store, repository).run();
+
+			verifyNoInteractions(store);
+		}
+
+		@Test
+		@DisplayName("should destroy keys pending destruction regardless of the retirement policy")
+		void shouldDestroyPendingKeysRegardlessOfPolicy() throws IOException {
+			when(repository.findPendingDestruction()).thenReturn(List.of(
+					retiringKeyset("ks-a", RetirementPolicy.SCHEDULE_DESTRUCTION,
+						pendingKey("k1", Instant.now().minus(Duration.ofDays(1))))));
+
+			new KeysetDestructionTask(store, repository).run();
+
+			verify(store).destroy("ks-a", "k1");
+		}
+
+		@Test
+		@DisplayName("should continue processing remaining keys after a concurrent modification")
+		void shouldContinueAfterConcurrentModification() throws IOException {
+			when(repository.findPendingDestruction()).thenReturn(List.of(
+					retiringKeyset("ks-a", RetirementPolicy.DESTROY, retiredKey("k1"), retiredKey("k2"))));
+			doThrow(new CryptoException.KeysetConcurrentModificationException("ks-a"))
+					.when(store).destroy("ks-a", "k1");
+
+			assertThatNoException().isThrownBy(() -> new KeysetDestructionTask(store, repository).run());
+
+			verify(store).destroy("ks-a", "k2");
+		}
+
+		@Test
 		@DisplayName("should skip destruction when no keys are pending")
 		void shouldSkipWhenNoPendingKeys() throws IOException {
 			when(repository.findPendingDestruction()).thenReturn(List.of());
@@ -344,6 +404,26 @@ class KeysetTasksTest {
 				.keyEncryptionKey("test-kek")
 				.rotationInterval(Duration.ofDays(90))
 				.build(List.of());
+	}
+
+	private static EncryptedKeyset retiringKeyset(String name, RetirementPolicy policy, EncryptedKey... keys) {
+		return EncryptedKeyset.builder(partialKeyset(name))
+				.destructionGracePeriod(Duration.ofDays(30))
+				.retirementPolicy(policy)
+				.build(keys);
+	}
+
+	private static EncryptedKey retiredKey(String id) {
+		final Instant scheduledAt = Instant.now().minus(Duration.ofMinutes(1));
+
+		return EncryptedKey.builder()
+				.id(id)
+				.algorithm(TestAlgorithm.INSTANCE)
+				.status(KeyStatus.RETIRED)
+				.primary(false)
+				.createdAt(scheduledAt.minus(Duration.ofDays(120)))
+				.destructionScheduledAt(scheduledAt)
+				.build(ByteArray.fromString("enc-data"));
 	}
 
 	private static EncryptedKeyset partialKeyset(String name, EncryptedKey... keys) {

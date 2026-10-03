@@ -77,6 +77,11 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 	protected final List<T> keys;
 
 	/**
+	 * The policy that defines what happens to the primary key once it is demoted by a rotation.
+	 */
+	protected final RetirementPolicy retirementPolicy;
+
+	/**
 	 * The interval at which key material should be automatically rotated to mitigate
 	 * cryptographic wear-out. May be {@literal null} if automatic rotation is disabled.
 	 */
@@ -119,6 +124,7 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 		this.purpose = builder.purpose;
 		this.keyEncryptionKey = builder.kek;
 		this.keys = Collections.unmodifiableList(builder.keys);
+		this.retirementPolicy = builder.retirementPolicy;
 		this.rotationInterval = builder.rotationInterval;
 		this.rotationLeadTime = builder.rotationLeadTime;
 		this.destructionGracePeriod = builder.destructionGracePeriod;
@@ -194,28 +200,59 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 
 	/**
 	 * Looks up the {@link Key} with the given identifier within this keyset and asserts that it can
-	 * be used for cryptographic operations.
+	 * be used for cryptographic read operations.
 	 * <p>
 	 * This method is intended for cryptographic read operations ({@code decrypt}, {@code verify})
 	 * where the key is resolved from the identifier carried by the ciphertext or signature.
 	 *
 	 * @param keyId the identifier of the key to resolve, can't be {@literal null}
-	 * @return the usable key, never {@literal null}
+	 * @return the readable key, never {@literal null}
 	 * @throws CryptoException.KeyNotFoundException if no key with the given identifier exists in this keyset
-	 * @throws CryptoException.KeysetException      if the key is not usable, see {@link #requireUsableKey(Key)}
+	 * @throws CryptoException.KeysetException      if the key is not readable, see {@link #requireReadableKey(Key)}
+	 * @since 1.1.0
 	 */
-	protected final T requireUsableKey(String keyId) {
+	protected final T requireReadableKey(String keyId) {
 		final T key = getKey(keyId).orElseThrow(() -> new CryptoException.KeyNotFoundException(name, keyId));
-		return requireUsableKey(key);
+		return requireReadableKey(key);
 	}
 
 	/**
-	 * Asserts that the given {@link Key} is in a state where it can be used for cryptographic
+	 * Asserts that the given {@link Key} is in a state where it can be used for cryptographic read
+	 * operations ({@code decrypt}, {@code verify}), as defined by {@link #isReadable(Key)}.
+	 * <p>
+	 * Besides {@link KeyStatus#ENABLED} keys, {@link KeyStatus#RETIRED} keys may still verify signatures
+	 * and decrypt data they produced while they were the primary key. Keys in any other status fail with
+	 * the same status-specific exceptions as {@link #requireUsableKey(Key)}.
+	 *
+	 * @param key the key to check, can't be {@literal null}
+	 * @return the same key when it is readable, never {@literal null}
+	 * @throws CryptoException.KeysetException if the key is not readable, see {@link #requireUsableKey(Key)}
+	 * @since 1.1.0
+	 */
+	protected final T requireReadableKey(T key) {
+		return key.getStatus() == KeyStatus.RETIRED ? key : requireUsableKey(key);
+	}
+
+	/**
+	 * Checks if the given {@link Key} can be used for cryptographic read operations ({@code decrypt},
+	 * {@code verify}). This is the case for {@link KeyStatus#ENABLED} and {@link KeyStatus#RETIRED} keys.
+	 *
+	 * @param key the key to check, can't be {@literal null}
+	 * @return {@literal true} when the key can verify signatures and decrypt data
+	 * @since 1.1.0
+	 */
+	protected static boolean isReadable(Key key) {
+		return key.isEnabled() || key.getStatus() == KeyStatus.RETIRED;
+	}
+
+	/**
+	 * Asserts that the given {@link Key} is in a state where it can be used for all cryptographic
 	 * operations, as defined by {@link Key#isEnabled()}.
 	 * <p>
-	 * This method is the guard that every cryptographic operation must pass before key material
-	 * is used, both write operations ({@code encrypt}, {@code sign}) and read operations
-	 * ({@code decrypt}, {@code verify}). It deliberately evaluates the {@link KeyStatus} directly,
+	 * This method is the guard that every cryptographic write operation ({@code encrypt}, {@code sign})
+	 * must pass before key material is used. Read operations ({@code decrypt}, {@code verify}) use the
+	 * {@link #requireReadableKey(Key)} guard instead, which also accepts {@link KeyStatus#RETIRED} keys.
+	 * It deliberately evaluates the {@link KeyStatus} directly,
 	 * instead of relying on {@link Key#isEnabled()}, so that a {@link Key} implementation can't
 	 * weaken it and each blocked status results in its own exception type.
 	 * <p>
@@ -226,6 +263,7 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 	 * @throws CryptoException.KeysetCompromisedException       if the key status is {@link KeyStatus#COMPROMISED}
 	 *                                                          or {@link KeyStatus#COMPROMISED_PENDING_DESTRUCTION}
 	 * @throws CryptoException.KeysetDisabledException          if the key status is {@link KeyStatus#DISABLED}
+	 * @throws CryptoException.KeysetRetiredException           if the key status is {@link KeyStatus#RETIRED}
 	 * @throws CryptoException.KeysetPendingDestructionException if the key status is {@link KeyStatus#PENDING_DESTRUCTION}
 	 * @throws CryptoException.KeysetDestroyedException         if the key status is {@link KeyStatus#DESTROYED}
 	 * @throws CryptoException.KeysetUnavailableException       if the key status is {@link KeyStatus#INITIALIZING},
@@ -238,6 +276,7 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 			case ENABLED -> key;
 			case COMPROMISED, COMPROMISED_PENDING_DESTRUCTION -> throw new CryptoException.KeysetCompromisedException(name, key);
 			case DISABLED -> throw new CryptoException.KeysetDisabledException(name, key);
+			case RETIRED -> throw new CryptoException.KeysetRetiredException(name, key);
 			case PENDING_DESTRUCTION -> throw new CryptoException.KeysetPendingDestructionException(name, key);
 			case DESTROYED -> throw new CryptoException.KeysetDestroyedException(name, key);
 			case INITIALIZING, INITIALIZATION_FAILED, DESTRUCTION_FAILED ->
@@ -248,6 +287,11 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 	@Override
 	public Optional<? extends T> getKey(String id) {
 		return keys.stream().filter(key -> Objects.equals(key.getId(), id)).findFirst();
+	}
+
+	@Override
+	public RetirementPolicy getRetirementPolicy() {
+		return retirementPolicy;
 	}
 
 	@Override
@@ -412,6 +456,34 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 	 */
 	protected abstract Keyset doPromote(T key, @Nullable Instant expiresAt);
 
+	/**
+	 * Demotes the given primary {@link Key} using the given builder, which is created from that key, and
+	 * applies the {@link #getRetirementPolicy() retirement policy} of this keyset.
+	 * <p>
+	 * Implementations must use this method in {@link #doRotate(KeyDefinition, String)} and
+	 * {@link #doPromote(Key, Instant)} whenever they demote the current primary key. The key is always demoted,
+	 * and when the policy is not {@link RetirementPolicy#RETAIN} it is also {@link KeyStatus#RETIRED retired}
+	 * until the {@link #getDestructionGracePeriod() destruction grace period} elapses. Only
+	 * {@link KeyStatus#ENABLED} keys are retired, a primary key in any other status, for instance one that
+	 * was compromised, keeps its status.
+	 *
+	 * @param key     the primary key that is demoted, can't be {@literal null}
+	 * @param builder the key builder created from the demoted key, can't be {@literal null}
+	 * @param <B>     the type of the key builder
+	 * @return the given key builder, never {@literal null}
+	 * @since 1.1.0
+	 */
+	protected final <B extends AbstractKey.Builder<?, ?, B>> B demote(Key key, B builder) {
+		builder.demote();
+
+		if (retirementPolicy != RetirementPolicy.RETAIN && key.getStatus().next(KeyStatus.Operation.RETIRE).isPresent()) {
+			final Instant now = Instant.now();
+			builder.retire(destructionGracePeriod == null ? now : now.plus(destructionGracePeriod));
+		}
+
+		return builder;
+	}
+
 	@Override
 	public final boolean equals(Object object) {
 		if (!(object instanceof AbstractKeyset<?> that)) return false;
@@ -420,6 +492,7 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 			&& Objects.equals(purpose, that.purpose)
 			&& Objects.equals(keyEncryptionKey, that.keyEncryptionKey)
 			&& Objects.equals(keys, that.keys)
+			&& Objects.equals(retirementPolicy, that.retirementPolicy)
 			&& Objects.equals(rotationInterval, that.rotationInterval)
 			&& Objects.equals(rotationLeadTime, that.rotationLeadTime)
 			&& Objects.equals(destructionGracePeriod, that.destructionGracePeriod);
@@ -432,6 +505,7 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 		result = 31 * result + Objects.hashCode(purpose);
 		result = 31 * result + Objects.hashCode(keyEncryptionKey);
 		result = 31 * result + Objects.hashCode(keys);
+		result = 31 * result + Objects.hashCode(retirementPolicy);
 		result = 31 * result + Objects.hashCode(rotationInterval);
 		result = 31 * result + Objects.hashCode(rotationLeadTime);
 		result = 31 * result + Objects.hashCode(destructionGracePeriod);
@@ -446,6 +520,7 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 			.add("purpose=" + purpose)
 			.add("kek=" + KeyEncryptionKey.format(keyEncryptionKey))
 			.add("keys=" + keys)
+			.add("retirementPolicy=" + retirementPolicy)
 			.add("rotationInterval=" + rotationInterval)
 			.add("rotationLeadTime=" + rotationLeadTime)
 			.add("destructionGracePeriod=" + destructionGracePeriod)
@@ -484,6 +559,7 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 		private @Nullable Duration rotationInterval;
 		private @Nullable Duration rotationLeadTime;
 		private @Nullable Duration destructionGracePeriod;
+		private RetirementPolicy retirementPolicy = RetirementPolicy.RETAIN;
 		private long version = 0L;
 		private final List<T> keys;
 
@@ -506,6 +582,7 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 			rotationInterval = definition.getRotationInterval().orElse(null);
 			rotationLeadTime = definition.getRotationLeadTime().orElse(null);
 			destructionGracePeriod = definition.getDestructionGracePeriod().orElse(null);
+			retirementPolicy = definition.getRetirementPolicy();
 			keys = new ArrayList<>();
 		}
 
@@ -522,6 +599,7 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 			rotationInterval = keyset.getRotationInterval().orElse(null);
 			rotationLeadTime = keyset.getRotationLeadTime().orElse(null);
 			destructionGracePeriod = keyset.getDestructionGracePeriod().orElse(null);
+			retirementPolicy = keyset.getRetirementPolicy();
 			version = keyset.getVersion();
 			keys = new ArrayList<>(keyset.size());
 		}
@@ -538,6 +616,7 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 			rotationInterval = keyset.rotationInterval();
 			rotationLeadTime = keyset.rotationLeadTime();
 			destructionGracePeriod = keyset.destructionGracePeriod();
+			retirementPolicy = keyset.retirementPolicy();
 			version = keyset.version();
 			keys = new ArrayList<>(keyset.size());
 		}
@@ -656,6 +735,19 @@ public abstract class AbstractKeyset<T extends Key> implements Keyset {
 		 */
 		public B destructionGracePeriod(@Nullable Duration destructionGracePeriod) {
 			this.destructionGracePeriod = destructionGracePeriod;
+			return self();
+		}
+
+		/**
+		 * Sets the policy that defines what happens to the primary key once it is demoted by a rotation.
+		 *
+		 * @param retirementPolicy the retirement policy, can't be {@literal null}
+		 * @return this builder instance for method chaining
+		 * @since 1.1.0
+		 */
+		public B retirementPolicy(RetirementPolicy retirementPolicy) {
+			Assert.notNull(retirementPolicy, "Keyset retirement policy can't be null");
+			this.retirementPolicy = retirementPolicy;
 			return self();
 		}
 

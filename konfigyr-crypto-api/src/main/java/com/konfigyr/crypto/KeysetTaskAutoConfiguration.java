@@ -23,7 +23,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  *     <li><em>keyset-destruction</em> — calls
  *     {@link KeysetStore#destroy(String, String)} for every key whose
  *     {@link KeyStatus#PENDING_DESTRUCTION} or {@link KeyStatus#COMPROMISED_PENDING_DESTRUCTION}
- *     grace period has elapsed. Controlled via
+ *     grace period has elapsed, and destroys or schedules the destruction of every
+ *     {@link KeyStatus#RETIRED} key whose grace period has elapsed, as defined by the
+ *     {@link RetirementPolicy} of its keyset. Controlled via
  *     {@code konfigyr.crypto.tasks.keyset-destruction.*}.</li>
  * </ul>
  * <p>

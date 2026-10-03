@@ -31,11 +31,13 @@ import java.util.stream.Collectors;
  * Internally, it wraps a {@link JWKSet} to manage the JSON Web Key (JWK) representation and
  * facilitates key selection via a {@link JWKSource}.
  * <p>
- * Only {@link Key#isEnabled() enabled} keys take part in cryptographic operations. This applies
- * to the {@link JWKSource#get(JWKSelector, SecurityContext)} method as well, which only exposes
- * enabled keys. This prevents disabled or compromised keys from being used by Nimbus processors,
- * such as the {@code DefaultJWTProcessor}, or from being published as part of a public JWK set.
- * The {@link #getKeys()} method still lists every key in this keyset, regardless of its status.
+ * Only {@link KeyStatus#ENABLED enabled} keys take part in all cryptographic operations, while
+ * {@link KeyStatus#RETIRED retired} keys may only verify signatures and decrypt data. The same applies
+ * to the {@link JWKSource#get(JWKSelector, SecurityContext)} method, which only exposes enabled and
+ * retired keys, the latter limited to their verification and decryption key operations. This prevents
+ * disabled or compromised keys from being used by Nimbus processors, such as the
+ * {@code DefaultJWTProcessor}, or from being published as part of a public JWK set. The
+ * {@link #getKeys()} method still lists every key in this keyset, regardless of its status.
  *
  * @author Vladimir Spasic
  * @since 1.0.0
@@ -49,16 +51,19 @@ class JsonWebKeyset extends AbstractKeyset<JsonWebKey> implements JWKSource<Secu
 	}
 
 	/**
-	 * Selects the matching JSON Web Keys that are {@link Key#isEnabled() enabled}. Keys in any other
-	 * {@link KeyStatus} are never returned by this method, regardless of the given selector.
+	 * Selects the matching JSON Web Keys that are {@link KeyStatus#ENABLED enabled} or
+	 * {@link KeyStatus#RETIRED retired}. Retired keys are still returned, so third parties can verify
+	 * signatures, and send data encrypted, before the keys were retired. Their key operations are limited
+	 * to verification and decryption. Keys in any other {@link KeyStatus} are never returned by this method,
+	 * regardless of the given selector.
 	 *
 	 * @param selector the JWK selector, can't be {@literal null}
 	 * @param context the optional security context, can be {@literal null}
-	 * @return the matching enabled keys, never {@literal null}
+	 * @return the matching enabled and retired keys, never {@literal null}
 	 */
 	@Override
 	public List<JWK> get(JWKSelector selector, @Nullable SecurityContext context) {
-		return select(selector, Key::isEnabled);
+		return select(selector, AbstractKeyset::isReadable);
 	}
 
 	@Override
@@ -155,7 +160,7 @@ class JsonWebKeyset extends AbstractKeyset<JsonWebKey> implements JWKSource<Secu
 
 		stream().map(JsonWebKey.class::cast).forEach(existing -> {
 			if (existing.isPrimary() && definition.isPrimary()) {
-				builder.key(demote(existing));
+				builder.key(demoteKey(existing));
 			} else {
 				builder.key(existing);
 			}
@@ -172,7 +177,7 @@ class JsonWebKeyset extends AbstractKeyset<JsonWebKey> implements JWKSource<Secu
 			if (existing.getId().equals(key.getId())) {
 				builder.key(promote(existing, expiresAt));
 			} else if (existing.isPrimary()) {
-				builder.key(demote(existing));
+				builder.key(demoteKey(existing));
 			} else {
 				builder.key(existing);
 			}
@@ -246,7 +251,7 @@ class JsonWebKeyset extends AbstractKeyset<JsonWebKey> implements JWKSource<Secu
 			throw new KeySourceException("Found multiple keys for JWK matcher: " + matcher);
 		}
 
-		return requireUsableKey(keys.getFirst().getKeyID());
+		return requireReadableKey(keys.getFirst().getKeyID());
 	}
 
 	private java.security.Key resolveCryptographicKey(
@@ -276,7 +281,7 @@ class JsonWebKeyset extends AbstractKeyset<JsonWebKey> implements JWKSource<Secu
 
 	/**
 	 * Promotes the given key to be the primary key, restoring all the key operations permitted by the
-	 * purpose of its algorithm, as these are removed when a key is {@link #demote(JsonWebKey) demoted}.
+	 * purpose of its algorithm, as these are removed when a key is {@link #demoteKey(JsonWebKey) demoted}.
 	 *
 	 * @param key       the key to be promoted
 	 * @param expiresAt the new expiration time of the promoted key
@@ -308,7 +313,7 @@ class JsonWebKeyset extends AbstractKeyset<JsonWebKey> implements JWKSource<Secu
 	 * @param key the existing primary key to be demoted
 	 * @return the demoted key
 	 */
-	private static JsonWebKey demote(JsonWebKey key) {
+	private JsonWebKey demoteKey(JsonWebKey key) {
 		final Set<KeyOperation> operations = key.getValue()
 			.getKeyOperations()
 			.stream()
@@ -328,7 +333,7 @@ class JsonWebKeyset extends AbstractKeyset<JsonWebKey> implements JWKSource<Secu
 			default -> throw new IllegalStateException("Unsupported JWK type: " + key.getValue().getKeyType());
 		};
 
-		return new JsonWebKey.Builder(key, jwk).demote().build();
+		return demote(key, new JsonWebKey.Builder(key, jwk)).build();
 	}
 
 	static final class Builder extends AbstractKeyset.Builder<JsonWebKey, JsonWebKeyset, Builder> {

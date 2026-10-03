@@ -12,6 +12,8 @@ import com.nimbusds.jose.jwk.gen.OctetSequenceKeyGenerator;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -43,6 +45,10 @@ public class JoseIntegrationTest {
 	@Autowired
 	@Qualifier("keysetRotationTaskRegistration")
 	SchedulingConfigurer keysetRotationTask;
+
+	@Autowired
+	@Qualifier("keysetDestructionTaskRegistration")
+	SchedulingConfigurer keysetDestructionTask;
 
 	@Test
 	@Order(1)
@@ -258,23 +264,26 @@ public class JoseIntegrationTest {
 
 	@Test
 	@Order(5)
-	@DisplayName("should publish the next key ahead of the rotation and promote it when rotating the keyset")
+	@DisplayName("should publish the next key ahead of the rotation, promote it and retire the previous key")
 	void shouldPrepareAndPromoteNextKey() throws Exception {
 		final ByteArray data = ByteArray.fromString("konfigyr-crypto-test-data");
 
-		// create the keyset with a rotation lead time, as shown in the README
+		// create the keyset with a rotation lead time and retirement policy, as shown in the README
 		final Keyset keyset = store.create(KEK_PROVIDER, KEK_IDENTIFIER, KeysetDefinition.builder()
 			.name("jose-lead-time-keyset")
 			.algorithm(JoseAlgorithm.ES256)
 			.rotationInterval(Duration.ofDays(90))
 			.rotationLeadTime(Duration.ofDays(30))
+			.retirementPolicy(RetirementPolicy.DESTROY)
+			.destructionGracePeriod(Duration.ofDays(30))
 			.build());
 
 		final Key original = keyset.getPrimary();
 		final ByteArray signature = keyset.sign(data);
 
 		KeysetAssert.assertThat(store.read("jose-lead-time-keyset"))
-			.hasRotationLeadTime(Duration.ofDays(30));
+			.hasRotationLeadTime(Duration.ofDays(30))
+			.hasRetirementPolicy(RetirementPolicy.DESTROY);
 
 		// prepare the next key, as shown in the README
 		store.rotate("jose-lead-time-keyset", KeyDefinition.builder()
@@ -316,7 +325,97 @@ public class JoseIntegrationTest {
 			.as("promoted key must sign")
 			.isTrue();
 
+		KeyAssert.assertThat(promoted.getKey(original.getId()).orElseThrow())
+			.as("previous primary key must be retired for the destruction grace period")
+			.hasStatus(KeyStatus.RETIRED)
+			.destructionScheduledAt(Instant.now().plus(Duration.ofDays(30)), Duration.ofMinutes(1));
+
+		assertThat(publishedKeyIds(promoted))
+			.as("retired key must still be published for verification")
+			.containsExactlyInAnyOrder(original.getId(), next.getId());
+
+		// restore the retired key, as shown in the README
+		store.enable("jose-lead-time-keyset", original.getId());
+
+		KeyAssert.assertThat(store.read("jose-lead-time-keyset").getKey(original.getId()).orElseThrow())
+			.as("restored key must be enabled and no longer scheduled for destruction")
+			.isEnabled()
+			.isNotPrimary()
+			.destructionScheduledAt(null);
+
 		store.remove("jose-lead-time-keyset");
+	}
+
+	@Order(5)
+	@EnumSource(value = RetirementPolicy.class, names = "RETAIN", mode = EnumSource.Mode.EXCLUDE)
+	@ParameterizedTest(name = "retirement policy: {0}")
+	@DisplayName("should retire and destroy the previous key using the scheduled keyset maintenance tasks")
+	void shouldRetireAndDestroyPreviousKeyUsingMaintenanceTasks(RetirementPolicy policy) throws Exception {
+		final String name = "jose-retirement-" + policy.name().toLowerCase();
+		final ByteArray data = ByteArray.fromString("konfigyr-crypto-test-data");
+
+		final Keyset keyset = store.create(KEK_PROVIDER, KEK_IDENTIFIER, KeysetDefinition.builder()
+			.name(name)
+			.algorithm(JoseAlgorithm.ES256)
+			.rotationInterval(Duration.ofDays(90))
+			.retirementPolicy(policy)
+			.destructionGracePeriod(Duration.ofDays(30))
+			.build());
+
+		final Key original = keyset.getPrimary();
+		final ByteArray signature = keyset.sign(data);
+
+		// the primary key expired: the rotation task retires it
+		expirePrimaryKey(name, Instant.now().minus(Duration.ofMinutes(1)));
+		runTask(keysetRotationTask);
+
+		final Keyset rotated = store.read(name);
+
+		KeyAssert.assertThat(rotated.getKey(original.getId()).orElseThrow())
+			.hasStatus(KeyStatus.RETIRED)
+			.isNotPrimary();
+
+		assertThat(rotated.verify(signature, data))
+			.as("retired key must still verify signatures during the grace period")
+			.isTrue();
+
+		// the grace period has not elapsed yet: the destruction task leaves the retired key untouched
+		runTask(keysetDestructionTask);
+
+		KeyAssert.assertThat(store.read(name).getKey(original.getId()).orElseThrow())
+			.hasStatus(KeyStatus.RETIRED);
+
+		// the grace period elapsed: the destruction task moves the retired key on
+		scheduleDestruction(name, original.getId(), Instant.now().minus(Duration.ofMinutes(1)));
+		runTask(keysetDestructionTask);
+
+		if (policy == RetirementPolicy.SCHEDULE_DESTRUCTION) {
+			KeyAssert.assertThat(store.read(name).getKey(original.getId()).orElseThrow())
+				.as("retired key must be scheduled for destruction for another grace period")
+				.hasStatus(KeyStatus.PENDING_DESTRUCTION)
+				.destructionScheduledAt(Instant.now().plus(Duration.ofDays(30)), Duration.ofMinutes(1));
+
+			scheduleDestruction(name, original.getId(), Instant.now().minus(Duration.ofMinutes(1)));
+			runTask(keysetDestructionTask);
+		}
+
+		assertThat(repository.read(name).orElseThrow().getKey(original.getId()))
+			.as("retired key must be destroyed once its grace period elapsed, its record is retained for audit")
+			.hasValueSatisfying(key -> assertThat(key)
+				.returns(KeyStatus.DESTROYED, EncryptedKey::status)
+				.returns(null, EncryptedKey::data));
+
+		final Keyset destroyed = store.read(name);
+
+		assertThat(destroyed.getKey(original.getId()))
+			.as("destroyed key must no longer be part of the keyset")
+			.isEmpty();
+
+		assertThat(publishedKeyIds(destroyed))
+			.as("destroyed key must no longer be published")
+			.containsExactly(destroyed.getPrimary().getId());
+
+		store.remove(name);
 	}
 
 	@Test
@@ -378,12 +477,27 @@ public class JoseIntegrationTest {
 	}
 
 	private void runRotationTask() {
+		runTask(keysetRotationTask);
+	}
+
+	private static void runTask(SchedulingConfigurer registration) {
 		final ScheduledTaskRegistrar registrar = new ScheduledTaskRegistrar();
-		keysetRotationTask.configureTasks(registrar);
+		registration.configureTasks(registrar);
 
 		assertThat(registrar.getTriggerTaskList())
 			.singleElement()
 			.satisfies(task -> task.getRunnable().run());
+	}
+
+	private void scheduleDestruction(String name, String keyId, Instant destructionScheduledAt) throws IOException {
+		final EncryptedKeyset stored = repository.read(name).orElseThrow();
+
+		repository.write(EncryptedKeyset.builder(stored)
+			.build(stored.keys().stream()
+				.map(key -> key.id().equals(keyId)
+					? EncryptedKey.builder(key).destructionScheduledAt(destructionScheduledAt).build(key.data())
+					: key)
+				.toList()));
 	}
 
 	private void expirePrimaryKey(String name, Instant expiresAt) throws IOException {

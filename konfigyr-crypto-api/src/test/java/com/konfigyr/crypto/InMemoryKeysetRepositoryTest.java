@@ -143,6 +143,26 @@ class InMemoryKeysetRepositoryTest {
 	}
 
 	@Test
+	@DisplayName("should return retired keys with an elapsed destruction schedule")
+	void shouldFindRetiredKeysPendingDestruction() throws IOException {
+		final Instant past = NOW.minus(Duration.ofDays(1));
+		final Instant future = Instant.now().plus(Duration.ofDays(1));
+
+		repository.write(encryptedKeyset("retiring",
+			encryptedKey("primary", KeyStatus.ENABLED, true, ByteArray.fromString("primary"), null),
+			encryptedKey("retired-due", KeyStatus.RETIRED, false, ByteArray.fromString("due"), past),
+			encryptedKey("retired-later", KeyStatus.RETIRED, false, ByteArray.fromString("later"), future)));
+
+		assertThat(repository.findPendingDestruction())
+			.singleElement()
+			.returns("retiring", EncryptedKeyset::name)
+			.extracting(EncryptedKeyset::keys)
+			.asInstanceOf(InstanceOfAssertFactories.list(EncryptedKey.class))
+			.extracting(EncryptedKey::id)
+			.containsExactly("retired-due");
+	}
+
+	@Test
 	@DisplayName("should not return keys whose destruction schedule is in the future")
 	void shouldNotFindFutureScheduledDestructionKeys() throws IOException {
 		final Instant futureSchedule = Instant.now().plus(Duration.ofDays(7));
