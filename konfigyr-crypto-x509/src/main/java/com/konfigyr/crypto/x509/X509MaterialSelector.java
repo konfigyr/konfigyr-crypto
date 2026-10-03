@@ -41,7 +41,7 @@ import java.util.List;
  * </ul>
  *
  * @author Vladimir Spasic
- * @since 1.0.0
+ * @since 1.1.0
  * @see X509Matcher
  * @see X509Material
  */
