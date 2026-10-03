@@ -29,7 +29,7 @@ import java.util.*;
  * {@link #convert(Converter)} method.
  *
  * @author Vladimir Spasic
- * @since 1.0.0
+ * @since 1.1.0
  */
 @NullMarked
 final class X509Key extends AbstractKey<X509Algorithm> implements X509Material {
@@ -111,25 +111,24 @@ final class X509Key extends AbstractKey<X509Algorithm> implements X509Material {
 	 * Generates a new key pair for the algorithm defined in the {@link KeyDefinition} and issues a
 	 * self-signed certificate for it.
 	 * <p>
-	 * The certificate is valid from the key creation time until the key expiration time, or for
-	 * {@link X509Utils#DEFAULT_CERTIFICATE_VALIDITY} when the key does not expire.
+	 * The certificate is valid from the key creation time until the given time, which should cover the whole
+	 * period during which the key can be used, see {@link X509Utils#certificateNotAfter}.
 	 *
 	 * @param definition the key definition, can't be {@literal null}
 	 * @param id         the key identifier, can't be {@literal null}
 	 * @param subject    common name of the certificate subject, usually the keyset name, can't be {@literal null}
+	 * @param notAfter   the end of the certificate validity, can't be {@literal null}
 	 * @return the generated key, never {@literal null}
 	 * @throws CryptoException.UnsupportedAlgorithmException when the algorithm is not a {@link X509Algorithm}
-	 * @throws CryptoException.KeysetException when the key pair or the certificate can not be generated
+	 * @throws CryptoException.KeysetException when the key pair or the certificate cannot be generated
 	 */
-	static X509Key generate(KeyDefinition definition, String id, String subject) {
+	static X509Key generate(KeyDefinition definition, String id, String subject, Instant notAfter) {
 		if (!(definition.getAlgorithm() instanceof X509Algorithm algorithm)) {
 			throw new CryptoException.UnsupportedAlgorithmException(definition.getAlgorithm());
 		}
 
 		final Builder builder = new Builder(definition).id(id).status(KeyStatus.ENABLED);
 		final Instant notBefore = Objects.requireNonNull(builder.createdAt(), "Key creation time can't be null");
-		final Instant expiresAt = builder.expiresAt();
-		final Instant notAfter = expiresAt == null ? notBefore.plus(X509Utils.DEFAULT_CERTIFICATE_VALIDITY) : expiresAt;
 
 		try {
 			final KeyPair pair = algorithm.keyPairGenerator(X509Utils.random()).generateKeyPair();
