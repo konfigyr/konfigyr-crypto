@@ -44,7 +44,7 @@ import java.util.UUID;
  * </pre>
  *
  * @author Vladimir Spasic
- * @since 1.0.0
+ * @since 1.1.0
  */
 @NullMarked
 final class X509Keyset extends AbstractKeyset<X509Key> implements X509MaterialSelector {

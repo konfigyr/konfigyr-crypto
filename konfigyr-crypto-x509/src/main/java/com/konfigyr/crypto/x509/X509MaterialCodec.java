@@ -33,7 +33,7 @@ import java.util.List;
  * The certificate chain starts with the certificate of the key, followed by the issuer certificates.
  *
  * @author Vladimir Spasic
- * @since 1.0.0
+ * @since 1.1.0
  */
 @NullMarked
 final class X509MaterialCodec {

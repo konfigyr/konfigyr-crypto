@@ -30,7 +30,7 @@ import java.util.StringJoiner;
  * {@link KeyStatus#RETIRED retired} are never selected, even when the matcher would match them.
  *
  * @author Vladimir Spasic
- * @since 1.0.0
+ * @since 1.1.0
  * @see X509MaterialSelector
  */
 @NullMarked
@@ -116,7 +116,7 @@ public final class X509Matcher {
 	 * Builder used to create a {@link X509Matcher}.
 	 *
 	 * @author Vladimir Spasic
-	 * @since 1.0.0
+	 * @since 1.1.0
 	 */
 	@NullMarked
 	public static final class Builder {

@@ -38,7 +38,7 @@ import java.util.UUID;
  * BouncyCastle security provider is registered or used.
  *
  * @author Vladimir Spasic
- * @since 1.0.0
+ * @since 1.1.0
  */
 @NullMarked
 final class X509Utils {

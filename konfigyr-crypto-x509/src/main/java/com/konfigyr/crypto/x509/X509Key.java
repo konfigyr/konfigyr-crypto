@@ -29,7 +29,7 @@ import java.util.*;
  * {@link #convert(Converter)} method.
  *
  * @author Vladimir Spasic
- * @since 1.0.0
+ * @since 1.1.0
  */
 @NullMarked
 final class X509Key extends AbstractKey<X509Algorithm> implements X509Material {

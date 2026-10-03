@@ -30,7 +30,7 @@ import java.util.List;
  * {@link EncryptedKeyset}.
  *
  * @author Vladimir Spasic
- * @since 1.0.0
+ * @since 1.1.0
  * @see X509Algorithm
  */
 @NullMarked
