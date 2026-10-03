@@ -175,8 +175,11 @@ final class X509Keyset extends AbstractKeyset<X509Key> implements X509MaterialSe
 
 	@Override
 	protected Keyset doRotate(KeyDefinition definition, String uniqueId) {
+		final Instant notAfter = X509Utils.certificateNotAfter(resolveCertificateActivatesAt(definition),
+			definition.getRotationInterval().orElse(null), destructionGracePeriod);
+
 		final Builder builder = new Builder(this)
-			.key(X509Key.generate(definition, uniqueId, name));
+			.key(X509Key.generate(definition, uniqueId, name, notAfter));
 
 		stream().map(X509Key.class::cast).forEach(existing -> {
 			if (existing.isPrimary() && definition.isPrimary()) {
@@ -195,7 +198,7 @@ final class X509Keyset extends AbstractKeyset<X509Key> implements X509MaterialSe
 
 		stream().map(X509Key.class::cast).forEach(existing -> {
 			if (existing.getId().equals(key.getId())) {
-				builder.key(new X509Key.Builder(existing).promote(expiresAt).build());
+				builder.key(new X509Key.Builder(existing).promote(resolveCertificateExpiration(key, expiresAt)).build());
 			} else if (existing.isPrimary()) {
 				builder.key(demote(existing, new X509Key.Builder(existing)).build());
 			} else {
@@ -204,6 +207,38 @@ final class X509Keyset extends AbstractKeyset<X509Key> implements X509MaterialSe
 		});
 
 		return builder.build();
+	}
+
+	/**
+	 * Resolves the time when a key generated from the given definition becomes the primary key. A primary
+	 * key becomes the primary key right away, while the next key takes over once the current primary key
+	 * expires, or right away when the current primary key does not expire or has already expired.
+	 */
+	private Instant resolveCertificateActivatesAt(KeyDefinition definition) {
+		final Instant now = Instant.now();
+
+		if (definition.isPrimary()) {
+			return now;
+		}
+
+		final Instant primaryExpiresAt = getPrimary().getExpiresAt();
+		return primaryExpiresAt == null || primaryExpiresAt.isBefore(now) ? now : primaryExpiresAt;
+	}
+
+	/**
+	 * Caps the expiration time of a promoted key, so that the key, including the destruction grace period
+	 * during which it is retired afterward, never outlives its certificate. This is the case when the key is
+	 * promoted later than planned, for instance, when the scheduled maintenance tasks could not run in time.
+	 */
+	private @Nullable Instant resolveCertificateExpiration(X509Key key, @Nullable Instant expiresAt) {
+		if (expiresAt == null) {
+			return null;
+		}
+
+		final Instant latest = X509Utils.latestExpiration(key.getCertificate().getNotAfter().toInstant(),
+			destructionGracePeriod);
+
+		return expiresAt.isAfter(latest) ? latest : expiresAt;
 	}
 
 	/**

@@ -1,6 +1,7 @@
 package com.konfigyr.crypto.x509;
 
 import com.konfigyr.crypto.CryptoException;
+import com.konfigyr.crypto.Key;
 import com.konfigyr.crypto.KeyDefinition;
 import com.konfigyr.crypto.KeyStatus;
 import com.konfigyr.crypto.Keyset;
@@ -19,6 +20,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.nio.ByteBuffer;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
@@ -27,6 +29,7 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.within;
 
 class X509KeysetTest {
 
@@ -39,6 +42,8 @@ class X509KeysetTest {
 		.toList();
 
 	static final String KEY_ID = "0f8fad5b-d9cb-469f-a165-70867728950e";
+
+	static final Instant NOT_AFTER = Instant.now().plus(Duration.ofDays(121));
 
 	final ByteArray data = ByteArray.fromString("konfigyr-crypto-x509-data");
 
@@ -258,15 +263,15 @@ class X509KeysetTest {
 		final KeyDefinition definition = KeyDefinition.of(X509Algorithm.EC_P256_SIGNING);
 
 		assertThatIllegalArgumentException()
-			.isThrownBy(() -> X509Key.generate(definition, "key-id", "test-keyset"))
+			.isThrownBy(() -> X509Key.generate(definition, "key-id", "test-keyset", NOT_AFTER))
 			.withMessage("X509 key identifier must be a UUID, got: key-id");
 
 		assertThatIllegalArgumentException()
-			.isThrownBy(() -> X509Key.generate(definition, "1-1-1-1-1", "test-keyset"))
+			.isThrownBy(() -> X509Key.generate(definition, "1-1-1-1-1", "test-keyset", NOT_AFTER))
 			.withMessageStartingWith("X509 key identifier must be a UUID in its canonical lower case form");
 
 		assertThatIllegalArgumentException()
-			.isThrownBy(() -> X509Key.generate(definition, KEY_ID.toUpperCase(), "test-keyset"))
+			.isThrownBy(() -> X509Key.generate(definition, KEY_ID.toUpperCase(), "test-keyset", NOT_AFTER))
 			.withMessageStartingWith("X509 key identifier must be a UUID in its canonical lower case form");
 	}
 
@@ -277,7 +282,7 @@ class X509KeysetTest {
 		final X509Key key = X509Key.generate(KeyDefinition.builder()
 			.algorithm(algorithm)
 			.rotationInterval(Duration.ofDays(30))
-			.build(), KEY_ID, "test-keyset");
+			.build(), KEY_ID, "test-keyset", NOT_AFTER);
 
 		final X509Certificate certificate = key.getCertificate();
 
@@ -304,10 +309,120 @@ class X509KeysetTest {
 		assertThat(certificate.getKeyUsage()[2])
 			.isEqualTo(algorithm.purpose() == KeysetPurpose.ENCRYPTION);
 
+		assertThat(certificate.getNotBefore().toInstant())
+			.isEqualTo(key.getCreatedAt().truncatedTo(ChronoUnit.SECONDS));
+
 		assertThat(certificate.getNotAfter().toInstant())
-			.isEqualTo(key.getExpiresAt().truncatedTo(ChronoUnit.SECONDS));
+			.isEqualTo(NOT_AFTER.truncatedTo(ChronoUnit.SECONDS));
 
 		certificate.verify(certificate.getPublicKey());
+	}
+
+	@Test
+	@DisplayName("should calculate the certificate validity from the keyset timings")
+	void shouldCalculateCertificateValidity() {
+		final Instant now = Instant.now();
+
+		assertThat(X509Utils.certificateNotAfter(now, Duration.ofDays(90), Duration.ofDays(30)))
+			.as("certificate must cover the rotation interval, the grace period and the margin")
+			.isEqualTo(now.plus(Duration.ofDays(121)));
+
+		assertThat(X509Utils.certificateNotAfter(now, null, null))
+			.as("certificate must cover the maximum rotation interval when automatic rotation is disabled")
+			.isEqualTo(now.plus(KeysetDefinition.MAXIMUM_ROTATION_INTERVAL).plus(Duration.ofDays(1)));
+
+		assertThat(X509Utils.latestExpiration(now.plus(Duration.ofDays(121)), Duration.ofDays(30)))
+			.isEqualTo(now.plus(Duration.ofDays(90)));
+	}
+
+	@Test
+	@DisplayName("should issue a certificate covering the primary key and its retirement when rotating")
+	void shouldIssueCertificateForPrimaryKey() {
+		final Keyset rotated = keyset(X509Algorithm.EC_P256_SIGNING).rotate();
+		final X509Key primary = (X509Key) rotated.getPrimary();
+
+		assertThat(primary.getCertificate().getNotAfter().toInstant())
+			.isCloseTo(Instant.now().plus(Duration.ofDays(121)), within(Duration.ofSeconds(5)));
+
+		assertThat(primary.getExpiresAt())
+			.isCloseTo(Instant.now().plus(Duration.ofDays(90)), within(Duration.ofSeconds(5)));
+	}
+
+	@Test
+	@DisplayName("should issue a certificate for the next key that starts when the current primary key expires")
+	void shouldIssueCertificateForNextKey() {
+		final X509Keyset keyset = keyset(X509Algorithm.EC_P256_SIGNING);
+		final Instant primaryExpiresAt = keyset.getPrimary().getExpiresAt();
+
+		final X509Key next = (X509Key) keyset.rotate(KeyDefinition.builder()
+				.algorithm(X509Algorithm.EC_P256_SIGNING)
+				.rotationInterval(Duration.ofDays(90))
+				.primary(false)
+				.build())
+			.getNextKey()
+			.orElseThrow();
+
+		assertThat(primaryExpiresAt)
+			.isNotNull();
+
+		assertThat(next.getCertificate().getNotAfter().toInstant())
+			.as("next key certificate must cover its time as the primary key and its retirement")
+			.isCloseTo(primaryExpiresAt.plus(Duration.ofDays(121)), within(Duration.ofSeconds(5)));
+	}
+
+	@Test
+	@DisplayName("should cap the expiration time of a next key that is promoted later than planned")
+	void shouldCapExpirationOfLatePromotion() {
+		final X509Keyset keyset = keyset(X509Algorithm.EC_P256_SIGNING);
+
+		// the next key was due to take over 10 days ago, its certificate ends 10 days earlier than required
+		final Instant notAfter = X509Utils.certificateNotAfter(Instant.now().minus(Duration.ofDays(10)),
+			Duration.ofDays(90), Duration.ofDays(30));
+
+		final X509Keyset prepared = new X509Keyset.Builder(keyset)
+			.keys(keyset.getKeys())
+			.key(X509Key.generate(KeyDefinition.builder()
+				.algorithm(X509Algorithm.EC_P256_SIGNING)
+				.rotationInterval(Duration.ofDays(90))
+				.primary(false)
+				.build(), UUID.randomUUID().toString(), "test-keyset", notAfter))
+			.build();
+
+		final Key promoted = prepared.rotate().getPrimary();
+
+		assertThat(promoted.getExpiresAt())
+			.as("promoted key must expire so that it is retired before its certificate expires")
+			.isEqualTo(notAfter.truncatedTo(ChronoUnit.SECONDS).minus(Duration.ofDays(31)))
+			.isBefore(Instant.now().plus(Duration.ofDays(90)));
+	}
+
+	@Test
+	@DisplayName("should not cap the expiration time of a promoted key when automatic rotation is disabled")
+	void shouldNotCapExpirationWithoutRotation() {
+		final KeysetDefinition definition = KeysetDefinition.builder()
+			.name("test-keyset")
+			.algorithm(X509Algorithm.EC_P256_SIGNING)
+			.disableAutomaticKeyRotation()
+			.build();
+
+		final X509Keyset keyset = new X509Keyset.Builder(definition)
+			.keyEncryptionKey(TestKeyEncryptionKey.INSTANCE)
+			.key(X509Key.generate(KeyDefinition.of(definition), KEY_ID, definition.getName(), NOT_AFTER))
+			.build();
+
+		final Keyset prepared = keyset.rotate(KeyDefinition.builder()
+			.algorithm(X509Algorithm.EC_P256_SIGNING)
+			.primary(false)
+			.build());
+
+		final X509Key next = (X509Key) prepared.getNextKey().orElseThrow();
+
+		assertThat(next.getCertificate().getNotAfter().toInstant())
+			.isCloseTo(Instant.now().plus(KeysetDefinition.MAXIMUM_ROTATION_INTERVAL)
+				.plus(Duration.ofDays(31)), within(Duration.ofSeconds(5)));
+
+		assertThat(prepared.rotate().getPrimary().getExpiresAt())
+			.isNull();
 	}
 
 	@Test
@@ -327,7 +442,7 @@ class X509KeysetTest {
 
 		return new X509Keyset.Builder(definition)
 			.keyEncryptionKey(TestKeyEncryptionKey.INSTANCE)
-			.key(X509Key.generate(KeyDefinition.of(definition), KEY_ID, definition.getName()))
+			.key(X509Key.generate(KeyDefinition.of(definition), KEY_ID, definition.getName(), NOT_AFTER))
 			.build();
 	}
 

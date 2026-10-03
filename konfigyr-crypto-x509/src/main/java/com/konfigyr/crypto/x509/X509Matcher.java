@@ -208,6 +208,12 @@ public final class X509Matcher {
 		/**
 		 * Matches keys whose certificate is valid at the given instant, as defined by the certificate
 		 * {@code notBefore} and {@code notAfter} validity period.
+		 * <p>
+		 * The usability of a key is defined by its {@link com.konfigyr.crypto.KeyStatus status}, not by the
+		 * validity of its certificate. The certificate covers the whole period during which the key is used,
+		 * so it does not expire while the key is selected, unless the keyset retains its demoted keys or the
+		 * scheduled keyset maintenance tasks could not run in time. Use this criterion when publishing
+		 * certificates, for instance in SAML metadata, to make sure an expired certificate is never published.
 		 *
 		 * @param validAt the instant at which the certificate must be valid, {@literal null} to match
 		 *                any certificate
