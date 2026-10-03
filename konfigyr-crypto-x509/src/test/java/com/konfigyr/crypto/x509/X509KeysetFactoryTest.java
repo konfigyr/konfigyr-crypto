@@ -4,10 +4,14 @@ import com.konfigyr.crypto.AlgorithmRegistry;
 import com.konfigyr.crypto.CryptoException;
 import com.konfigyr.crypto.EncryptedKey;
 import com.konfigyr.crypto.EncryptedKeyset;
+import com.konfigyr.crypto.InMemoryKeysetRepository;
+import com.konfigyr.crypto.KeyEncryptionKey;
+import com.konfigyr.crypto.KeyEncryptionKeyProvider;
 import com.konfigyr.crypto.KeyStatus;
 import com.konfigyr.crypto.Keyset;
 import com.konfigyr.crypto.KeysetDefinition;
 import com.konfigyr.crypto.KeysetFactory;
+import com.konfigyr.crypto.KeysetStore;
 import com.konfigyr.crypto.SimpleAlgorithmRegistry;
 import com.konfigyr.crypto.test.AbstractKeysetFactoryTest;
 import com.konfigyr.crypto.test.TestKeyEncryptionKey;
@@ -17,6 +21,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
@@ -73,6 +78,69 @@ class X509KeysetFactoryTest extends AbstractKeysetFactoryTest {
 
 		assertThat(key.getCertificate().getSubjectX500Principal())
 			.hasToString("CN=" + definition.getName());
+	}
+
+	@ParameterizedTest(name = "status: {0}")
+	@EnumSource(value = KeyStatus.class, names = {
+		"DISABLED", "COMPROMISED", "PENDING_DESTRUCTION", "COMPROMISED_PENDING_DESTRUCTION", "DESTRUCTION_FAILED",
+		"INITIALIZING", "INITIALIZATION_FAILED"
+	})
+	@DisplayName("should wrap and unwrap keys that are not enabled with their key material")
+	void shouldPersistKeysThatAreNotEnabled(KeyStatus status) throws IOException {
+		final Keyset created = factory.create(kek(), definition());
+		final String keyId = created.getPrimary().getId();
+		final Keyset keyset = withKeyStatus(created.rotate(), keyId, status);
+		final X509Key original = (X509Key) keyset.getKey(keyId).orElseThrow();
+
+		assertThat(original.getStatus())
+			.isEqualTo(status);
+
+		final Keyset restored = factory.create(kek(), factory.create(keyset));
+
+		final X509Key key = (X509Key) restored.getKey(original.getId()).orElseThrow();
+
+		assertThat(key)
+			.returns(status, X509Key::getStatus)
+			.returns(false, X509Key::isPrimary)
+			.returns(original.getCertificateChain(), X509Key::getCertificateChain);
+
+		assertThat(key.privateKey().getEncoded())
+			.isEqualTo(original.privateKey().getEncoded());
+
+		assertThatExceptionOfType(CryptoException.KeysetException.class)
+			.as("Private key of a key that is not enabled must not be handed over to consumers")
+			.isThrownBy(() -> key.convert(privateKey -> privateKey));
+	}
+
+	@Test
+	@DisplayName("should rotate a keyset in the store after its primary key was compromised")
+	void shouldRotateStoredKeysetAfterPrimaryKeyCompromise() {
+		final KeyEncryptionKey kek = kek();
+		final KeysetStore store = KeysetStore.builder()
+			.repository(new InMemoryKeysetRepository())
+			.factories(factory)
+			.providers(KeyEncryptionKeyProvider.of(kek.getProvider(), kek))
+			.build();
+
+		final Keyset keyset = store.create(kek, definition());
+		final String compromised = keyset.getPrimary().getId();
+
+		store.compromise(keyset.getName(), compromised);
+		store.rotate(keyset.getName());
+
+		final Keyset rotated = store.read(keyset.getName());
+
+		assertThat(rotated.getKeys())
+			.hasSize(2);
+
+		assertThat(rotated.getPrimary())
+			.returns(KeyStatus.ENABLED, key -> key.getStatus())
+			.doesNotReturn(compromised, key -> key.getId());
+
+		assertThat(rotated.getKey(compromised))
+			.hasValueSatisfying(key -> assertThat(key)
+				.returns(KeyStatus.COMPROMISED, it -> it.getStatus())
+				.returns(false, it -> it.isPrimary()));
 	}
 
 	@Test
