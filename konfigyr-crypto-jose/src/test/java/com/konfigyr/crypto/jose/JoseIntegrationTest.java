@@ -4,10 +4,13 @@ import com.konfigyr.crypto.*;
 import com.konfigyr.crypto.test.KeyAssert;
 import com.konfigyr.crypto.test.KeysetAssert;
 import com.konfigyr.io.ByteArray;
+import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.JWSObject;
 import com.nimbusds.jose.KeySourceException;
 import com.nimbusds.jose.jwk.JWK;
 import com.nimbusds.jose.jwk.JWKMatcher;
 import com.nimbusds.jose.jwk.JWKSelector;
+import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.gen.OctetSequenceKeyGenerator;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
@@ -21,9 +24,11 @@ import org.springframework.scheduling.annotation.SchedulingConfigurer;
 import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 import static com.konfigyr.crypto.jose.JoseIntegrationConfiguration.KEK_IDENTIFIER;
 import static com.konfigyr.crypto.jose.JoseIntegrationConfiguration.KEK_PROVIDER;
@@ -474,6 +479,63 @@ public class JoseIntegrationTest {
 			.isCloseTo(Instant.now().plus(Duration.ofDays(90)), within(Duration.ofMinutes(1)));
 
 		store.remove(name);
+	}
+
+	@Test
+	@Order(5)
+	@DisplayName("should sign a payload as a compact JWS and verify it, as shown in the module README")
+	void shouldSignCompactJws() throws Exception {
+		store.create(KEK_PROVIDER, KEK_IDENTIFIER, KeysetDefinition.of("my-jwks", JoseAlgorithm.ES256));
+
+		final Keyset keyset = store.read("my-jwks");
+		final ByteArray payload = ByteArray.fromString("{\"sub\":\"john.doe\"}");
+
+		final ByteArray jws = keyset.sign(payload);
+		final String compact = jws.toString(StandardCharsets.UTF_8);
+
+		final boolean valid = keyset.verify(jws, payload);
+
+		assertThat(valid)
+			.isTrue();
+
+		assertThat(JWSObject.parse(compact))
+			.returns(JWSAlgorithm.ES256, object -> object.getHeader().getAlgorithm())
+			.returns(keyset.getPrimary().getId(), object -> object.getHeader().getKeyID())
+			.returns(payload.toString(StandardCharsets.UTF_8), object -> object.getPayload().toString());
+
+		assertThat(keyset.verify(jws, ByteArray.fromString("{\"sub\":\"jane.doe\"}")))
+			.as("signature must not verify a different payload")
+			.isFalse();
+
+		store.remove("my-jwks");
+	}
+
+	@Test
+	@Order(5)
+	@DisplayName("should publish the public JSON Web Key Set of a keyset, as shown in the module README")
+	void shouldPublishPublicJsonWebKeySet() throws Exception {
+		store.create(KEK_PROVIDER, KEK_IDENTIFIER, KeysetDefinition.of("my-jwks", JoseAlgorithm.ES256));
+		store.rotate("my-jwks");
+
+		@SuppressWarnings("unchecked")
+		JWKSource<SecurityContext> source = (JWKSource<SecurityContext>) store.read("my-jwks");
+
+		List<JWK> keys = source.get(new JWKSelector(new JWKMatcher.Builder().build()), null);
+		Map<String, Object> jwks = new JWKSet(keys).toPublicJWKSet().toJSONObject();
+
+		final JWKSet published = JWKSet.parse(jwks);
+		final Keyset keyset = store.read("my-jwks");
+
+		assertThat(published.getKeys())
+			.as("published set must contain the primary key and the demoted key")
+			.extracting(JWK::getKeyID)
+			.containsExactlyInAnyOrderElementsOf(keyset.stream().map(Key::getId).toList());
+
+		assertThat(published.getKeys())
+			.as("published set must only contain public keys")
+			.noneMatch(JWK::isPrivate);
+
+		store.remove("my-jwks");
 	}
 
 	private void runRotationTask() {
