@@ -2,6 +2,7 @@ package com.konfigyr.crypto.x509;
 
 import com.konfigyr.crypto.Key;
 import com.konfigyr.crypto.KeyStatus;
+import com.konfigyr.crypto.KeysetOperation;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 import org.springframework.core.convert.converter.Converter;
@@ -17,11 +18,11 @@ import java.util.List;
  * <p>
  * The certificate chain is public information and is exposed directly. The private key is intentionally
  * not exposed through a getter, so it cannot be picked up by serializers, template engines, or bean
- * introspection by accident. It can only be handed over by {@link #convert(Converter) converting} it into
- * the type expected by the consumer. For instance, if you need the private key to be used with a Spring
- * Security SAML 2.0 X509 credential, you can do this:
+ * introspection by accident. It can only be handed over by {@link #convert(KeysetOperation, Converter) converting}
+ * it into the type expected by the consumer, for the operation the private key is used for. For instance, if you
+ * need the private key to be used with a Spring Security SAML 2.0 X509 signing credential, you can do this:
  * <pre>{@code
- * Saml2X509Credential credential = material.convert(
+ * Saml2X509Credential credential = material.convert(KeysetOperation.SIGN,
  *     privateKey -> Saml2X509Credential.signing(privateKey, material.getCertificate())
  * );
  * }</pre>
@@ -34,6 +35,14 @@ import java.util.List;
  */
 @NullMarked
 public sealed interface X509Material extends Key permits X509Key {
+
+	/**
+	 * Returns the X.509 algorithm bound to this key.
+	 *
+	 * @return the algorithm, never {@literal null}
+	 */
+	@Override
+	X509Algorithm getAlgorithm();
 
 	/**
 	 * Returns the X.509 certificate bound to this key.
@@ -58,25 +67,40 @@ public sealed interface X509Material extends Key permits X509Key {
 	PublicKey getPublicKey();
 
 	/**
-	 * Hands the private key over to the given converter and returns its result.
+	 * Hands the private key over to the given converter, so it can be used for the given operation, and returns
+	 * the result of the converter.
 	 * <p>
 	 * The private key is live key material: neither the private key nor the converted result should be
 	 * logged, serialized, cached outside the process, or persisted.
 	 * <p>
-	 * The private key is only handed over when the key is {@link KeyStatus#ENABLED enabled} or
-	 * {@link KeyStatus#RETIRED retired}. A retired key is handed over so that it can still decrypt data,
-	 * such as SAML assertions, that was encrypted for it before it was retired. Only ever sign or encrypt
-	 * with the material of the {@link #isPrimary() primary key}, which is always selected first, never
-	 * with the material of a retired key.
+	 * Only the {@link KeysetOperation#SIGN} and {@link KeysetOperation#DECRYPT} operations use the private key,
+	 * {@link KeysetOperation#VERIFY verification} and {@link KeysetOperation#ENCRYPT encryption} use the
+	 * {@link #getPublicKey() public key} or the {@link #getCertificate() certificate} instead. The private key
+	 * is only handed over when the operation is supported by the {@link com.konfigyr.crypto.KeysetPurpose purpose}
+	 * of the key algorithm, and when the key may perform it:
+	 * <ul>
+	 *     <li>{@link KeysetOperation#SIGN}: only the {@link KeyStatus#ENABLED enabled} {@link #isPrimary() primary}
+	 *         key, never a retired key or a key that is not yet the primary key,</li>
+	 *     <li>{@link KeysetOperation#DECRYPT}: {@link KeyStatus#ENABLED enabled} and
+	 *         {@link KeyStatus#RETIRED retired} keys, so that retired keys can still decrypt data, such as SAML
+	 *         assertions, that was encrypted for them before they were retired.</li>
+	 * </ul>
+	 * These are the same rules that are applied by the {@link X509Matcher.Builder#operations(KeysetOperation...)}
+	 * criterion, use it to select the keys that may be used for a specific operation.
 	 * <p>
 	 * Keep in mind that the status is the one this key had when its keyset was read from the
 	 * {@link com.konfigyr.crypto.KeysetStore}, read the keyset again to observe status changes.
 	 *
+	 * @param operation the operation the private key is used for, can't be {@literal null}
 	 * @param converter converter that creates the consumer type from the private key, can't be {@literal null}
 	 * @param <T> the type created by the converter
 	 * @return the converted result as returned by the converter
-	 * @throws com.konfigyr.crypto.CryptoException.KeysetException when the key is neither enabled nor retired
+	 * @throws IllegalArgumentException when the operation does not use the private key
+	 * @throws com.konfigyr.crypto.CryptoException.UnsupportedKeysetOperationException when the operation is not
+	 *         supported by the purpose of the key algorithm
+	 * @throws com.konfigyr.crypto.CryptoException.KeysetOperationException when the key may not perform the
+	 *         operation because of its status, or because it is not the primary key
 	 */
-	<T extends @Nullable Object> T convert(Converter<PrivateKey, T> converter);
+	<T extends @Nullable Object> T convert(KeysetOperation operation, Converter<PrivateKey, T> converter);
 
 }

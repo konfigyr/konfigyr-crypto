@@ -2,6 +2,7 @@ package com.konfigyr.crypto.x509;
 
 import com.konfigyr.crypto.KeyStatus;
 import com.konfigyr.crypto.KeyType;
+import com.konfigyr.crypto.KeysetOperation;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 import org.springframework.util.Assert;
@@ -39,15 +40,19 @@ public final class X509Matcher {
 	private static final X509Matcher ANY = new Builder().build();
 
 	private final @Nullable Boolean primary;
+	private final @Nullable Boolean enabled;
 	private final @Nullable Set<String> keyIds;
 	private final @Nullable Set<KeyType> keyTypes;
+	private final @Nullable Set<KeysetOperation> operations;
 	private final @Nullable Set<X509Algorithm> algorithms;
 	private final @Nullable Instant validAt;
 
 	private X509Matcher(Builder builder) {
 		this.primary = builder.primary;
+		this.enabled = builder.enabled;
 		this.keyIds = builder.keyIds;
 		this.keyTypes = builder.keyTypes;
+		this.operations = builder.operations;
 		this.algorithms = builder.algorithms;
 		this.validAt = builder.validAt;
 	}
@@ -80,10 +85,16 @@ public final class X509Matcher {
 		if (primary != null && primary != key.isPrimary()) {
 			return false;
 		}
+		if (enabled != null && enabled != key.isEnabled()) {
+			return false;
+		}
 		if (keyIds != null && !keyIds.contains(key.getId())) {
 			return false;
 		}
 		if (keyTypes != null && !keyTypes.contains(key.getType())) {
+			return false;
+		}
+		if (operations != null && operations.stream().noneMatch(operation -> X509Key.isPermitted(key, operation))) {
 			return false;
 		}
 		if (algorithms != null && !algorithms.contains(key.getAlgorithm())) {
@@ -105,8 +116,10 @@ public final class X509Matcher {
 	public String toString() {
 		return new StringJoiner(", ", "X509Matcher(", ")")
 			.add("primary=" + primary)
+			.add("enabled=" + enabled)
 			.add("keyIds=" + keyIds)
 			.add("keyTypes=" + keyTypes)
+			.add("operations=" + operations)
 			.add("algorithms=" + algorithms)
 			.add("validAt=" + validAt)
 			.toString();
@@ -122,8 +135,10 @@ public final class X509Matcher {
 	public static final class Builder {
 
 		private @Nullable Boolean primary;
+		private @Nullable Boolean enabled;
 		private @Nullable Set<String> keyIds;
 		private @Nullable Set<KeyType> keyTypes;
+		private @Nullable Set<KeysetOperation> operations;
 		private @Nullable Set<X509Algorithm> algorithms;
 		private @Nullable Instant validAt;
 
@@ -139,6 +154,40 @@ public final class X509Matcher {
 		 */
 		public Builder primary(@Nullable Boolean primary) {
 			this.primary = primary;
+			return this;
+		}
+
+		/**
+		 * Matches keys that are, or are not, {@link KeyStatus#ENABLED enabled}.
+		 * <p>
+		 * As only enabled and {@link KeyStatus#RETIRED retired} keys are ever selected, {@literal false} matches
+		 * the retired keys. Matching enabled keys selects the primary key and the next key that is created ahead
+		 * of the rotation, but never the retired keys. Use it to select the certificates that third parties should
+		 * use from now on, for instance the certificates that are published in SAML 2.0 metadata. Retired keys may
+		 * still decrypt data that was encrypted for them, but must not be advertised, otherwise third parties keep
+		 * encrypting data for keys that are about to be destroyed:
+		 * <pre>{@code
+		 * // all keys that may still decrypt assertions, used as the decryption credentials
+		 * X509Matcher decryption = X509Matcher.builder()
+		 *     .operations(KeysetOperation.DECRYPT)
+		 *     .build();
+		 *
+		 * // only the primary and the next key, used for the certificates published in the metadata
+		 * X509Matcher published = X509Matcher.builder()
+		 *     .operations(KeysetOperation.DECRYPT)
+		 *     .enabled(true)
+		 *     .build();
+		 * }</pre>
+		 * Keep in mind that Spring Security publishes all the decryption credentials of a
+		 * {@code RelyingPartyRegistration} in its metadata, customize the metadata to publish only the
+		 * certificates of the enabled keys.
+		 *
+		 * @param enabled {@literal true} to match enabled keys, {@literal false} to match retired keys,
+		 *                {@literal null} to match any key
+		 * @return the matcher builder, never {@literal null}
+		 */
+		public Builder enabled(@Nullable Boolean enabled) {
+			this.enabled = enabled;
 			return this;
 		}
 
@@ -206,14 +255,59 @@ public final class X509Matcher {
 		}
 
 		/**
+		 * Matches keys that may perform one of the given operations.
+		 * <p>
+		 * A key may perform an operation when it is supported by the {@link com.konfigyr.crypto.KeysetPurpose purpose}
+		 * of its algorithm and allowed by its status, following the same rules as the cryptographic operations of
+		 * the keyset:
+		 * <ul>
+		 *     <li>{@link KeysetOperation#SIGN} and {@link KeysetOperation#ENCRYPT}: only the
+		 *         {@link KeyStatus#ENABLED enabled} primary key,</li>
+		 *     <li>{@link KeysetOperation#VERIFY} and {@link KeysetOperation#DECRYPT}: {@link KeyStatus#ENABLED enabled}
+		 *         and {@link KeyStatus#RETIRED retired} keys.</li>
+		 * </ul>
+		 * <pre>
+		 * {@code
+		 * // the primary key of the signing keyset, never a retired or next key
+		 * X509Matcher signing = X509Matcher.builder()
+		 *     .operations(KeysetOperation.SIGN)
+		 *     .build();
+		 *
+		 * // all keys of the encryption keyset that may still decrypt assertions encrypted for them
+		 * X509Matcher decryption = X509Matcher.builder()
+		 *     .operations(KeysetOperation.DECRYPT)
+		 *     .build();
+		 * }</pre>
+		 *
+		 * @param operations the operations to match, can't be {@literal null}
+		 * @return the matcher builder, never {@literal null}
+		 */
+		public Builder operations(KeysetOperation... operations) {
+			return operations(Arrays.asList(operations));
+		}
+
+		/**
+		 * Matches keys that may perform one of the given operations.
+		 *
+		 * @param operations the operations to match, can't be {@literal null}
+		 * @return the matcher builder, never {@literal null}
+		 * @see #operations(KeysetOperation...)
+		 */
+		public Builder operations(Collection<KeysetOperation> operations) {
+			this.operations = copyOf(operations, "Operations");
+			return this;
+		}
+
+		/**
 		 * Matches keys whose certificate is valid at the given instant, as defined by the certificate
 		 * {@code notBefore} and {@code notAfter} validity period.
 		 * <p>
 		 * The usability of a key is defined by its {@link com.konfigyr.crypto.KeyStatus status}, not by the
 		 * validity of its certificate. The certificate covers the whole period during which the key is used,
 		 * so it does not expire while the key is selected, unless the keyset retains its demoted keys or the
-		 * scheduled keyset maintenance tasks could not run in time. Use this criterion when publishing
-		 * certificates, for instance in SAML metadata, to make sure an expired certificate is never published.
+		 * scheduled keyset maintenance tasks could not run in time.
+		 * <p>Use this criterion when publishing or exposing the certificates to 3rd parties, for instance,
+		 * in SAML metadata.
 		 *
 		 * @param validAt the instant at which the certificate must be valid, {@literal null} to match
 		 *                any certificate
