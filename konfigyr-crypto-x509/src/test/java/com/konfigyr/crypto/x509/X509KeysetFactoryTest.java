@@ -11,6 +11,7 @@ import com.konfigyr.crypto.KeyStatus;
 import com.konfigyr.crypto.Keyset;
 import com.konfigyr.crypto.KeysetDefinition;
 import com.konfigyr.crypto.KeysetFactory;
+import com.konfigyr.crypto.KeysetOperation;
 import com.konfigyr.crypto.KeysetStore;
 import com.konfigyr.crypto.SimpleAlgorithmRegistry;
 import com.konfigyr.crypto.test.AbstractKeysetFactoryTest;
@@ -109,7 +110,7 @@ class X509KeysetFactoryTest extends AbstractKeysetFactoryTest {
 
 		assertThatExceptionOfType(CryptoException.KeysetException.class)
 			.as("Private key of a key that is not enabled must not be handed over to consumers")
-			.isThrownBy(() -> key.convert(privateKey -> privateKey));
+			.isThrownBy(() -> key.convert(KeysetOperation.SIGN, privateKey -> privateKey));
 	}
 
 	@Test

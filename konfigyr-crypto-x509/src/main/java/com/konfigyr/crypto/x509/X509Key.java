@@ -4,6 +4,8 @@ import com.konfigyr.crypto.AbstractKey;
 import com.konfigyr.crypto.CryptoException;
 import com.konfigyr.crypto.KeyDefinition;
 import com.konfigyr.crypto.KeyStatus;
+import com.konfigyr.crypto.KeysetOperation;
+import com.konfigyr.crypto.KeysetPurpose;
 import org.bouncycastle.operator.OperatorCreationException;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
@@ -26,7 +28,7 @@ import java.util.*;
  * The certificate chain is public information and is exposed by this key. The private key is
  * intentionally not exposed through a getter, so it cannot be picked up by serializers, template
  * engines, or bean introspection by accident, it can only be handed over using the
- * {@link #convert(Converter)} method.
+ * {@link #convert(KeysetOperation, Converter)} method, for the operation it is used for.
  *
  * @author Vladimir Spasic
  * @since 1.1.0
@@ -58,6 +60,11 @@ final class X509Key extends AbstractKey<X509Algorithm> implements X509Material {
 
 	UUID uuid() {
 		return uuid;
+	}
+
+	@Override
+	public X509Algorithm getAlgorithm() {
+		return super.getAlgorithm();
 	}
 
 	/**
@@ -92,15 +99,42 @@ final class X509Key extends AbstractKey<X509Algorithm> implements X509Material {
 	}
 
 	@Override
-	public <T extends @Nullable Object> T convert(Converter<PrivateKey, T> converter) {
+	public <T extends @Nullable Object> T convert(KeysetOperation operation, Converter<PrivateKey, T> converter) {
+		Assert.notNull(operation, "Private key operation can't be null");
 		Assert.notNull(converter, "Private key converter can't be null");
+		Assert.isTrue(operation == KeysetOperation.SIGN || operation == KeysetOperation.DECRYPT, () -> "The "
+			+ operation + " operation does not use the private key, use the public key or the certificate instead");
 
-		if (status == KeyStatus.ENABLED || status == KeyStatus.RETIRED) {
-			return converter.convert(privateKey);
+		final KeysetPurpose purpose = algorithm.purpose();
+
+		if (!purpose.isOperationSupported(operation)) {
+			throw new CryptoException.UnsupportedKeysetOperationException(id, operation, purpose.operations());
 		}
 
-		throw new CryptoException.KeysetException(id, "X509 key '" + id + "' is " + status
-			+ " and its private key material can not be used.");
+		if (!isPermitted(this, operation)) {
+			final String reason = operation == KeysetOperation.SIGN && isEnabled() ? "is not the primary key" : "is " + status;
+
+			throw new CryptoException.KeysetOperationException(id, operation, "X509 key '" + id + "' " + reason
+				+ " and its private key material can not be used to " + operation + ".");
+		}
+
+		return converter.convert(privateKey);
+	}
+
+	/**
+	 * Checks if the key may perform the operation, following the same rules as the cryptographic operations of
+	 * the keyset: only the enabled primary key may sign or encrypt, while enabled and retired keys may verify
+	 * and decrypt. The operation must also be supported by the purpose of the key algorithm.
+	 */
+	static boolean isPermitted(X509Material key, KeysetOperation operation) {
+		if (!key.getAlgorithm().purpose().isOperationSupported(operation)) {
+			return false;
+		}
+
+		return switch (operation) {
+			case SIGN, ENCRYPT -> key.isPrimary() && key.isEnabled();
+			case VERIFY, DECRYPT -> key.isEnabled() || key.getStatus() == KeyStatus.RETIRED;
+		};
 	}
 
 	PrivateKey privateKey() {
