@@ -29,6 +29,7 @@ import java.util.*;
  * @param provider               {@link KeyEncryptionKeyProvider} name that supplied the {@link KeyEncryptionKey} to encrypt this keyset.
  * @param keyEncryptionKey       The identifier of the {@link KeyEncryptionKey} used to wrap and unwrap this keyset.
  * @param keys                   Per-key encrypted material with lifecycle metadata.
+ * @param retirementPolicy       Policy that defines what happens to the primary key once it is demoted by a rotation.
  * @param rotationInterval       Rotation frequency for the keyset. {@literal null} when automatic rotation is disabled.
  * @param rotationLeadTime       How long before the scheduled rotation the next key is created. {@literal null} when
  *                               the next key is created at the moment of rotation.
@@ -52,6 +53,7 @@ public record EncryptedKeyset(
 	String provider,
 	String keyEncryptionKey,
 	List<EncryptedKey> keys,
+	RetirementPolicy retirementPolicy,
 	@Nullable Duration rotationInterval,
 	@Nullable Duration rotationLeadTime,
 	@Nullable Duration destructionGracePeriod,
@@ -59,7 +61,8 @@ public record EncryptedKeyset(
 ) implements Iterable<EncryptedKey> {
 
 	/**
-	 * Creates a new {@link EncryptedKeyset} without a rotation lead time.
+	 * Creates a new {@link EncryptedKeyset} without a rotation lead time and with the
+	 * {@link RetirementPolicy#RETAIN} retirement policy.
 	 *
 	 * @param name                   Unique keyset name.
 	 * @param purpose                The purpose of the key material in this keyset, stored as the enum name.
@@ -71,14 +74,14 @@ public record EncryptedKeyset(
 	 * @param destructionGracePeriod Grace period between scheduling key destruction and the actual removal of key material.
 	 * @param version                Optimistic-locking version counter.
 	 * @deprecated since 1.1.0, use the {@link #builder() builder} or the canonical constructor, which also accepts
-	 * the rotation lead time
+	 * the rotation lead time and the retirement policy
 	 */
 	@Deprecated(since = "1.1.0", forRemoval = true)
 	public EncryptedKeyset(String name, String purpose, String factory, String provider, String keyEncryptionKey,
 			List<EncryptedKey> keys, @Nullable Duration rotationInterval, @Nullable Duration destructionGracePeriod,
 			long version) {
-		this(name, purpose, factory, provider, keyEncryptionKey, keys, rotationInterval, null,
-			destructionGracePeriod, version);
+		this(name, purpose, factory, provider, keyEncryptionKey, keys, RetirementPolicy.RETAIN, rotationInterval,
+			null, destructionGracePeriod, version);
 	}
 
 	/**
@@ -116,6 +119,7 @@ public record EncryptedKeyset(
 			&& Objects.equals(provider, that.provider)
 			&& Objects.equals(keyEncryptionKey, that.keyEncryptionKey)
 			&& Objects.equals(keys, that.keys)
+			&& Objects.equals(retirementPolicy, that.retirementPolicy)
 			&& Objects.equals(rotationInterval, that.rotationInterval)
 			&& Objects.equals(rotationLeadTime, that.rotationLeadTime)
 			&& Objects.equals(destructionGracePeriod, that.destructionGracePeriod);
@@ -124,7 +128,7 @@ public record EncryptedKeyset(
 	@Override
 	public int hashCode() {
 		return Objects.hash(name, purpose, factory, provider, keyEncryptionKey, keys,
-			rotationInterval, rotationLeadTime, destructionGracePeriod);
+			retirementPolicy, rotationInterval, rotationLeadTime, destructionGracePeriod);
 	}
 
 	/**
@@ -148,6 +152,7 @@ public record EncryptedKeyset(
 			.name(definition.getName())
 			.purpose(definition.getPurpose())
 			.factory(definition.getAlgorithm().factory())
+			.retirementPolicy(definition.getRetirementPolicy())
 			.rotationInterval(definition.getRotationInterval().orElse(null))
 			.rotationLeadTime(definition.getRotationLeadTime().orElse(null))
 			.destructionGracePeriod(definition.getDestructionGracePeriod().orElse(null));
@@ -171,6 +176,7 @@ public record EncryptedKeyset(
 			.factory(existing.factory())
 			.provider(existing.provider())
 			.keyEncryptionKey(existing.keyEncryptionKey())
+			.retirementPolicy(existing.retirementPolicy())
 			.rotationInterval(existing.rotationInterval())
 			.rotationLeadTime(existing.rotationLeadTime())
 			.destructionGracePeriod(existing.destructionGracePeriod())
@@ -191,6 +197,7 @@ public record EncryptedKeyset(
 			.purpose(keyset.getPurpose())
 			.factory(keyset.getFactory())
 			.keyEncryptionKey(keyset.getKeyEncryptionKey())
+			.retirementPolicy(keyset.getRetirementPolicy())
 			.version(keyset.getVersion());
 
 		keyset.getRotationInterval().ifPresent(builder::rotationInterval);
@@ -217,6 +224,7 @@ public record EncryptedKeyset(
 		private Duration rotationInterval;
 		private Duration rotationLeadTime;
 		private Duration destructionGracePeriod;
+		private RetirementPolicy retirementPolicy = RetirementPolicy.RETAIN;
 		private long version = 0L;
 
 		/**
@@ -287,6 +295,19 @@ public record EncryptedKeyset(
 		}
 
 		/**
+		 * Specify the retirement policy of the {@link EncryptedKeyset} by its name.
+		 *
+		 * @param retirementPolicy retirement policy name, can't be {@literal null}
+		 * @return builder
+		 * @throws IllegalArgumentException when the name does not match any {@link RetirementPolicy}
+		 * @since 1.1.0
+		 */
+		public Builder retirementPolicy(String retirementPolicy) {
+			Assert.hasText(retirementPolicy, "Keyset retirement policy can not be blank");
+			return retirementPolicy(RetirementPolicy.valueOf(retirementPolicy));
+		}
+
+		/**
 		 * Specify the rotation frequency of the {@link EncryptedKeyset} in milliseconds.
 		 *
 		 * @param rotationInterval rotation frequency, can't be {@literal null}
@@ -352,6 +373,20 @@ public record EncryptedKeyset(
 		}
 
 		/**
+		 * Specify the policy that defines what happens to the primary key of the {@link EncryptedKeyset} once it
+		 * is demoted by a rotation. Defaults to {@link RetirementPolicy#RETAIN}.
+		 *
+		 * @param retirementPolicy retirement policy, can't be {@literal null}
+		 * @return builder
+		 * @since 1.1.0
+		 */
+		public Builder retirementPolicy(RetirementPolicy retirementPolicy) {
+			Assert.notNull(retirementPolicy, "Keyset retirement policy can not be null");
+			this.retirementPolicy = retirementPolicy;
+			return this;
+		}
+
+		/**
 		 * Specify the optimistic-locking version for this {@link EncryptedKeyset}.
 		 *
 		 * @param version non-negative version counter
@@ -387,8 +422,8 @@ public record EncryptedKeyset(
 			Assert.hasText(kek, "KEK identifier can not be blank");
 			Assert.notNull(keys, "Encrypted keys can not be null");
 
-			return new EncryptedKeyset(name, purpose, factory, provider, kek,
-				List.copyOf(keys), rotationInterval, rotationLeadTime, destructionGracePeriod, version);
+			return new EncryptedKeyset(name, purpose, factory, provider, kek, List.copyOf(keys),
+				retirementPolicy, rotationInterval, rotationLeadTime, destructionGracePeriod, version);
 		}
 
 	}

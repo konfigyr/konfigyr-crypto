@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -72,6 +73,27 @@ class JsonWebKeysetSelectorTest extends AbstractCryptoTest {
 		assertThat(compromised.getKeys())
 			.as("keyset must still list every key, regardless of its status")
 			.hasSize(2);
+	}
+
+	@Test
+	@DisplayName("should expose retired keys through the JWK source with read operations only")
+	void shouldSelectRetiredKeys() throws IOException {
+		final var keyset = (JsonWebKeyset) generate("selecting-keyset", JoseAlgorithm.ES256).rotate();
+		final var primary = keyset.getPrimary().getId();
+		final var previous = keyset.stream().filter(key -> !key.isPrimary()).findFirst().orElseThrow().getId();
+
+		final var retired = withStatus(keyset, previous, KeyStatus.RETIRED);
+
+		assertThat(retired.get(new JWKSelector(new JWKMatcher.Builder().build()), null))
+			.as("JWK source must expose enabled and retired keys")
+			.extracting(JWK::getKeyID)
+			.containsExactlyInAnyOrder(primary, previous);
+
+		assertThat(retired.get(new JWKSelector(new JWKMatcher.Builder().keyID(previous).build()), null))
+			.singleElement()
+			.extracting(JWK::getKeyOperations)
+			.as("retired key must only permit read operations")
+			.isEqualTo(Set.of(KeyOperation.VERIFY));
 	}
 
 	@Test

@@ -58,8 +58,8 @@ public class KeysetAssert extends AbstractObjectAssert<KeysetAssert, @Nullable K
 	}
 
 	/**
-	 * Verifies that the keyset's name, purpose, rotation interval, rotation lead time, and destruction
-	 * grace period all match the corresponding values of the given {@link KeysetDefinition}.
+	 * Verifies that the keyset's name, purpose, rotation interval, rotation lead time, destruction
+	 * grace period, and retirement policy all match the corresponding values of the given {@link KeysetDefinition}.
 	 *
 	 * @param definition the definition to match against, can't be {@literal null}
 	 * @return this assertion for chaining, never {@literal null}
@@ -69,7 +69,8 @@ public class KeysetAssert extends AbstractObjectAssert<KeysetAssert, @Nullable K
 			.hasPurpose(definition.getPurpose())
 			.hasRotationInterval(definition.getRotationInterval().orElse(null))
 			.hasRotationLeadTime(definition.getRotationLeadTime().orElse(null))
-			.hasDestructionGracePeriod(definition.getDestructionGracePeriod().orElse(null));
+			.hasDestructionGracePeriod(definition.getDestructionGracePeriod().orElse(null))
+			.hasRetirementPolicy(definition.getRetirementPolicy());
 	}
 
 	/**
@@ -221,6 +222,20 @@ public class KeysetAssert extends AbstractObjectAssert<KeysetAssert, @Nullable K
 			.extracting(Keyset::getRotationLeadTime, InstanceOfAssertFactories.optional(Duration.class))
 			.as("keyset rotation lead time")
 			.hasValue(leadTime);
+		return myself;
+	}
+
+	/**
+	 * Verifies that the keyset has the expected retirement policy.
+	 *
+	 * @param policy the expected retirement policy, can't be {@literal null}
+	 * @return this assertion for chaining, never {@literal null}
+	 */
+	public KeysetAssert hasRetirementPolicy(RetirementPolicy policy) {
+		assertThatKeyset()
+			.extracting(Keyset::getRetirementPolicy)
+			.as("keyset retirement policy")
+			.isEqualTo(policy);
 		return myself;
 	}
 

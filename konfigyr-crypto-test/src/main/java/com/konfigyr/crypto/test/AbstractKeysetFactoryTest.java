@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
@@ -263,6 +264,37 @@ public abstract class AbstractKeysetFactoryTest {
 		KeysetAssert.assertThat(keyset.rotate())
 			.matchesDefinition(definition)
 			.hasRotationLeadTime(Duration.ofDays(30));
+	}
+
+	@ParameterizedTest(name = "retirement policy: {0}")
+	@EnumSource(RetirementPolicy.class)
+	@DisplayName("should retain the retirement policy when wrapping, unwrapping and rotating the keyset")
+	void shouldRetainRetirementPolicy(RetirementPolicy policy) throws IOException {
+		final KeysetDefinition definition = KeysetDefinition.builder()
+			.name(definition().getName())
+			.algorithm(definition().getAlgorithm())
+			.retirementPolicy(policy)
+			.build();
+
+		final Keyset keyset = createKeyset(definition);
+
+		KeysetAssert.assertThat(keyset)
+			.matchesDefinition(definition)
+			.hasRetirementPolicy(policy);
+
+		final EncryptedKeyset encrypted = encryptKeyset(keyset);
+
+		EncryptedKeysetAssert.assertThat(encrypted)
+			.matchesKeyset(keyset)
+			.hasRetirementPolicy(policy);
+
+		KeysetAssert.assertThat(decryptKeyset(encrypted))
+			.matchesDefinition(definition)
+			.hasRetirementPolicy(policy);
+
+		KeysetAssert.assertThat(keyset.rotate())
+			.matchesDefinition(definition)
+			.hasRetirementPolicy(policy);
 	}
 
 	@Test
@@ -569,6 +601,64 @@ public abstract class AbstractKeysetFactoryTest {
 			assertCryptoAccess(purpose, candidate, producedByNext, data,
 				label + ": must access data produced by the promoted key");
 		}
+	}
+
+	@ParameterizedTest(name = "algorithm: {0}")
+	@MethodSource("definitions")
+	@DisplayName("should verify signatures and decrypt data using a retired key")
+	void shouldUseRetiredKeyForReadOperations(String label, KeysetDefinition definition) throws IOException {
+		final ByteArray data = ByteArray.fromString("konfigyr-crypto-test-data");
+		final KeysetPurpose purpose = definition.getPurpose();
+
+		final Keyset keyset = createKeyset(definition);
+		final Key original = keyset.getPrimary();
+		final ByteArray produced = produce(purpose, keyset, data);
+
+		final EncryptedKeyset encrypted = encryptKeyset(keyset.rotate());
+		final Keyset retired = decryptKeyset(EncryptedKeyset.builder(encrypted)
+			.build(encrypted.keys().stream()
+				.map(key -> key.id().equals(original.getId())
+					? EncryptedKey.builder(key).status(KeyStatus.RETIRED).build(key.data())
+					: key)
+				.toList()));
+
+		KeyAssert.assertThat(retired.getKey(original.getId()).orElseThrow())
+			.hasStatus(KeyStatus.RETIRED)
+			.isNotPrimary();
+
+		assertCryptoAccess(purpose, retired, produced, data,
+			label + ": retired key must still verify signatures and decrypt data it produced");
+
+		assertCryptoAccess(purpose, retired, produce(purpose, retired, data), data,
+			label + ": primary key must not be affected by the retired key");
+	}
+
+	@ParameterizedTest(name = "algorithm: {0}")
+	@MethodSource("definitions")
+	@DisplayName("should retire the demoted key and retain cryptographic access to data it produced")
+	void shouldRetireDemotedKey(String label, KeysetDefinition definition) throws IOException {
+		final ByteArray data = ByteArray.fromString("konfigyr-crypto-test-data");
+		final KeysetPurpose purpose = definition.getPurpose();
+
+		final Keyset keyset = createKeyset(KeysetDefinition.builder().name(definition.getName())
+			.algorithm(definition.getAlgorithm())
+			.destructionGracePeriod(Duration.ofDays(30))
+			.retirementPolicy(RetirementPolicy.DESTROY)
+			.build());
+
+		final Key original = keyset.getPrimary();
+		final ByteArray produced = produce(purpose, keyset, data);
+
+		final Keyset rotated = decryptKeyset(encryptKeyset(keyset.rotate()));
+
+		KeyAssert.assertThat(rotated.getKey(original.getId()).orElseThrow())
+			.as("%s: demoted key must be retired for the destruction grace period", label)
+			.hasStatus(KeyStatus.RETIRED)
+			.isNotPrimary()
+			.destructionScheduledAt(Instant.now().plus(Duration.ofDays(30)), Duration.ofSeconds(5));
+
+		assertCryptoAccess(purpose, rotated, produced, data,
+			label + ": retired key must still verify signatures and decrypt data it produced");
 	}
 
 	@Test

@@ -52,6 +52,19 @@ class AbstractKeysetTest {
 			.build();
 	}
 
+	static TestKeyset retiringKeyset(RetirementPolicy policy, TestKey... keys) {
+		return TestKeyset.builder()
+			.name("test-keyset")
+			.factory("test-factory")
+			.purpose(KeysetPurpose.ENCRYPTION)
+			.keyEncryptionKey(kek)
+			.rotationInterval(Duration.ofDays(90))
+			.destructionGracePeriod(Duration.ofDays(30))
+			.retirementPolicy(policy)
+			.keys(List.of(keys))
+			.build();
+	}
+
 	static TestKeyset keyset(Duration rotationInterval, TestKey... keys) {
 		return TestKeyset.builder()
 			.name("test-keyset")
@@ -99,6 +112,7 @@ class AbstractKeysetTest {
 			.rotationInterval(Duration.ofDays(90))
 			.rotationLeadTime(Duration.ofDays(30))
 			.destructionGracePeriod(Duration.ofDays(30))
+			.retirementPolicy(RetirementPolicy.DESTROY)
 			.key(primaryKey)
 			.key(secondKey)
 			.build();
@@ -111,6 +125,7 @@ class AbstractKeysetTest {
 			.hasRotationInterval(Duration.ofDays(90))
 			.hasRotationLeadTime(Duration.ofDays(30))
 			.hasDestructionGracePeriod(Duration.ofDays(30))
+			.hasRetirementPolicy(RetirementPolicy.DESTROY)
 			.hasSize(2);
 	}
 
@@ -148,7 +163,8 @@ class AbstractKeysetTest {
 			.matchesDefinition(definition)
 			.hasNoRotationInterval()
 			.hasNoRotationLeadTime()
-			.hasNoDestructionGracePeriod();
+			.hasNoDestructionGracePeriod()
+			.hasRetirementPolicy(RetirementPolicy.RETAIN);
 	}
 
 	@Test
@@ -164,6 +180,7 @@ class AbstractKeysetTest {
 			.rotationInterval(Duration.ofDays(90))
 			.rotationLeadTime(Duration.ofDays(30))
 			.destructionGracePeriod(Duration.ofDays(30))
+			.retirementPolicy(RetirementPolicy.DESTROY)
 			.key(primaryKey)
 			.build();
 
@@ -186,6 +203,7 @@ class AbstractKeysetTest {
 			.rotationInterval(Duration.ofDays(90))
 			.rotationLeadTime(Duration.ofDays(30))
 			.destructionGracePeriod(Duration.ofDays(30))
+			.retirementPolicy(RetirementPolicy.SCHEDULE_DESTRUCTION)
 			.build(List.of());
 
 		final var keyset = TestKeyset.builder(encryptedKeyset)
@@ -200,7 +218,8 @@ class AbstractKeysetTest {
 			.hasKeyEncryptionKey(kek)
 			.hasRotationInterval(Duration.ofDays(90))
 			.hasRotationLeadTime(Duration.ofDays(30))
-			.hasDestructionGracePeriod(Duration.ofDays(30));
+			.hasDestructionGracePeriod(Duration.ofDays(30))
+			.hasRetirementPolicy(RetirementPolicy.SCHEDULE_DESTRUCTION);
 	}
 
 	@Test
@@ -256,7 +275,7 @@ class AbstractKeysetTest {
 	void shouldReturnEnabledKeyById() {
 		final var keyset = createKeyset(createKey("primary-key", true), createKey("other-key", false));
 
-		KeyAssert.assertThat(keyset.requireUsableKey("other-key"))
+		KeyAssert.assertThat(keyset.requireReadableKey("other-key"))
 			.hasId("other-key")
 			.isNotPrimary()
 			.isEnabled();
@@ -270,7 +289,7 @@ class AbstractKeysetTest {
 		final var keyset = createKeyset(createKey("primary-key", true), blocked);
 
 		assertThatExceptionOfType(CryptoException.KeysetException.class)
-			.isThrownBy(() -> keyset.requireUsableKey("other-key"))
+			.isThrownBy(() -> keyset.requireReadableKey("other-key"))
 			.isExactlyInstanceOf(type)
 			.withMessageStartingWith("Key 'other-key' in keyset 'test-keyset'")
 			.returns("test-keyset", CryptoException.KeysetException::getName);
@@ -287,30 +306,69 @@ class AbstractKeysetTest {
 	}
 
 	@Test
+	@DisplayName("should allow retired keys to verify and decrypt but not to sign or encrypt")
+	void shouldOnlyAllowReadOperationsForRetiredKeys() {
+		final var retired = createKey("other-key", false, KeyStatus.RETIRED);
+		final var keyset = createKeyset(createKey("primary-key", true), retired);
+
+		KeyAssert.assertThat(keyset.requireReadableKey("other-key"))
+			.hasId("other-key")
+			.hasStatus(KeyStatus.RETIRED);
+
+		assertThat(keyset.requireReadableKey(retired))
+			.isSameAs(retired);
+
+		assertThatExceptionOfType(CryptoException.KeysetRetiredException.class)
+			.isThrownBy(() -> keyset.requireUsableKey(retired))
+			.withMessage("Key 'other-key' in keyset 'test-keyset' is retired and can only verify signatures "
+				+ "or decrypt data. Call enable to restore it.")
+			.returns("test-keyset", CryptoException.KeysetException::getName)
+			.returns("other-key", CryptoException.KeysetRetiredException::getKeyId);
+	}
+
+	@Test
+	@DisplayName("should not allow a retired primary key to sign or encrypt")
+	void shouldThrowWhenPrimaryKeyIsRetired() {
+		final var keyset = createKeyset(createKey("primary-key", true, KeyStatus.RETIRED));
+
+		assertThatExceptionOfType(CryptoException.KeysetRetiredException.class)
+			.isThrownBy(keyset::requireActivePrimary)
+			.returns("primary-key", CryptoException.KeysetRetiredException::getKeyId);
+	}
+
+	@EnumSource(KeyStatus.class)
+	@ParameterizedTest(name = "status: {0}")
+	@DisplayName("should only consider enabled and retired keys readable")
+	void shouldCheckIfKeyIsReadable(KeyStatus status) {
+		assertThat(AbstractKeyset.isReadable(createKey("key", false, status)))
+			.isEqualTo(status == KeyStatus.ENABLED || status == KeyStatus.RETIRED);
+	}
+
+	@Test
 	@DisplayName("should expose the identifier of the key that is not usable")
 	void shouldExposeKeyIdentifier() {
 		assertThatExceptionOfType(CryptoException.KeysetCompromisedException.class)
-			.isThrownBy(() -> keysetWithKeyInStatus(KeyStatus.COMPROMISED).requireUsableKey("other-key"))
+			.isThrownBy(() -> keysetWithKeyInStatus(KeyStatus.COMPROMISED).requireReadableKey("other-key"))
 			.withMessageStartingWith("Key 'other-key' in keyset 'test-keyset' is compromised")
 			.returns("other-key", CryptoException.KeysetCompromisedException::getKeyId);
 
 		assertThatExceptionOfType(CryptoException.KeysetCompromisedException.class)
-			.isThrownBy(() -> keysetWithKeyInStatus(KeyStatus.COMPROMISED_PENDING_DESTRUCTION).requireUsableKey("other-key"))
+			.isThrownBy(() -> keysetWithKeyInStatus(KeyStatus.COMPROMISED_PENDING_DESTRUCTION).requireReadableKey("other-key"))
 			.withMessageStartingWith("Key 'other-key' in keyset 'test-keyset' is compromised")
 			.returns("other-key", CryptoException.KeysetCompromisedException::getKeyId);
 
 		assertThatExceptionOfType(CryptoException.KeysetDisabledException.class)
-			.isThrownBy(() -> keysetWithKeyInStatus(KeyStatus.DISABLED).requireUsableKey("other-key"))
+			.isThrownBy(() -> keysetWithKeyInStatus(KeyStatus.DISABLED).requireReadableKey("other-key"))
 			.withMessageStartingWith("Key 'other-key' in keyset 'test-keyset' is disabled")
 			.returns("other-key", CryptoException.KeysetDisabledException::getKeyId);
 
 		assertThatExceptionOfType(CryptoException.KeysetPendingDestructionException.class)
-			.isThrownBy(() -> keysetWithKeyInStatus(KeyStatus.PENDING_DESTRUCTION).requireUsableKey("other-key"))
+			.isThrownBy(() -> keysetWithKeyInStatus(KeyStatus.PENDING_DESTRUCTION).requireReadableKey("other-key"))
 			.withMessageStartingWith("Key 'other-key' in keyset 'test-keyset' is pending destruction")
 			.returns("other-key", CryptoException.KeysetPendingDestructionException::getKeyId);
 
 		assertThatExceptionOfType(CryptoException.KeysetDestroyedException.class)
-			.isThrownBy(() -> keysetWithKeyInStatus(KeyStatus.DESTROYED).requireUsableKey("other-key"))
+			.isThrownBy(() -> keysetWithKeyInStatus(KeyStatus.DESTROYED).requireReadableKey("other-key"))
 			.withMessageStartingWith("Key 'other-key' in keyset 'test-keyset' has been permanently destroyed")
 			.returns("other-key", CryptoException.KeysetDestroyedException::getKeyId);
 	}
@@ -327,7 +385,7 @@ class AbstractKeysetTest {
 			.returns(status, CryptoException.KeysetUnavailableException::getStatus);
 
 		assertThatExceptionOfType(CryptoException.KeysetUnavailableException.class)
-			.isThrownBy(() -> keyset.requireUsableKey("other-key"))
+			.isThrownBy(() -> keyset.requireReadableKey("other-key"))
 			.returns(status, CryptoException.KeysetUnavailableException::getStatus);
 	}
 
@@ -337,7 +395,7 @@ class AbstractKeysetTest {
 		final var keyset = createKeyset(createKey("primary-key", true));
 
 		assertThatExceptionOfType(CryptoException.KeyNotFoundException.class)
-			.isThrownBy(() -> keyset.requireUsableKey("missing"))
+			.isThrownBy(() -> keyset.requireReadableKey("missing"))
 			.returns("test-keyset", CryptoException.KeysetException::getName)
 			.returns("missing", CryptoException.KeyNotFoundException::getKeyId);
 	}
@@ -627,6 +685,84 @@ class AbstractKeysetTest {
 	}
 
 	@Test
+	@DisplayName("should keep the demoted key enabled when retaining demoted keys")
+	void shouldRetainDemotedKey() {
+		final Keyset rotated = retiringKeyset(RetirementPolicy.RETAIN,
+			key("primary", true, KeyStatus.ENABLED, now.minus(Duration.ofDays(90)))
+		).rotate();
+
+		assertThat(rotated.getKey("primary"))
+			.hasValueSatisfying(demoted -> KeyAssert.assertThat(demoted)
+				.isNotPrimary()
+				.isEnabled()
+				.destructionScheduledAt(null));
+	}
+
+	@EnumSource(value = RetirementPolicy.class, names = "RETAIN", mode = EnumSource.Mode.EXCLUDE)
+	@ParameterizedTest(name = "retirement policy: {0}")
+	@DisplayName("should retire the demoted key for the destruction grace period when rotating the keyset")
+	void shouldRetireDemotedKeyOnRotation(RetirementPolicy policy) {
+		final Keyset rotated = retiringKeyset(policy,
+			key("primary", true, KeyStatus.ENABLED, now.minus(Duration.ofDays(90)))
+		).rotate();
+
+		assertThat(rotated.getKey("primary"))
+			.hasValueSatisfying(demoted -> KeyAssert.assertThat(demoted)
+				.isNotPrimary()
+				.hasStatus(KeyStatus.RETIRED)
+				.destructionScheduledAt(Instant.now().plus(Duration.ofDays(30)), Duration.ofSeconds(5)));
+
+		KeyAssert.assertThat(rotated.getPrimary())
+			.isEnabled();
+	}
+
+	@EnumSource(value = RetirementPolicy.class, names = "RETAIN", mode = EnumSource.Mode.EXCLUDE)
+	@ParameterizedTest(name = "retirement policy: {0}")
+	@DisplayName("should retire the demoted key when promoting the next key")
+	void shouldRetireDemotedKeyOnPromotion(RetirementPolicy policy) {
+		final Keyset rotated = retiringKeyset(policy,
+			key("primary", true, KeyStatus.ENABLED, now.minus(Duration.ofDays(90))),
+			key("next", false, KeyStatus.ENABLED, now.minus(Duration.ofDays(1)))
+		).rotate();
+
+		KeyAssert.assertThat(rotated.getPrimary())
+			.hasId("next")
+			.isEnabled();
+
+		assertThat(rotated.getKey("primary"))
+			.hasValueSatisfying(demoted -> KeyAssert.assertThat(demoted)
+				.isNotPrimary()
+				.hasStatus(KeyStatus.RETIRED)
+				.destructionScheduledAt(Instant.now().plus(Duration.ofDays(30)), Duration.ofSeconds(5)));
+	}
+
+	@EnumSource(value = KeyStatus.class, names = "ENABLED", mode = EnumSource.Mode.EXCLUDE)
+	@ParameterizedTest(name = "primary key status: {0}")
+	@DisplayName("should not retire a demoted primary key that is not enabled")
+	void shouldNotRetireDemotedKeyThatIsNotEnabled(KeyStatus status) {
+		final Keyset rotated = retiringKeyset(RetirementPolicy.DESTROY,
+			key("primary", true, status, now.minus(Duration.ofDays(90)))
+		).rotate();
+
+		assertThat(rotated.getKey("primary"))
+			.hasValueSatisfying(demoted -> KeyAssert.assertThat(demoted)
+				.isNotPrimary()
+				.hasStatus(status));
+	}
+
+	@Test
+	@DisplayName("should not retire existing non-primary keys when rotating the keyset")
+	void shouldNotRetireNonPrimaryKeys() {
+		final Keyset rotated = retiringKeyset(RetirementPolicy.DESTROY,
+			key("previous", false, KeyStatus.ENABLED, now.minus(Duration.ofDays(200))),
+			key("primary", true, KeyStatus.ENABLED, now.minus(Duration.ofDays(90)))
+		).rotate();
+
+		assertThat(rotated.getKey("previous"))
+			.hasValueSatisfying(previous -> KeyAssert.assertThat(previous).isEnabled());
+	}
+
+	@Test
 	@DisplayName("should fail to rotate keyset with an unsupported algorithm")
 	void shouldFailToRotateWithUnsupportedAlgorithm() {
 		final var keyset = TestKeyset.builder()
@@ -673,6 +809,42 @@ class AbstractKeysetTest {
 		assertThat(keyset).isNotEqualTo(TestKeyset.builder()
 			.name("test-keyset").factory("test-factory").purpose(KeysetPurpose.ENCRYPTION)
 			.keyEncryptionKey(kek).rotationLeadTime(Duration.ofDays(30)).key(key).build());
+
+		assertThat(keyset).isNotEqualTo(TestKeyset.builder()
+			.name("test-keyset").factory("test-factory").purpose(KeysetPurpose.ENCRYPTION)
+			.keyEncryptionKey(kek).retirementPolicy(RetirementPolicy.DESTROY).key(key).build());
+	}
+
+	@Test
+	@DisplayName("should build a keyset from a definition with a retirement policy")
+	void shouldBuildKeysetFromDefinitionWithRetirementPolicy() {
+		final var definition = KeysetDefinition.builder()
+			.name("test-keyset")
+			.algorithm(TestAlgorithm.INSTANCE)
+			.retirementPolicy(RetirementPolicy.DESTROY)
+			.build();
+
+		final var keyset = TestKeyset.builder(definition)
+			.keyEncryptionKey(kek)
+			.key(createKey("primary-key", true))
+			.build();
+
+		KeysetAssert.assertThat(keyset)
+			.matchesDefinition(definition)
+			.hasRetirementPolicy(RetirementPolicy.DESTROY);
+
+		assertThat(KeysetDefinition.builder(keyset).algorithm(TestAlgorithm.INSTANCE).build())
+			.as("definition created from the keyset must retain the retirement policy")
+			.isEqualTo(definition);
+	}
+
+	@Test
+	@DisplayName("should reject a null retirement policy")
+	@SuppressWarnings("DataFlowIssue")
+	void shouldRejectNullRetirementPolicy() {
+		assertThatIllegalArgumentException()
+			.isThrownBy(() -> TestKeyset.builder().retirementPolicy(null))
+			.withMessage("Keyset retirement policy can't be null");
 	}
 
 	@Test

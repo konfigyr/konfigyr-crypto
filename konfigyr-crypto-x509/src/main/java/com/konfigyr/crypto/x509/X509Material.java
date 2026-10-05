@@ -63,13 +63,19 @@ public sealed interface X509Material extends Key permits X509Key {
 	 * The private key is live key material: neither the private key nor the converted result should be
 	 * logged, serialized, cached outside the process, or persisted.
 	 * <p>
-	 * The private key is only handed over when the key is {@link KeyStatus#ENABLED enabled}. Keep in mind that the status is the one this key had when its keyset was
-	 * read from the {@link com.konfigyr.crypto.KeysetStore}, read the keyset again to observe status changes.
+	 * The private key is only handed over when the key is {@link KeyStatus#ENABLED enabled} or
+	 * {@link KeyStatus#RETIRED retired}. A retired key is handed over so that it can still decrypt data,
+	 * such as SAML assertions, that was encrypted for it before it was retired. Only ever sign or encrypt
+	 * with the material of the {@link #isPrimary() primary key}, which is always selected first, never
+	 * with the material of a retired key.
+	 * <p>
+	 * Keep in mind that the status is the one this key had when its keyset was read from the
+	 * {@link com.konfigyr.crypto.KeysetStore}, read the keyset again to observe status changes.
 	 *
 	 * @param converter converter that creates the consumer type from the private key, can't be {@literal null}
 	 * @param <T> the type created by the converter
 	 * @return the converted result as returned by the converter
-	 * @throws com.konfigyr.crypto.CryptoException.KeysetException when the key is not enabled
+	 * @throws com.konfigyr.crypto.CryptoException.KeysetException when the key is neither enabled nor retired
 	 */
 	<T extends @Nullable Object> T convert(Converter<PrivateKey, T> converter);
 

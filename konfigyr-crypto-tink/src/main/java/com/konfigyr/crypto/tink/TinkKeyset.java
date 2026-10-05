@@ -77,7 +77,7 @@ class TinkKeyset extends AbstractKeyset<TinkKey> {
 			TinkKey blocked = null;
 
 			for (TinkKey key : prefixMap.getAllWithMatchingPrefix(bytes)) {
-				if (!key.isEnabled()) {
+				if (!isReadable(key)) {
 					blocked = blocked == null ? key : blocked;
 					continue;
 				}
@@ -94,7 +94,7 @@ class TinkKeyset extends AbstractKeyset<TinkKey> {
 			}
 
 			if (blocked != null) {
-				requireUsableKey(blocked);
+				requireReadableKey(blocked);
 			}
 
 			if (lastException != null) {
@@ -133,7 +133,7 @@ class TinkKeyset extends AbstractKeyset<TinkKey> {
 		TinkKey blocked = null;
 
 		for (TinkKey key : prefixMap.getAllWithMatchingPrefix(bytes)) {
-			if (!key.isEnabled()) {
+			if (!isReadable(key)) {
 				blocked = blocked == null ? key : blocked;
 				continue;
 			}
@@ -147,7 +147,7 @@ class TinkKeyset extends AbstractKeyset<TinkKey> {
 		}
 
 		if (blocked != null) {
-			requireUsableKey(blocked);
+			requireReadableKey(blocked);
 		}
 
 		return false;
@@ -165,7 +165,7 @@ class TinkKeyset extends AbstractKeyset<TinkKey> {
 
 		stream().map(TinkKey.class::cast).forEach(existing -> {
 			if (existing.isPrimary() && definition.isPrimary()) {
-				builder.key(new TinkKey.Builder(existing).demote().build());
+				builder.key(demote(existing, new TinkKey.Builder(existing)).build());
 			} else {
 				builder.key(existing);
 			}
@@ -182,7 +182,7 @@ class TinkKeyset extends AbstractKeyset<TinkKey> {
 			if (existing.getId().equals(key.getId())) {
 				builder.key(new TinkKey.Builder(existing).promote(expiresAt).build());
 			} else if (existing.isPrimary()) {
-				builder.key(new TinkKey.Builder(existing).demote().build());
+				builder.key(demote(existing, new TinkKey.Builder(existing)).build());
 			} else {
 				builder.key(existing);
 			}
