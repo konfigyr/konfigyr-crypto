@@ -116,13 +116,15 @@ public interface KeysetRepository {
 	 * {@link EncryptedKeyset#retirementPolicy() retirement policy} of their keyset.
 	 * <p>
 	 * Each returned {@link EncryptedKeyset} is a <em>partial view</em> — it carries the
-	 * keyset metadata but only the eligible pending-destruction keys. Callers typically
-	 * iterate the returned keysets and call
-	 * {@link com.konfigyr.crypto.KeysetStore#destroy(String, String)} for each key:
+	 * keyset metadata but only the eligible retired and pending-destruction keys. Callers
+	 * typically iterate the returned keysets and call
+	 * {@link com.konfigyr.crypto.KeysetStore#destroy(String, String)} for each key that is
+	 * pending destruction, and destroy or schedule the destruction of each retired key
+	 * according to the retirement policy of its keyset:
 	 * <pre>{@code
 	 * for (EncryptedKeyset keyset : repository.findPendingDestruction()) {
-	 *     for (EncryptedKey key : keyset.getKeys()) {
-	 *         store.destroy(keyset.getName(), key.getId());
+	 *     for (EncryptedKey key : keyset) {
+	 *         store.destroy(keyset.name(), key.id());
 	 *     }
 	 * }
 	 * }</pre>
@@ -131,8 +133,8 @@ public interface KeysetRepository {
 	 * stored keysets (e.g. {@link InMemoryKeysetRepository}) or issue an efficient query
 	 * (e.g. {@code JdbcKeysetRepository}) should override this method.
 	 *
-	 * @return list of partial {@link EncryptedKeyset} objects with only their pending-destruction
-	 *         keys, never {@literal null}
+	 * @return list of partial {@link EncryptedKeyset} objects with only their retired and
+	 *         pending-destruction keys, never {@literal null}
 	 * @throws IOException if there is an issue while querying for pending destruction keys
 	 */
 	default List<EncryptedKeyset> findPendingDestruction() throws IOException {
@@ -153,7 +155,7 @@ public interface KeysetRepository {
 	 * keyset name to trigger rotation:
 	 * <pre>{@code
 	 * for (EncryptedKeyset keyset : repository.findPendingRotation()) {
-	 *     store.rotate(keyset.getName());
+	 *     store.rotate(keyset.name());
 	 * }
 	 * }</pre>
 	 * <p>

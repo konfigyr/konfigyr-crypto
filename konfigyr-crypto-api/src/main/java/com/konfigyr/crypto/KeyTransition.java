@@ -23,19 +23,19 @@ import java.util.function.Function;
  * // ENABLED → DISABLED
  * KeyTransition.disable(encryptedKeyset, keyId);
  *
- * // DISABLED → ENABLED
+ * // DISABLED | RETIRED → ENABLED
  * KeyTransition.enable(encryptedKeyset, keyId);
  *
- * // ENABLED | DISABLED → COMPROMISED, PENDING_DESTRUCTION → COMPROMISED_PENDING_DESTRUCTION
+ * // ENABLED | DISABLED → COMPROMISED, RETIRED | PENDING_DESTRUCTION → COMPROMISED_PENDING_DESTRUCTION
  * KeyTransition.compromise(encryptedKeyset, keyId);
  *
- * // DISABLED → PENDING_DESTRUCTION, COMPROMISED → COMPROMISED_PENDING_DESTRUCTION
+ * // DISABLED | RETIRED → PENDING_DESTRUCTION, COMPROMISED → COMPROMISED_PENDING_DESTRUCTION
  * KeyTransition.scheduleDestruction(encryptedKeyset, keyId, destructionTime);
  *
  * // PENDING_DESTRUCTION → DISABLED, COMPROMISED_PENDING_DESTRUCTION → COMPROMISED
  * KeyTransition.cancelDestruction(encryptedKeyset, keyId);
  *
- * // PENDING_DESTRUCTION | COMPROMISED_PENDING_DESTRUCTION → DESTROYED (key material erased)
+ * // RETIRED | PENDING_DESTRUCTION | COMPROMISED_PENDING_DESTRUCTION → DESTROYED (key material erased)
  * KeyTransition.destroy(encryptedKeyset, keyId, Instant.now());
  * }</pre>
  * <p>
@@ -92,7 +92,8 @@ public record KeyTransition(
 
 	/**
 	 * Creates a transition that applies the {@link KeyStatus.Operation#ENABLE} operation, moving
-	 * a key from {@link KeyStatus#DISABLED} to {@link KeyStatus#ENABLED}.
+	 * a key from {@link KeyStatus#DISABLED} or {@link KeyStatus#RETIRED} to {@link KeyStatus#ENABLED}.
+	 * The scheduled destruction time of a retired key is cleared.
 	 *
 	 * @param keyset the keyset containing the key, can't be {@literal null}
 	 * @param keyId  the identifier of the key to re-enable, can't be {@literal null}
@@ -109,8 +110,9 @@ public record KeyTransition(
 	 * Creates a transition that applies the {@link KeyStatus.Operation#COMPROMISE} operation.
 	 * <p>
 	 * A key in {@link KeyStatus#ENABLED} or {@link KeyStatus#DISABLED} state is moved to
-	 * {@link KeyStatus#COMPROMISED}. A key that is in {@link KeyStatus#PENDING_DESTRUCTION}
-	 * is moved to {@link KeyStatus#COMPROMISED_PENDING_DESTRUCTION}, keeping its existing
+	 * {@link KeyStatus#COMPROMISED}. A key that is in {@link KeyStatus#RETIRED} or
+	 * {@link KeyStatus#PENDING_DESTRUCTION} is moved to {@link KeyStatus#COMPROMISED_PENDING_DESTRUCTION},
+	 * keeping its existing
 	 * {@link EncryptedKey#destructionScheduledAt() scheduled destruction time}.
 	 * <p>
 	 * This is an emergency transition. Once compromised, the key cannot be re-enabled or
@@ -133,7 +135,8 @@ public record KeyTransition(
 	 * Creates a transition that applies the {@link KeyStatus.Operation#SCHEDULE_DESTRUCTION}
 	 * operation, recording the scheduled destruction time.
 	 * <p>
-	 * A {@link KeyStatus#DISABLED} key is moved to {@link KeyStatus#PENDING_DESTRUCTION}, a
+	 * A {@link KeyStatus#DISABLED} or {@link KeyStatus#RETIRED} key is moved to
+	 * {@link KeyStatus#PENDING_DESTRUCTION}, a
 	 * {@link KeyStatus#COMPROMISED} key is moved to {@link KeyStatus#COMPROMISED_PENDING_DESTRUCTION}.
 	 *
 	 * @param keyset                 the keyset containing the key, can't be {@literal null}
@@ -171,8 +174,8 @@ public record KeyTransition(
 
 	/**
 	 * Creates a transition that applies the {@link KeyStatus.Operation#DESTROY} operation, moving
-	 * a key from {@link KeyStatus#PENDING_DESTRUCTION} or {@link KeyStatus#COMPROMISED_PENDING_DESTRUCTION}
-	 * to {@link KeyStatus#DESTROYED}.
+	 * a key from {@link KeyStatus#RETIRED}, {@link KeyStatus#PENDING_DESTRUCTION} or
+	 * {@link KeyStatus#COMPROMISED_PENDING_DESTRUCTION} to {@link KeyStatus#DESTROYED}.
 	 * <p>
 	 * The key material ({@link EncryptedKey#data()}) is erased — set to {@code null} — by
 	 * the repository when this transition is applied. The row itself is kept for audit purposes.
