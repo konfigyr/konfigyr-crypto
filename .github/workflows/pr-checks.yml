@@ -37,10 +37,11 @@ jobs:
         run: ./gradlew --no-daemon --no-parallel --continue check
 
       - name: Test Reports
-        uses: codecov/test-results-action@v1
+        uses: codecov/codecov-action@v7
         if: success() || failure()
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+          report_type: test_results
 
       - name: Test coverage reports
         uses: codecov/codecov-action@v7
