@@ -1,12 +1,16 @@
 package com.konfigyr.crypto.tink;
 
 import com.google.crypto.tink.Aead;
+import com.google.crypto.tink.aead.PredefinedAeadParameters;
 import com.google.crypto.tink.KmsClient;
 import com.google.crypto.tink.KmsClients;
 import com.google.crypto.tink.subtle.AesGcmJce;
 import com.google.crypto.tink.subtle.Random;
+import com.konfigyr.crypto.AlgorithmRegistrar;
 import com.konfigyr.crypto.InMemoryKeysetRepository;
 import com.konfigyr.crypto.KeyEncryptionKeyProvider;
+import com.konfigyr.crypto.KeyType;
+import com.konfigyr.crypto.KeysetPurpose;
 import com.konfigyr.crypto.KeysetRepository;
 import com.konfigyr.io.ByteArray;
 import org.springframework.beans.factory.InitializingBean;
@@ -24,9 +28,22 @@ public class TinkIntegrationConfiguration implements InitializingBean {
 
 	static final ByteArray AES_KEY = ByteArray.fromBase64String("eal1ugRPdfdWpEe6fmi6RA==");
 
+	// custom Tink algorithm, as shown in the module README
+	static final TinkAlgorithm AES256_EAX = new TinkAlgorithm(
+		"tink:AES256_EAX",
+		KeysetPurpose.ENCRYPTION,
+		KeyType.OCTET,
+		PredefinedAeadParameters.AES256_EAX
+	);
+
 	@Override
 	public void afterPropertiesSet() {
 		KmsClients.add(new TestKmsClient());
+	}
+
+	@Bean
+	AlgorithmRegistrar customTinkAlgorithmRegistrar() {
+		return registry -> registry.register(AES256_EAX);
 	}
 
 	@Bean
