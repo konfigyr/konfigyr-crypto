@@ -26,11 +26,11 @@ import java.util.StringJoiner;
  *     .validAt(Instant.now())
  *     .build();
  * }</pre>
- * Matchers can only narrow down the selection. Keys that are not {@link KeyStatus#ENABLED enabled} are
- * never selected, even when the matcher would match them.
+ * Matchers can only narrow down the selection. Keys that are neither {@link KeyStatus#ENABLED enabled} nor
+ * {@link KeyStatus#RETIRED retired} are never selected, even when the matcher would match them.
  *
  * @author Vladimir Spasic
- * @since 1.0.0
+ * @since 1.1.0
  * @see X509MaterialSelector
  */
 @NullMarked
@@ -116,7 +116,7 @@ public final class X509Matcher {
 	 * Builder used to create a {@link X509Matcher}.
 	 *
 	 * @author Vladimir Spasic
-	 * @since 1.0.0
+	 * @since 1.1.0
 	 */
 	@NullMarked
 	public static final class Builder {
@@ -208,6 +208,12 @@ public final class X509Matcher {
 		/**
 		 * Matches keys whose certificate is valid at the given instant, as defined by the certificate
 		 * {@code notBefore} and {@code notAfter} validity period.
+		 * <p>
+		 * The usability of a key is defined by its {@link com.konfigyr.crypto.KeyStatus status}, not by the
+		 * validity of its certificate. The certificate covers the whole period during which the key is used,
+		 * so it does not expire while the key is selected, unless the keyset retains its demoted keys or the
+		 * scheduled keyset maintenance tasks could not run in time. Use this criterion when publishing
+		 * certificates, for instance in SAML metadata, to make sure an expired certificate is never published.
 		 *
 		 * @param validAt the instant at which the certificate must be valid, {@literal null} to match
 		 *                any certificate

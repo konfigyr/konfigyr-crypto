@@ -1,5 +1,6 @@
 package com.konfigyr.crypto.x509;
 
+import com.konfigyr.crypto.KeysetDefinition;
 import com.konfigyr.crypto.KeysetPurpose;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x500.X500NameBuilder;
@@ -15,6 +16,7 @@ import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 import java.io.IOException;
 import java.math.BigInteger;
@@ -36,15 +38,16 @@ import java.util.UUID;
  * BouncyCastle security provider is registered or used.
  *
  * @author Vladimir Spasic
- * @since 1.0.0
+ * @since 1.1.0
  */
 @NullMarked
 final class X509Utils {
 
 	/**
-	 * Validity of the issued certificate when the key does not define an expiration time.
+	 * Margin added to the end of the certificate validity, so that the certificate remains valid until the
+	 * scheduled keyset maintenance tasks destroyed its key, even when they run with a delay.
 	 */
-	static final Duration DEFAULT_CERTIFICATE_VALIDITY = Duration.ofDays(365);
+	static final Duration CERTIFICATE_VALIDITY_MARGIN = Duration.ofDays(1);
 
 	private static final SecureRandom RANDOM = new SecureRandom();
 
@@ -57,6 +60,46 @@ final class X509Utils {
 
 	static String generateKeyId() {
 		return UUID.randomUUID().toString();
+	}
+
+	/**
+	 * Calculates the end of the validity of a certificate whose key becomes the primary key at the given time.
+	 * <p>
+	 * The certificate remains valid while its key is the primary key, for the rotation interval, and while it
+	 * is retired afterwards, for the destruction grace period, followed by the
+	 * {@link #CERTIFICATE_VALIDITY_MARGIN validity margin}:
+	 * <pre>
+	 *     notAfter = activatesAt + rotationInterval + destructionGracePeriod + margin
+	 * </pre>
+	 * When automatic key rotation is disabled, the {@link KeysetDefinition#MAXIMUM_ROTATION_INTERVAL maximum
+	 * rotation interval} is used, and no destruction grace period counts as zero.
+	 *
+	 * @param activatesAt            the time when the key becomes the primary key
+	 * @param rotationInterval       the rotation interval of the keyset, can be {@literal null}
+	 * @param destructionGracePeriod the destruction grace period of the keyset, can be {@literal null}
+	 * @return the end of the certificate validity, never {@literal null}
+	 */
+	static Instant certificateNotAfter(Instant activatesAt, @Nullable Duration rotationInterval,
+			@Nullable Duration destructionGracePeriod) {
+		return activatesAt
+			.plus(rotationInterval == null ? KeysetDefinition.MAXIMUM_ROTATION_INTERVAL : rotationInterval)
+			.plus(destructionGracePeriod == null ? Duration.ZERO : destructionGracePeriod)
+			.plus(CERTIFICATE_VALIDITY_MARGIN);
+	}
+
+	/**
+	 * Calculates the latest time at which a key, whose certificate is valid until the given time, may expire
+	 * as the primary key, so that it remains covered by its certificate for the destruction grace period
+	 * during which it is retired afterwards.
+	 *
+	 * @param notAfter               the end of the certificate validity
+	 * @param destructionGracePeriod the destruction grace period of the keyset, can be {@literal null}
+	 * @return the latest expiration time of the key, never {@literal null}
+	 */
+	static Instant latestExpiration(Instant notAfter, @Nullable Duration destructionGracePeriod) {
+		return notAfter
+			.minus(destructionGracePeriod == null ? Duration.ZERO : destructionGracePeriod)
+			.minus(CERTIFICATE_VALIDITY_MARGIN);
 	}
 
 	/**

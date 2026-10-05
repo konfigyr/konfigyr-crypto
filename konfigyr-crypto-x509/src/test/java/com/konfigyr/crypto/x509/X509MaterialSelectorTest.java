@@ -202,16 +202,26 @@ class X509MaterialSelectorTest {
 		final X509MaterialSelector selector = (X509MaterialSelector) keyset;
 
 		// mirrors the X509MaterialSelector example, using a credential record instead of the Spring Security type
-		final List<Credential> credentials = selector.select(X509Matcher.builder().validAt(Instant.now()).build())
+		final X509Material primary = selector.select(X509Matcher.builder()
+				.primary(true)
+				.build())
+			.getFirst();
+
+		final Credential signing = primary.convert(
+			privateKey -> new Credential(privateKey, primary.getCertificate())
+		);
+
+		final List<X509Certificate> certificates = selector.select(X509Matcher.builder()
+				.validAt(Instant.now())
+				.build())
 			.stream()
-			.map(material -> material.convert(
-				privateKey -> new Credential(privateKey, material.getCertificate())
-			))
+			.map(X509Material::getCertificate)
 			.toList();
 
-		assertThat(credentials)
-			.hasSize(1)
-			.first()
+		assertThat(certificates)
+			.containsExactly(primary.getCertificate());
+
+		assertThat(signing)
 			.satisfies(credential -> {
 				assertThat(credential.certificate())
 					.isEqualTo(((X509Material) keyset.getPrimary()).getCertificate())

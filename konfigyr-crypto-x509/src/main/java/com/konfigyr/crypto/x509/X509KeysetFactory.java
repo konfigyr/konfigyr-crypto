@@ -17,6 +17,7 @@ import org.jspecify.annotations.NullMarked;
 
 import java.io.IOException;
 import java.security.GeneralSecurityException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -29,7 +30,7 @@ import java.util.List;
  * {@link EncryptedKeyset}.
  *
  * @author Vladimir Spasic
- * @since 1.0.0
+ * @since 1.1.0
  * @see X509Algorithm
  */
 @NullMarked
@@ -60,9 +61,19 @@ public class X509KeysetFactory implements KeysetFactory {
 
 	@Override
 	public Keyset create(KeyEncryptionKey kek, KeysetDefinition definition) {
+		final X509Key key = X509Key.generate(
+			KeyDefinition.of(definition),
+			X509Utils.generateKeyId(),
+			definition.getName(),
+			X509Utils.certificateNotAfter(
+				Instant.now(),
+				definition.getRotationInterval().orElse(null),
+				definition.getDestructionGracePeriod().orElse(null)
+			));
+
 		return new X509Keyset.Builder(definition)
-			.key(X509Key.generate(KeyDefinition.of(definition), X509Utils.generateKeyId(), definition.getName()))
 			.keyEncryptionKey(kek)
+			.key(key)
 			.build();
 	}
 

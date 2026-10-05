@@ -50,7 +50,7 @@ import java.util.Set;
  * {@link com.konfigyr.crypto.AlgorithmRegistrar} bean.
  *
  * @author Vladimir Spasic
- * @since 1.0.0
+ * @since 1.1.0
  * @see KeyPairGenerator
  * @see java.security.Signature
  */

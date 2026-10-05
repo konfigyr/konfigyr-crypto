@@ -13,24 +13,35 @@ import java.util.List;
  * <pre>{@code
  * X509MaterialSelector selector = (X509MaterialSelector) store.read("saml-signing");
  *
- * List<Saml2X509Credential> credentials = selector.select(X509Matcher.builder()
+ * // only ever sign with the primary key
+ * X509Material primary = selector.select(X509Matcher.builder()
+ *         .primary(true)
+ *         .build())
+ *     .getFirst();
+ *
+ * Saml2X509Credential signing = primary.convert(
+ *     privateKey -> Saml2X509Credential.signing(privateKey, primary.getCertificate())
+ * );
+ *
+ * // publish the certificates of all keys that are still valid, the primary key first
+ * List<X509Certificate> certificates = selector.select(X509Matcher.builder()
  *         .validAt(Instant.now())
  *         .build())
  *     .stream()
- *     .map(material -> material.convert(
- *         privateKey -> Saml2X509Credential.signing(privateKey, material.getCertificate())
- *     ))
+ *     .map(X509Material::getCertificate)
  *     .toList();
  * }</pre>
  * Implementations must honor the following rules, regardless of the {@link X509Matcher}:
  * <ul>
- *     <li>keys that are not {@link KeyStatus#ENABLED enabled} are never selected,</li>
+ *     <li>only {@link KeyStatus#ENABLED enabled} and {@link KeyStatus#RETIRED retired} keys are selected,
+ *         retired keys may still decrypt data that was encrypted for them, but must never sign or
+ *         encrypt,</li>
  *     <li>the primary key, when selected, is always the first element, followed by the remaining keys
  *         ordered from the most recently created one.</li>
  * </ul>
  *
  * @author Vladimir Spasic
- * @since 1.0.0
+ * @since 1.1.0
  * @see X509Matcher
  * @see X509Material
  */
