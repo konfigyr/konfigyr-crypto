@@ -1,7 +1,5 @@
 package com.konfigyr.crypto;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigureAfter;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -10,9 +8,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
-import java.io.IOException;
-import java.util.List;
-
 /**
  * Autoconfiguration class that registers {@link KeysetTaskRegistration} beans for
  * automatic key lifecycle maintenance when both a {@link KeysetStore} and a
@@ -20,9 +15,11 @@ import java.util.List;
  * <p>
  * Two maintenance tasks are registered by default:
  * <ul>
- *     <li><em>keyset-rotation</em> — calls {@link KeysetStore#rotate(String)} for every
- *     keyset whose primary key's {@link EncryptedKey#expiresAt() expiry time} has
- *     elapsed. Controlled via {@code konfigyr.crypto.tasks.keyset-rotation.*}.</li>
+ *     <li><em>keyset-rotation</em> — creates the next key of every keyset whose primary key
+ *     expires within its {@link KeysetDefinition#getRotationLeadTime() rotation lead time}, then
+ *     calls {@link KeysetStore#rotate(String)} for every keyset whose primary key's
+ *     {@link EncryptedKey#expiresAt() expiry time} has elapsed. Controlled via
+ *     {@code konfigyr.crypto.tasks.keyset-rotation.*}.</li>
  *     <li><em>keyset-destruction</em> — calls
  *     {@link KeysetStore#destroy(String, String)} for every key whose
  *     {@link KeyStatus#PENDING_DESTRUCTION} or {@link KeyStatus#COMPROMISED_PENDING_DESTRUCTION}
@@ -87,100 +84,6 @@ public class KeysetTaskAutoConfiguration {
 	@ConditionalOnProperty(name = "konfigyr.crypto.tasks.keyset-destruction.enabled", havingValue = "true", matchIfMissing = true)
 	KeysetTaskRegistration keysetDestructionTaskRegistration() {
 		return KeysetTaskRegistration.of("keyset-destruction", environment, new KeysetDestructionTask(keysetStore, keysetRepository));
-	}
-
-	/**
-	 * Queries {@link KeysetRepository#findPendingRotation()} and calls
-	 * {@link KeysetStore#rotate(String)} for every keyset whose rotation interval has
-	 * elapsed. Failures for individual keysets are caught and logged so that one failure
-	 * does not prevent the remaining keysets from being rotated.
-	 */
-	static final class KeysetRotationTask implements Runnable {
-
-		private static final Logger log = LoggerFactory.getLogger(KeysetRotationTask.class);
-
-		private final KeysetStore store;
-		private final KeysetRepository repository;
-
-		KeysetRotationTask(KeysetStore store, KeysetRepository repository) {
-			this.store = store;
-			this.repository = repository;
-		}
-
-		@Override
-		public void run() {
-			final List<EncryptedKeyset> pending;
-			try {
-				pending = repository.findPendingRotation();
-			} catch (IOException e) {
-				log.error("Failed to query for keysets pending rotation", e);
-				return;
-			}
-
-			if (pending.isEmpty()) {
-				return;
-			}
-
-			log.debug("Found {} keyset(s) pending rotation", pending.size());
-
-			for (EncryptedKeyset keyset : pending) {
-				try {
-					log.debug("Rotating keyset '{}'", keyset.name());
-					store.rotate(keyset.name());
-				} catch (Exception e) {
-					log.error("Failed to rotate keyset '{}'", keyset.name(), e);
-				}
-			}
-		}
-
-	}
-
-	/**
-	 * Queries {@link KeysetRepository#findPendingDestruction()} and calls
-	 * {@link KeysetStore#destroy(String, String)} for every key whose grace period has
-	 * elapsed. Failures for individual keys are caught and logged so that one failure
-	 * does not prevent the remaining keys from being destroyed.
-	 */
-	static final class KeysetDestructionTask implements Runnable {
-
-		private static final Logger log = LoggerFactory.getLogger(KeysetDestructionTask.class);
-
-		private final KeysetStore store;
-		private final KeysetRepository repository;
-
-		KeysetDestructionTask(KeysetStore store, KeysetRepository repository) {
-			this.store = store;
-			this.repository = repository;
-		}
-
-		@Override
-		public void run() {
-			final List<EncryptedKeyset> pending;
-			try {
-				pending = repository.findPendingDestruction();
-			} catch (IOException e) {
-				log.error("Failed to query for keys pending destruction", e);
-				return;
-			}
-
-			if (pending.isEmpty()) {
-				return;
-			}
-
-			log.debug("Found {} keyset(s) with keys pending destruction", pending.size());
-
-			for (EncryptedKeyset keyset : pending) {
-				for (EncryptedKey key : keyset) {
-					try {
-						log.debug("Destroying key '{}' in keyset '{}'", key.id(), keyset.name());
-						store.destroy(keyset.name(), key.id());
-					} catch (Exception e) {
-						log.error("Failed to destroy key '{}' in keyset '{}'", key.id(), keyset.name(), e);
-					}
-				}
-			}
-		}
-
 	}
 
 }

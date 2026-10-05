@@ -235,6 +235,37 @@ public abstract class AbstractKeysetFactoryTest {
 	}
 
 	@Test
+	@DisplayName("should retain the rotation lead time when wrapping, unwrapping and rotating the keyset")
+	void shouldRetainRotationLeadTime() throws IOException {
+		final KeysetDefinition definition = KeysetDefinition.builder()
+			.name(definition().getName())
+			.algorithm(definition().getAlgorithm())
+			.rotationInterval(Duration.ofDays(90))
+			.rotationLeadTime(Duration.ofDays(30))
+			.build();
+
+		final Keyset keyset = createKeyset(definition);
+
+		KeysetAssert.assertThat(keyset)
+			.matchesDefinition(definition)
+			.hasRotationLeadTime(Duration.ofDays(30));
+
+		final EncryptedKeyset encrypted = encryptKeyset(keyset);
+
+		EncryptedKeysetAssert.assertThat(encrypted)
+			.matchesKeyset(keyset)
+			.hasRotationLeadTime(Duration.ofDays(30));
+
+		KeysetAssert.assertThat(decryptKeyset(encrypted))
+			.matchesDefinition(definition)
+			.hasRotationLeadTime(Duration.ofDays(30));
+
+		KeysetAssert.assertThat(keyset.rotate())
+			.matchesDefinition(definition)
+			.hasRotationLeadTime(Duration.ofDays(30));
+	}
+
+	@Test
 	@DisplayName("should rotate the keyset and promote a new primary key while demoting the previous one")
 	void shouldRotateAndPromoteNewPrimaryKey() throws IOException {
 		final Keyset original = createKeyset(definition());
@@ -480,6 +511,103 @@ public abstract class AbstractKeysetFactoryTest {
 		}
 	}
 
+	@ParameterizedTest(name = "algorithm: {0}")
+	@MethodSource("definitions")
+	@DisplayName("should promote the next key on rotation and retain cryptographic access to prior data")
+	void shouldPromoteNextKeyOnRotation(String label, KeysetDefinition definition) throws IOException {
+		final ByteArray data = ByteArray.fromString("konfigyr-crypto-test-data");
+		final KeysetPurpose purpose = definition.getPurpose();
+
+		final Keyset keyset = createKeyset(definition);
+		final Key original = keyset.getPrimary();
+		final ByteArray producedByOriginal = produce(purpose, keyset, data);
+
+		final Keyset prepared = keyset.rotate(KeyDefinition.builder()
+			.algorithm(definition.getAlgorithm())
+			.rotationInterval(definition.getRotationInterval().orElse(null))
+			.primary(false)
+			.build());
+
+		KeysetAssert.assertThat(prepared)
+			.hasSize(2);
+
+		KeyAssert.assertThat(prepared.getPrimary())
+			.as("%s: preparing the next key must not change the primary key", label)
+			.hasId(original.getId());
+
+		final Key next = prepared.stream()
+			.filter(key -> !key.isPrimary())
+			.findFirst()
+			.orElseThrow(() -> new AssertionError(label + ": prepared keyset must contain the next key"));
+
+		final Keyset promoted = decryptKeyset(encryptKeyset(prepared)).rotate();
+
+		KeysetAssert.assertThat(promoted)
+			.as("%s: promoting the next key must not generate a new key", label)
+			.hasSize(2);
+
+		KeyAssert.assertThat(promoted.getPrimary())
+			.hasId(next.getId())
+			.isPrimary()
+			.isEnabled();
+
+		definition.getRotationInterval().ifPresent(interval -> assertThat(promoted.getPrimary().getExpiresAt())
+			.as("%s: promoted key must expire one rotation interval after its promotion", label)
+			.isNotNull()
+			.isCloseTo(Instant.now().plus(interval), within(Duration.ofSeconds(5))));
+
+		KeyAssert.assertThat(promoted.getKey(original.getId()).orElseThrow())
+			.as("%s: previous primary key must be demoted", label)
+			.isNotPrimary()
+			.isEnabled();
+
+		final ByteArray producedByNext = produce(purpose, promoted, data);
+
+		for (Keyset candidate : List.of(promoted, decryptKeyset(encryptKeyset(promoted)))) {
+			assertCryptoAccess(purpose, candidate, producedByOriginal, data,
+				label + ": must access data produced by the previous primary key");
+			assertCryptoAccess(purpose, candidate, producedByNext, data,
+				label + ": must access data produced by the promoted key");
+		}
+	}
+
+	@Test
+	@DisplayName("should generate a new primary key instead of promoting the next key when the primary is compromised")
+	void shouldNotPromoteNextKeyWhenPrimaryIsCompromised() throws IOException {
+		final KeysetDefinition definition = definition();
+		final Keyset prepared = createKeyset(definition).rotate(KeyDefinition.builder()
+			.algorithm(definition.getAlgorithm())
+			.primary(false)
+			.build());
+
+		final Key primary = prepared.getPrimary();
+		final Key next = prepared.stream()
+			.filter(key -> !key.isPrimary())
+			.findFirst()
+			.orElseThrow();
+
+		final EncryptedKeyset encrypted = encryptKeyset(prepared);
+		final Keyset compromised = decryptKeyset(EncryptedKeyset.builder(encrypted)
+			.build(encrypted.keys().stream()
+				.map(key -> key.id().equals(primary.getId())
+					? EncryptedKey.builder(key).status(KeyStatus.COMPROMISED).build(key.data())
+					: key)
+				.toList()));
+
+		final Keyset rotated = compromised.rotate();
+
+		KeysetAssert.assertThat(rotated)
+			.hasSize(3);
+
+		assertThat(rotated.getPrimary().getId())
+			.as("rotated keyset must have a newly generated primary key")
+			.isNotIn(primary.getId(), next.getId());
+
+		KeyAssert.assertThat(rotated.getKey(next.getId()).orElseThrow())
+			.isNotPrimary()
+			.isEnabled();
+	}
+
 	/**
 	 * Creates a new {@link Keyset} using the factory under test and the {@link #kek()}.
 	 *
@@ -531,6 +659,10 @@ public abstract class AbstractKeysetFactoryTest {
 			.toList();
 
 		return decryptKeyset(EncryptedKeyset.builder(encrypted).build(keys));
+	}
+
+	private static ByteArray produce(KeysetPurpose purpose, Keyset keyset, ByteArray data) {
+		return purpose == KeysetPurpose.SIGNING ? keyset.sign(data) : keyset.encrypt(data);
 	}
 
 	private void assertCryptoAccess(

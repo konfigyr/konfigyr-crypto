@@ -102,6 +102,66 @@ class JdbcKeysetRepositoryTest {
 	}
 
 	@Test
+	@DisplayName("should store, update and clear the keyset rotation lead time")
+	void shouldPersistRotationLeadTime() throws IOException {
+		final Instant t0 = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+		final String name = "rotation-lead-time";
+
+		final EncryptedKey primary = expiringKey("primary", true, KeyStatus.ENABLED, t0.minus(Duration.ofDays(1)));
+		final EncryptedKey retired = EncryptedKey.builder()
+			.id("retired")
+			.algorithm(TestAlgorithm.INSTANCE)
+			.status(KeyStatus.PENDING_DESTRUCTION)
+			.primary(false)
+			.createdAt(t0)
+			.destructionScheduledAt(t0.minus(Duration.ofDays(1)))
+			.build(ByteArray.fromString("secret"));
+
+		final EncryptedKeyset keyset = EncryptedKeyset.builder(encryptedKeyset(name))
+			.rotationLeadTime(Duration.ofDays(30))
+			.build(primary, retired);
+
+		try {
+			final EncryptedKeyset written = repository.write(keyset);
+
+			assertThat(repository.read(name))
+				.get()
+				.returns(Duration.ofDays(30), EncryptedKeyset::rotationLeadTime)
+				.isEqualTo(written);
+
+			assertThat(repository.findPendingRotation())
+				.filteredOn(it -> name.equals(it.name()))
+				.singleElement()
+				.returns(Duration.ofDays(30), EncryptedKeyset::rotationLeadTime);
+
+			assertThat(repository.findPendingDestruction())
+				.filteredOn(it -> name.equals(it.name()))
+				.singleElement()
+				.returns(Duration.ofDays(30), EncryptedKeyset::rotationLeadTime);
+
+			repository.write(EncryptedKeyset.builder(written)
+				.rotationLeadTime(Duration.ofDays(60))
+				.build(written.keys()));
+
+			assertThat(repository.read(name))
+				.get()
+				.returns(Duration.ofDays(60), EncryptedKeyset::rotationLeadTime);
+
+			final EncryptedKeyset updated = repository.read(name).orElseThrow();
+
+			repository.write(EncryptedKeyset.builder(updated)
+				.rotationLeadTime((Duration) null)
+				.build(updated.keys()));
+
+			assertThat(repository.read(name))
+				.get()
+				.returns(null, EncryptedKeyset::rotationLeadTime);
+		} finally {
+			repository.remove(name);
+		}
+	}
+
+	@Test
 	@DisplayName("should update key status without altering key data")
 	void shouldUpdateKeyStatus() throws IOException {
 		final Instant t0 = Instant.now().truncatedTo(ChronoUnit.MILLIS);
@@ -358,13 +418,68 @@ class JdbcKeysetRepositoryTest {
 	}
 
 	@Test
+	@DisplayName("should only return keysets whose primary key expires within the rotation lead time and have no next key")
+	void shouldFindKeysetsPendingPreparation() throws IOException {
+		final Instant now = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+		final List<String> names = List.of("preparation-within-lead-time", "preparation-missed-lead-time",
+			"preparation-before-lead-time", "preparation-already-prepared", "preparation-not-prepared",
+			"preparation-compromised", "preparation-no-lead-time");
+
+		// primary key expires within the lead time and there is no next key yet: returned
+		repository.write(preparedKeyset("preparation-within-lead-time",
+			expiringKey("primary", true, KeyStatus.ENABLED, now.plus(Duration.ofDays(20)))));
+
+		// primary key already expired without the keyset being prepared: returned
+		repository.write(preparedKeyset("preparation-missed-lead-time",
+			expiringKey("primary", true, KeyStatus.ENABLED, now.minus(Duration.ofDays(10)))));
+
+		// primary key expires after the lead time: not returned
+		repository.write(preparedKeyset("preparation-before-lead-time",
+			expiringKey("primary", true, KeyStatus.ENABLED, now.plus(Duration.ofDays(60)))));
+
+		// next key, created after the primary key, already exists: not returned
+		repository.write(preparedKeyset("preparation-already-prepared",
+			expiringKey("primary", true, KeyStatus.ENABLED, now.plus(Duration.ofDays(20))),
+			expiringKey("next", false, KeyStatus.ENABLED, now.plus(Duration.ofDays(85)))));
+
+		// only an older, demoted, key and a disabled newer key exist: returned
+		repository.write(preparedKeyset("preparation-not-prepared",
+			expiringKey("previous", false, KeyStatus.ENABLED, now.minus(Duration.ofDays(70))),
+			expiringKey("primary", true, KeyStatus.ENABLED, now.plus(Duration.ofDays(20))),
+			expiringKey("disabled", false, KeyStatus.DISABLED, now.plus(Duration.ofDays(85)))));
+
+		// primary key is not enabled: not returned
+		repository.write(preparedKeyset("preparation-compromised",
+			expiringKey("primary", true, KeyStatus.COMPROMISED, now.plus(Duration.ofDays(20)))));
+
+		// keyset without a rotation lead time: not returned
+		repository.write(encryptedKeyset("preparation-no-lead-time",
+			expiringKey("primary", true, KeyStatus.ENABLED, now.plus(Duration.ofDays(20)))));
+
+		try {
+			assertThat(repository.findPendingPreparation())
+				.filteredOn(keyset -> names.contains(keyset.name()))
+				.extracting(EncryptedKeyset::name, EncryptedKeyset::rotationLeadTime, EncryptedKeyset::keys)
+				.containsExactly(
+					tuple("preparation-missed-lead-time", Duration.ofDays(30), List.of()),
+					tuple("preparation-not-prepared", Duration.ofDays(30), List.of()),
+					tuple("preparation-within-lead-time", Duration.ofDays(30), List.of())
+				);
+		} finally {
+			for (String name : names) {
+				repository.remove(name);
+			}
+		}
+	}
+
+	@Test
 	@DisplayName("should bind the expiry time and primary flag parameters to a custom pending rotation query")
 	void shouldBindParametersToCustomPendingRotationQuery() throws IOException {
 		final Instant pastExpiry = Instant.now().truncatedTo(ChronoUnit.MILLIS).minus(Duration.ofDays(1));
 		final var repo = new JdbcKeysetRepository(jdbcOperations, transactionOperations);
 		repo.setFindPendingRotationQuery("""
 				SELECT DISTINCT K.KEYSET_NAME, K.KEYSET_PURPOSE, K.KEYSET_FACTORY, K.KEYSET_PROVIDER, K.KEYSET_KEK,
-					K.ROTATION_INTERVAL, K.DESTRUCTION_GRACE_PERIOD, K.KEYSET_VERSION
+					K.ROTATION_INTERVAL, K.ROTATION_LEAD_TIME, K.DESTRUCTION_GRACE_PERIOD, K.KEYSET_VERSION
 				FROM %KEYSETS_TABLE_NAME% K
 				INNER JOIN %KEYS_TABLE_NAME% E ON E.KEYSET_NAME = K.KEYSET_NAME
 				WHERE E.EXPIRES_AT <= ? AND E.KEY_PRIMARY <> ?
@@ -407,6 +522,13 @@ class JdbcKeysetRepositoryTest {
 			.createdAt(expiresAt.minus(Duration.ofDays(90)))
 			.expiresAt(expiresAt)
 			.build(ByteArray.fromString("enc-key-material"));
+	}
+
+	@NonNull
+	private static EncryptedKeyset preparedKeyset(String name, EncryptedKey... keys) {
+		return EncryptedKeyset.builder(encryptedKeyset(name))
+			.rotationLeadTime(Duration.ofDays(30))
+			.build(keys);
 	}
 
 	@NonNull
@@ -667,7 +789,7 @@ class JdbcKeysetRepositoryTest {
 		final var repo = new JdbcKeysetRepository(jdbcOperations, transactionOperations);
 		repo.setGetKeysetQuery("""
 				SELECT K.KEYSET_NAME, K.KEYSET_PURPOSE, K.KEYSET_FACTORY, K.KEYSET_PROVIDER, K.KEYSET_KEK,
-					K.ROTATION_INTERVAL, K.DESTRUCTION_GRACE_PERIOD, K.KEYSET_VERSION
+					K.ROTATION_INTERVAL, K.ROTATION_LEAD_TIME, K.DESTRUCTION_GRACE_PERIOD, K.KEYSET_VERSION
 				FROM %s K
 				WHERE K.KEYSET_NAME = ?
 				""".formatted(placeholder));

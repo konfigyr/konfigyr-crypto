@@ -4,6 +4,7 @@ import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
 import java.time.Instant;
+import java.util.Objects;
 
 /**
  * Interface that describes the public attributes of a key within the {@link Keyset}.
@@ -87,9 +88,27 @@ public interface Key {
 	 * @return {@literal true} if this key is in {@link KeyStatus#ENABLED} state, {@literal false} otherwise.
 	 * @see KeyStatus
 	 * @see #getStatus()
+	 * @since 1.1.0
 	 */
 	default boolean isEnabled() {
 		return getStatus() == KeyStatus.ENABLED;
+	}
+
+	/**
+	 * Checks if this key uses the given {@link Algorithm} to generate its key material and to perform
+	 * the cryptographic operations.
+	 * <p>
+	 * Algorithms are compared using their {@link Object#equals(Object) equality}, as implemented by the
+	 * {@link Algorithm} itself. The {@link Keyset#rotate(KeyDefinition)} uses this check to only promote
+	 * the next key when it uses the algorithm requested for the new primary key.
+	 *
+	 * @param algorithm the algorithm to check against, can't be {@literal null}
+	 * @return {@literal true} if this key uses the given algorithm, {@literal false} otherwise.
+	 * @see #getAlgorithm()
+	 * @since 1.1.0
+	 */
+	default boolean isUsing(Algorithm algorithm) {
+		return Objects.equals(getAlgorithm(), algorithm);
 	}
 
 	/**

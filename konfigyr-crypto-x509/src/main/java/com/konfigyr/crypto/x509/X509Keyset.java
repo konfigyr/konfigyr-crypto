@@ -15,6 +15,7 @@ import org.springframework.util.Assert;
 import javax.crypto.Cipher;
 import javax.crypto.spec.OAEPParameterSpec;
 import javax.crypto.spec.PSource;
+import java.time.Instant;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.security.Signature;
@@ -179,7 +180,24 @@ final class X509Keyset extends AbstractKeyset<X509Key> implements X509MaterialSe
 
 		stream().map(X509Key.class::cast).forEach(existing -> {
 			if (existing.isPrimary() && definition.isPrimary()) {
-				builder.key(new X509Key.Builder(existing).primary(false).build());
+				builder.key(new X509Key.Builder(existing).demote().build());
+			} else {
+				builder.key(existing);
+			}
+		});
+
+		return builder.build();
+	}
+
+	@Override
+	protected Keyset doPromote(X509Key key, @Nullable Instant expiresAt) {
+		final Builder builder = new Builder(this);
+
+		stream().map(X509Key.class::cast).forEach(existing -> {
+			if (existing.getId().equals(key.getId())) {
+				builder.key(new X509Key.Builder(existing).promote(expiresAt).build());
+			} else if (existing.isPrimary()) {
+				builder.key(new X509Key.Builder(existing).demote().build());
 			} else {
 				builder.key(existing);
 			}

@@ -11,6 +11,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.util.Assert;
 import org.springframework.util.ClassUtils;
 
+import java.time.Instant;
 import java.security.GeneralSecurityException;
 
 import static com.konfigyr.crypto.CryptoException.KeysetOperationException;
@@ -164,7 +165,24 @@ class TinkKeyset extends AbstractKeyset<TinkKey> {
 
 		stream().map(TinkKey.class::cast).forEach(existing -> {
 			if (existing.isPrimary() && definition.isPrimary()) {
-				builder.key(new TinkKey.Builder(existing).primary(false).build());
+				builder.key(new TinkKey.Builder(existing).demote().build());
+			} else {
+				builder.key(existing);
+			}
+		});
+
+		return builder.build();
+	}
+
+	@Override
+	protected Keyset doPromote(TinkKey key, @Nullable Instant expiresAt) {
+		final Builder builder = new Builder(this);
+
+		stream().map(TinkKey.class::cast).forEach(existing -> {
+			if (existing.getId().equals(key.getId())) {
+				builder.key(new TinkKey.Builder(existing).promote(expiresAt).build());
+			} else if (existing.isPrimary()) {
+				builder.key(new TinkKey.Builder(existing).demote().build());
 			} else {
 				builder.key(existing);
 			}

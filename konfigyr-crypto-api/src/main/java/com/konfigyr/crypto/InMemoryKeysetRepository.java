@@ -103,4 +103,45 @@ public class InMemoryKeysetRepository implements KeysetRepository {
 		return result;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 * <p>
+	 * Scans all stored keysets and returns metadata-only {@link EncryptedKeyset} views (empty key list) for
+	 * keysets with a rotation lead time, whose primary {@link KeyStatus#ENABLED} key expires within that lead
+	 * time and that do not contain a next key yet.
+	 */
+	@Override
+	public List<EncryptedKeyset> findPendingPreparation() {
+		final Instant now = Instant.now();
+		final List<EncryptedKeyset> result = new ArrayList<>();
+		for (EncryptedKeyset keyset : store.values()) {
+			if (keyset.rotationLeadTime() == null) {
+				continue;
+			}
+
+			final EncryptedKey primary = keyset.keys().stream()
+				.filter(EncryptedKey::primary)
+				.findFirst()
+				.orElse(null);
+
+			if (primary == null || primary.status() != KeyStatus.ENABLED || primary.expiresAt() == null) {
+				continue;
+			}
+
+			if (primary.expiresAt().minus(keyset.rotationLeadTime()).isAfter(now)) {
+				continue;
+			}
+
+			final boolean prepared = keyset.keys().stream()
+				.anyMatch(key -> !key.primary()
+					&& key.status() == KeyStatus.ENABLED
+					&& key.createdAt().isAfter(primary.createdAt()));
+
+			if (!prepared) {
+				result.add(EncryptedKeyset.builder(keyset).build(List.of()));
+			}
+		}
+		return result;
+	}
+
 }

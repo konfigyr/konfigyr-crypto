@@ -30,6 +30,10 @@ import java.util.Optional;
  * 		    schedule the automatic key rotation by the {@link KeysetStore}.
  * 		</li>
  * 		<li>
+ * 		    Rotation lead time - how long before the scheduled rotation the next key should be created,
+ * 		    so it can be published to third parties before it becomes the primary key.
+ * 		</li>
+ * 		<li>
  * 		    Destruction grace duration - the "grace period" between a deletion request and the
  * 		    permanent destruction of the key material.
  * 		</li>
@@ -103,6 +107,27 @@ public interface KeysetDefinition {
 	Optional<@Nullable Duration> getRotationInterval();
 
 	/**
+	 * Duration that defines how long before the scheduled rotation of the primary key the next key
+	 * should be created. Leaving this unspecified creates the next key at the moment of rotation.
+	 * <p>
+	 * The next key is created as a non-primary key and becomes the primary key once the rotation interval
+	 * of the current primary key elapses. This allows third parties that cache the public key material,
+	 * like the consumers of a JSON Web Key Set or SAML metadata, to obtain the next key before it is used.
+	 * The lead time should therefore be longer than the interval in which these third parties refresh
+	 * their copy of the public key material.
+	 * <p>
+	 * The rotation lead time can only be specified together with a {@link #getRotationInterval() rotation interval}
+	 * and must be shorter than it.
+	 *
+	 * @return rotation lead time, may be {@literal null}.
+	 * @see #getRotationInterval()
+	 * @since 1.1.0
+	 */
+	default Optional<@Nullable Duration> getRotationLeadTime() {
+		return Optional.empty();
+	}
+
+	/**
 	 * This duration interval defines the mandatory waiting period between the moment a user initiates a
 	 * deletion request for a {@link Key} within the {@link Keyset}, and the permanent, irrevocable destruction
 	 * of the cryptographic key material.
@@ -169,6 +194,7 @@ public interface KeysetDefinition {
 	 *     <li>Name</li>
 	 *     <li>Keyset purpose</li>
 	 *     <li>Key rotation interval</li>
+	 *     <li>Key rotation lead time</li>
 	 *     <li>Destruction grace period</li>
 	 * </ul>
 	 *
@@ -182,6 +208,9 @@ public interface KeysetDefinition {
 
 		keyset.getRotationInterval().ifPresentOrElse(
 			builder::rotationInterval, builder::disableAutomaticKeyRotation
+		);
+		keyset.getRotationLeadTime().ifPresentOrElse(
+			builder::rotationLeadTime, builder::disableRotationLeadTime
 		);
 		keyset.getDestructionGracePeriod().ifPresentOrElse(
 			builder::destructionGracePeriod, builder::disableDestructionGracePeriod
@@ -221,6 +250,13 @@ public interface KeysetDefinition {
 		 */
 		@Nullable
 		protected Duration rotationInterval = Duration.ofDays(90);
+
+		/**
+		 * How long before the scheduled rotation the next key should be created. Not set by default.
+		 * {@literal null} creates the next key at the moment of rotation.
+		 */
+		@Nullable
+		protected Duration rotationLeadTime;
 
 		/**
 		 * Safety window between a deletion request and permanent key destruction. Defaults to 30 days.
@@ -310,6 +346,46 @@ public interface KeysetDefinition {
 		}
 
 		/**
+		 * Sets how long before the scheduled rotation of the primary key the next key should be created.
+		 * <p>
+		 * The next key is created as a non-primary key, so it can be published to third parties that cache
+		 * public key material, like the consumers of a JSON Web Key Set or SAML metadata, before it becomes
+		 * primary. Choose a lead time that is longer than the interval in which these third parties refresh
+		 * their copy of the public key material.
+		 * <p>
+		 * The lead time must be positive, requires a {@link #rotationInterval(Duration) rotation interval}
+		 * and must be shorter than it.
+		 *
+		 * @param rotationLeadTime the duration before the scheduled rotation when the next key is created.
+		 * @return the definition builder
+		 * @since 1.1.0
+		 */
+		public Builder rotationLeadTime(Duration rotationLeadTime) {
+			this.rotationLeadTime = rotationLeadTime;
+			return this;
+		}
+
+		/**
+		 * Disables the rotation lead time, so the next key is created at the moment of rotation.
+		 * <p>
+		 * The next key then becomes the primary key without being published in advance. Third parties
+		 * that cache the public key material, like the consumers of a JSON Web Key Set or SAML metadata,
+		 * may reject the output of the new primary key until they refresh their copy.
+		 * <p>
+		 * Use this method to clear a lead time copied from an existing {@link Keyset}, for instance before
+		 * {@link #disableAutomaticKeyRotation() disabling the automatic key rotation}, which requires the
+		 * lead time to be disabled as well.
+		 *
+		 * @return the definition builder
+		 * @see #rotationLeadTime(Duration)
+		 * @since 1.1.0
+		 */
+		public Builder disableRotationLeadTime() {
+			this.rotationLeadTime = null;
+			return this;
+		}
+
+		/**
 		 * Sets the safety window between a deletion request and the permanent destruction of the key.
 		 * <p>
 		 * We recommended setting this to 30 days, that is an industry standard.
@@ -378,6 +454,20 @@ public interface KeysetDefinition {
 				}
 			}
 
+			if (rotationLeadTime != null) {
+				if (rotationLeadTime.isNegative() || rotationLeadTime.isZero()) {
+					throw new IllegalArgumentException("Keyset rotation lead time must be positive");
+				}
+				if (rotationInterval == null) {
+					throw new IllegalArgumentException("Keyset rotation lead time can not be specified "
+						+ "when automatic key rotation is disabled");
+				}
+				if (rotationLeadTime.compareTo(rotationInterval) >= 0) {
+					throw new IllegalArgumentException("Keyset rotation lead time must be shorter than "
+						+ "the rotation interval of " + rotationInterval.toDays() + " days");
+				}
+			}
+
 			if (destructionGracePeriod != null) {
 				if (KeysetDefinition.MINIMUM_DESTRUCTION_GRACE_INTERVAL.compareTo(destructionGracePeriod) > 0) {
 					throw new IllegalArgumentException("Keyset destruction grace interval can not be less than "
@@ -389,7 +479,8 @@ public interface KeysetDefinition {
 				}
 			}
 
-			return new SimpleKeysetDefinition(name, purpose, algorithm, rotationInterval, destructionGracePeriod);
+			return new SimpleKeysetDefinition(name, purpose, algorithm, rotationInterval, rotationLeadTime,
+				destructionGracePeriod);
 		}
 
 	}
