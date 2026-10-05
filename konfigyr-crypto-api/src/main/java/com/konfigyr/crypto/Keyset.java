@@ -19,8 +19,8 @@ import java.util.stream.Stream;
  * <p>
  * The designated primary key within the {@link Keyset} is used to perform the active
  * cryptographic operation (sign or encrypt). Non-primary keys are used only for
- * the corresponding passive operation (verify or decrypt) when they are not
- * in a disabled state.
+ * the corresponding passive operation (verify or decrypt) when they are
+ * {@link KeyStatus#ENABLED enabled} or {@link KeyStatus#RETIRED retired}.
  * <p>
  * Which operations a keyset supports is determined by its {@link Algorithm#purpose()}:
  * <ul>
@@ -180,8 +180,9 @@ public interface Keyset extends Iterable<Key> {
 	 * @return Decrypted data wrapped inside a byte buffer.
 	 * @throws CryptoException.UnsupportedKeysetOperationException when the algorithm does not
 	 * support {@link KeysetOperation#DECRYPT}.
-	 * @throws CryptoException.KeysetException when the cipher was produced by a key that is not
-	 * {@link Key#isEnabled() enabled}, see {@link #decrypt(ByteArray, ByteArray)}.
+	 * @throws CryptoException.KeysetException when the cipher was produced by a key that is neither
+	 * {@link KeyStatus#ENABLED enabled} nor {@link KeyStatus#RETIRED retired}, see
+	 * {@link #decrypt(ByteArray, ByteArray)}.
 	 */
 	default ByteArray decrypt(ByteArray cipher) {
 		return decrypt(cipher, null);
@@ -192,9 +193,10 @@ public interface Keyset extends Iterable<Key> {
 	 * authentication context. Only supported when {@link Algorithm#purpose()} is
 	 * {@link KeysetPurpose#ENCRYPTION}.
 	 * <p>
-	 * The cipher can only be decrypted by a {@link Key} that is {@link Key#isEnabled() enabled}.
-	 * When the cipher was produced by a key that is no longer enabled, for instance a key that was
-	 * disabled or marked as compromised after rotation, the operation fails with a status specific
+	 * The cipher can only be decrypted by a {@link Key} that is {@link KeyStatus#ENABLED enabled} or
+	 * {@link KeyStatus#RETIRED retired}, a retired key may still decrypt the data it encrypted while it was
+	 * the primary key. When the cipher was produced by a key in any other status, for instance a key that
+	 * was disabled or marked as compromised after rotation, the operation fails with a status specific
 	 * exception before the key material is used.
 	 *
 	 * @param cipher Data wrapped as a byte buffer that should be decrypted, can't be {@literal null}.
@@ -211,7 +213,7 @@ public interface Keyset extends Iterable<Key> {
 	 * @throws CryptoException.KeysetDestroyedException when the cipher was produced by a key in
 	 * {@link KeyStatus#DESTROYED} state.
 	 * @throws CryptoException.KeysetException when the cipher was produced by a key in any other state
-	 * that is not {@link KeyStatus#ENABLED}.
+	 * that is neither {@link KeyStatus#ENABLED} nor {@link KeyStatus#RETIRED}.
 	 * @throws CryptoException.KeysetOperationException when the cipher can't be decrypted.
 	 */
 	default ByteArray decrypt(ByteArray cipher, @Nullable ByteArray context) {
@@ -251,9 +253,10 @@ public interface Keyset extends Iterable<Key> {
 	 * Verifies if the digital signature of the data wrapped inside a {@link ByteArray} is
 	 * correct. Only supported when {@link Algorithm#purpose()} is {@link KeysetPurpose#SIGNING}.
 	 * <p>
-	 * The signature can only be verified by a {@link Key} that is {@link Key#isEnabled() enabled}.
-	 * When the signature was produced by a key that is no longer enabled, for instance a key that
-	 * was disabled or marked as compromised after rotation, this method throws a status specific
+	 * The signature can only be verified by a {@link Key} that is {@link KeyStatus#ENABLED enabled} or
+	 * {@link KeyStatus#RETIRED retired}, a retired key may still verify the signatures it produced while it
+	 * was the primary key. When the signature was produced by a key in any other status, for instance a key
+	 * that was disabled or marked as compromised after rotation, this method throws a status specific
 	 * exception instead of returning {@code false}. This allows the caller to tell a signature
 	 * made by a blocked key apart from an invalid or forged signature.
 	 *
@@ -271,7 +274,7 @@ public interface Keyset extends Iterable<Key> {
 	 * @throws CryptoException.KeysetDestroyedException when the signature was produced by a key in
 	 * {@link KeyStatus#DESTROYED} state.
 	 * @throws CryptoException.KeysetException when the signature was produced by a key in any other state
-	 * that is not {@link KeyStatus#ENABLED}.
+	 * that is neither {@link KeyStatus#ENABLED} nor {@link KeyStatus#RETIRED}.
 	 */
 	default boolean verify(ByteArray signature, ByteArray data) {
 		throw new CryptoException.UnsupportedKeysetOperationException(

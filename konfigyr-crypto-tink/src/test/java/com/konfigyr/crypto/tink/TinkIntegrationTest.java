@@ -1,12 +1,14 @@
 package com.konfigyr.crypto.tink;
 
 import com.konfigyr.crypto.*;
+import com.konfigyr.crypto.test.KeyAssert;
 import com.konfigyr.crypto.test.KeysetAssert;
 import com.konfigyr.io.ByteArray;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 
@@ -214,6 +216,148 @@ public class TinkIntegrationTest {
 			.isTrue();
 
 		store.remove(definition.getName());
+	}
+
+	@Test
+	@Order(5)
+	@DisplayName("should read or create a keyset and use it to encrypt data, as shown in the README quick start")
+	void shouldReadOrCreateKeysetAsShownInReadme() {
+		final var name = "readme-documents";
+
+		assertThatExceptionOfType(CryptoException.KeysetNotFoundException.class)
+			.isThrownBy(() -> store.read(name));
+
+		final var created = readOrCreate(name);
+		final var ciphertext = created.encrypt(ByteArray.fromString("confidential"));
+
+		final var read = readOrCreate(name);
+
+		KeyAssert.assertThat(read.getPrimary())
+			.as("the existing keyset must be read instead of being created again")
+			.hasId(created.getPrimary().getId());
+
+		assertThat(read.decrypt(ciphertext).toString(StandardCharsets.UTF_8))
+			.isEqualTo("confidential");
+
+		store.remove(name);
+	}
+
+	@Test
+	@Order(5)
+	@DisplayName("should create keyset with a key encryption key resolved from the store, as shown in the README")
+	void shouldCreateKeysetWithResolvedKeyEncryptionKey() {
+		final var kek = store.kek("aes-provider", "aes-kek");
+		final var keyset = store.create(kek, KeysetDefinition.of("readme-dek", TinkAlgorithm.AES256_GCM));
+
+		KeysetAssert.assertThat(store.read("readme-dek"))
+			.hasKeyEncryptionKey(kek)
+			.hasSize(1);
+
+		store.rotate("readme-dek");
+
+		KeysetAssert.assertThat(store.read("readme-dek"))
+			.hasSize(2);
+
+		store.remove("readme-dek");
+
+		assertThatExceptionOfType(CryptoException.KeysetNotFoundException.class)
+			.isThrownBy(() -> store.read(keyset.getName()));
+	}
+
+	@Test
+	@Order(5)
+	@DisplayName("should disable the previous primary key and schedule its destruction, as shown in the README")
+	void shouldScheduleDestructionUsingGracePeriod() {
+		final var name = "readme-lifecycle";
+		final var oldKey = store.create("aes-provider", "aes-kek", KeysetDefinition.of(name, TinkAlgorithm.AES256_GCM))
+			.getPrimary();
+
+		store.rotate(name);
+
+		// disable the old primary key after rotating to a new one
+		store.disable(name, oldKey.getId());
+
+		// schedule it for destruction using the keyset's configured grace period
+		store.scheduleDestruction(name, oldKey.getId());
+
+		KeyAssert.assertThat(store.read(name).getKey(oldKey.getId()).orElseThrow())
+			.hasStatus(KeyStatus.PENDING_DESTRUCTION)
+			.destructionScheduledAt(Instant.now().plus(Duration.ofDays(30)), Duration.ofMinutes(1));
+
+		store.remove(name);
+	}
+
+	@Test
+	@Order(5)
+	@DisplayName("should encrypt and decrypt with associated data, as shown in the module README")
+	void shouldEncryptWithAssociatedData() {
+		store.create("aes-provider", "aes-kek", KeysetDefinition.of("customer-data", TinkAlgorithm.AES256_GCM));
+
+		final Keyset keyset = store.read("customer-data");
+		final ByteArray context = ByteArray.fromString("customer:42");
+
+		final ByteArray ciphertext = keyset.encrypt(ByteArray.fromString("confidential"), context);
+		final ByteArray plaintext = keyset.decrypt(ciphertext, context);
+
+		assertThat(plaintext)
+			.isEqualTo(ByteArray.fromString("confidential"));
+
+		assertThatExceptionOfType(CryptoException.KeysetOperationException.class)
+			.as("decrypting with a different context must fail")
+			.isThrownBy(() -> keyset.decrypt(ciphertext, ByteArray.fromString("customer:43")));
+
+		assertThatExceptionOfType(CryptoException.KeysetOperationException.class)
+			.as("decrypting without a context must fail")
+			.isThrownBy(() -> keyset.decrypt(ciphertext));
+
+		store.remove("customer-data");
+	}
+
+	@Test
+	@Order(5)
+	@DisplayName("should create and use a keyset with a custom Tink algorithm, as shown in the module README")
+	void shouldUseCustomTinkAlgorithm() {
+		final var data = ByteArray.fromString("konfigyr-crypto-test-data");
+		final var keyset = store.create("aes-provider", "aes-kek",
+			KeysetDefinition.of("documents", TinkIntegrationConfiguration.AES256_EAX));
+
+		final var ciphertext = keyset.encrypt(data);
+		final var read = store.read("documents");
+
+		KeyAssert.assertThat(read.getPrimary())
+			.hasAlgorithm(TinkIntegrationConfiguration.AES256_EAX);
+
+		assertThat(read.decrypt(ciphertext))
+			.isEqualTo(data);
+
+		store.remove("documents");
+	}
+
+	@Test
+	@Order(5)
+	@DisplayName("should create and read keyset wrapped by an envelope KMS key encryption key")
+	void shouldUseEnvelopeKmsKeyEncryptionKey() {
+		final var data = ByteArray.fromString("konfigyr-crypto-test-data");
+		final var keyset = store.create("kms-provider", TinkIntegrationConfiguration.ENVELOPE_KMS_KEY_URI,
+			KeysetDefinition.of("envelope-keyset", TinkAlgorithm.AES256_GCM));
+
+		final var ciphertext = keyset.encrypt(data);
+
+		KeysetAssert.assertThat(store.read("envelope-keyset"))
+			.hasKeyEncryptionKey("kms-provider", TinkIntegrationConfiguration.ENVELOPE_KMS_KEY_URI);
+
+		assertThat(store.read("envelope-keyset").decrypt(ciphertext))
+			.isEqualTo(data);
+
+		store.remove("envelope-keyset");
+	}
+
+	private Keyset readOrCreate(String name) {
+		try {
+			return store.read(name);
+		} catch (CryptoException.KeysetNotFoundException ex) {
+			return store.create("aes-provider", "aes-kek", KeysetDefinition.of(name, TinkAlgorithm.AES256_GCM));
+		}
 	}
 
 	@Test

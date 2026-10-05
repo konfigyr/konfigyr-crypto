@@ -22,12 +22,15 @@ import java.util.*;
  *     <li>Key destruction safety period via {@link #destructionGracePeriod}</li>
  * </ul>
  * <p>
- * Concrete implementations must provide:
+ * It also selects the {@link #getPrimary() primary} and the {@link #getNextKey() next} key, and implements
+ * the {@link #rotate(KeyDefinition) rotation}, including the promotion of the next key and the
+ * {@link RetirementPolicy retirement} of the demoted primary key. Concrete implementations must provide:
  * <ul>
- *     <li>The collection of cryptographic keys via {@link #getKeys()}</li>
- *     <li>Primary key selection logic via {@link #getPrimary()}</li>
- *     <li>Key rotation implementation via {@link #rotate()}</li>
- *     <li>Cryptographic operations (encrypt, decrypt, sign, verify) as appropriate for the {@link KeysetPurpose}</li>
+ *     <li>Key identifier generation via {@link #generateId()}</li>
+ *     <li>Creation of a new key via {@link #doRotate(KeyDefinition, String)}</li>
+ *     <li>Promotion of an existing key via {@link #doPromote(Key, Instant)}</li>
+ *     <li>Cryptographic operations (encrypt, decrypt, sign, verify) as appropriate for the {@link KeysetPurpose},
+ *     guarded by {@link #requireActivePrimary()} and {@link #requireReadableKey(Key)}</li>
  * </ul>
  * <p>
  * <b>Thread Safety:</b> Implementations should be immutable and thread-safe.

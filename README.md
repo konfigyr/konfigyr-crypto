@@ -6,36 +6,80 @@
 [![Latest Release](https://img.shields.io/maven-central/v/com.konfigyr/konfigyr-crypto-api.svg?style=flat)](https://central.sonatype.com/search?q=g%3Acom.konfigyr)
 ![Java 21+](https://img.shields.io/badge/java-21+-lightgray.svg)
 
-The Konfigyr Crypto library defines instructs how should a Spring Application perform crypto operations, generate cryptographic material and manage its lifecycle. It attempts to define an API that best describes cryptography best practices how should protect your data and protect the encryption keys that protect your data.
+Konfigyr Crypto is a Spring Boot library that encrypts and signs your data with keys whose whole lifecycle it
+manages: it creates the keys, stores them encrypted, rotates them, retires them, and destroys them. It doesn't
+implement cryptography itself. Instead, it connects established libraries, [Google Tink](https://github.com/tink-crypto/tink-java),
+[Nimbus JOSE JWT](https://connect2id.com/products/nimbus-jose-jwt), and [BouncyCastle](https://www.bouncycastle.org/documentation.html)
+for X.509 certificates, to your application through one API.
 
-Konfigyr Crypto does not implement nor provides any direct cryptographic implementations, its goal is to provide an API *how* should those libraries be incorporated into an application. We recommend using well established cryptography libraries to perform cryptographic operations, such as [Google Tink](https://github.com/tink-crypto/tink-java) or [BouncyCastle](https://www.bouncycastle.org/documentation.html).
+This guide is for Java developers who build Spring Boot applications and need to protect data or sign tokens
+without writing key management code themselves. It assumes that you know Spring Boot autoconfiguration and basic
+cryptography terms, such as symmetric encryption and digital signatures. After reading it, you can create keysets,
+use them to encrypt and sign data, and configure how their keys are rotated and destroyed.
 
-Library enforces a two-tier approach, a recommended industry standard, to encrypting data. In a two-tier approach there are two types of encryption keys. First is the key you used to encrypt data, usually referred to as a *Data Encryption Key (DEK)*. The second key that is only used to encrypt the DEKs, referred to as a Master Key or Key Encryption Key (KEK), that generates the *Encrypted Data Encryption Key (eDEK)* which can than safely be stored in a persistent storage like a database or a file system.
+This guide doesn't help you choose an algorithm for your threat model, and it doesn't explain how to operate a key
+management service (KMS). Module-specific setup, such as KMS integration or database schemas, lives in the
+[module guides](#modules), and the detailed API contracts live in the [API reference](konfigyr-crypto-api/README.md).
 
-Where possible, Key Encryption Keys should be stored in a separate location from Encrypted Data Encryption Key. For example, if the DEK is stored in a database, the KEK should be stored in the filesystem. This means that if an attacker only has access to one of these (for example through directory traversal or SQL injection), they cannot access both the keys and the data.
+## How it works
 
-It is recommended that your Key Encryption Keys are managed by an external Key Management Service where wrapping and unwrapping of the DEKs occurs on the KMS servers . This way the private key material of the KEK is not known to your application making your system more resilient to attackers.
+Konfigyr Crypto uses two tiers of keys, as recommended by NIST SP 800-57:
 
-## Getting Started
+- A *Data Encryption Key (DEK)* encrypts or signs your data. In this library, a DEK is a `Keyset`: a list of keys,
+  one of which is the primary key that encrypts and signs new data.
+- A *Key Encryption Key (KEK)* encrypts, or wraps, the keys of a keyset before they're stored. A KEK never
+  encrypts your data directly. The wrapped form of a keyset is an *Encrypted Data Encryption Key (eDEK)*, the
+  `EncryptedKeyset`, which is safe to store in a database or file system.
 
-The easiest way to consume this library is to import the BOM and then declare only the modules you need — without specifying versions.
+When you read a keyset, the library loads the `EncryptedKeyset` from the repository, finds the KEK that wrapped it,
+and unwraps the keys. When you create or rotate a keyset, it wraps the keys with the KEK and stores the result.
+Plaintext key material is never written to the repository.
 
-**Gradle (Kotlin DSL)**
+Store your KEKs in a different location from your eDEKs. For example, if the eDEKs are in a database, keep the KEK
+in a KMS or on the file system. An attacker who gains access to only one of them, for example through SQL injection
+or directory traversal, then can't decrypt your data. Wherever possible, use a KMS that wraps and unwraps the keys
+on its own servers, so the KEK never enters your application's memory.
+
+## Get started
+
+This section takes you from an empty Spring Boot application to encrypting your first value with a Tink keyset.
+
+### Before you begin
+
+Make sure that you have the following:
+
+- JDK 21 or later.
+- A Spring Boot 4.1 application. The library is built and tested against Spring Boot 4.1.1.
+
+### Add the dependencies
+
+Import the Konfigyr Crypto Bill of Materials (BOM) and declare the modules that you need without versions. Each
+implementation module also needs its cryptography library on the classpath. The modules don't bring these libraries
+in transitively, and the Spring Boot BOM doesn't manage their versions, so declare them yourself.
+
+The following table lists which library each module needs, and the version that the library is built and tested
+against:
+
+| Module | Required library | Tested version |
+|---|---|---|
+| `konfigyr-crypto-tink` | `com.google.crypto.tink:tink` | `1.23.0` |
+| `konfigyr-crypto-jose` | `com.nimbusds:nimbus-jose-jwt` | `10.9.1` |
+| `konfigyr-crypto-x509` | `org.bouncycastle:bcpkix-jdk18on` | `1.86` |
+| `konfigyr-crypto-jdbc` | `org.springframework.boot:spring-boot-starter-jdbc` | Managed by Spring Boot |
+
+The following Gradle (Kotlin DSL) snippet adds the core API and the Google Tink module:
 
 ```kotlin
 dependencies {
-    implementation(platform("com.konfigyr:konfigyr-crypto-dependencies:1.0.0"))
+    implementation(platform("com.konfigyr:konfigyr-crypto-dependencies:1.1.0"))
 
-    // pick the modules you need — versions are managed by the BOM
     implementation("com.konfigyr:konfigyr-crypto-api")
-    implementation("com.konfigyr:konfigyr-crypto-tink")   // Google Tink implementation
-    implementation("com.konfigyr:konfigyr-crypto-jose")   // Nimbus JOSE JWT implementation
-    implementation("com.konfigyr:konfigyr-crypto-x509")   // X.509 certificate implementation
-    implementation("com.konfigyr:konfigyr-crypto-jdbc")   // JDBC KeysetRepository
+    implementation("com.konfigyr:konfigyr-crypto-tink")
+    implementation("com.google.crypto.tink:tink:1.23.0")
 }
 ```
 
-**Maven**
+The following Maven snippet adds the same dependencies:
 
 ```xml
 <dependencyManagement>
@@ -43,7 +87,7 @@ dependencies {
         <dependency>
             <groupId>com.konfigyr</groupId>
             <artifactId>konfigyr-crypto-dependencies</artifactId>
-            <version>1.0.0</version>
+            <version>1.1.0</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
@@ -55,212 +99,255 @@ dependencies {
         <groupId>com.konfigyr</groupId>
         <artifactId>konfigyr-crypto-api</artifactId>
     </dependency>
-    <!-- add konfigyr-crypto-tink, konfigyr-crypto-jose, konfigyr-crypto-x509 or konfigyr-crypto-jdbc as needed -->
+    <dependency>
+        <groupId>com.konfigyr</groupId>
+        <artifactId>konfigyr-crypto-tink</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>com.google.crypto.tink</groupId>
+        <artifactId>tink</artifactId>
+        <version>1.23.0</version>
+    </dependency>
 </dependencies>
 ```
 
-Check [Maven Central](https://central.sonatype.com/search?q=g%3Acom.konfigyr) for the latest release version.
+For the latest release, see [Maven Central](https://central.sonatype.com/search?q=g%3Acom.konfigyr).
 
-### Available modules
+### Declare a key encryption key provider
+
+A `KeyEncryptionKeyProvider` is a named collection of KEKs. The library needs at least one provider with at least
+one KEK before it can create a keyset. The following configuration declares a provider named `my-kek-provider`
+with a single, randomly generated Tink KEK named `my-kek`:
+
+```java
+@Configuration
+class KeyEncryptionKeyConfiguration {
+
+    @Bean
+    KeyEncryptionKeyProvider keyEncryptionKeyProvider() {
+        return KeyEncryptionKeyProvider.of("my-kek-provider",
+                TinkKeyEncryptionKey.builder("my-kek-provider").generate("my-kek"));
+    }
+
+}
+```
+
+> **Caution:** A generated KEK exists only in memory and changes every time the application starts, so keysets
+> that it wrapped can't be read after a restart. Use it only for tests and local development. In production, use a
+> KMS-backed KEK, see [Use a KMS as the key encryption key](konfigyr-crypto-tink/README.md#use-a-kms-as-the-key-encryption-key).
+
+### Create and use a keyset
+
+Spring Boot autoconfiguration registers a `KeysetStore` bean when the application context contains a
+`KeysetFactory`, which the Tink module provides. The store requires at least one `KeyEncryptionKeyProvider` bean, and
+the application fails to start without one. Without a repository module, the store keeps keysets in memory, which
+also only suits tests and local development. For persistent storage, add the
+[JDBC module](konfigyr-crypto-jdbc/README.md).
+
+The following service reads the `documents` keyset, creates it when it doesn't exist yet, and uses it to encrypt and
+decrypt values:
+
+```java
+@Service
+class DocumentEncryptor {
+
+    private final KeysetStore store;
+
+    DocumentEncryptor(KeysetStore store) {
+        this.store = store;
+    }
+
+    ByteArray encrypt(String document) {
+        return keyset().encrypt(ByteArray.fromString(document));
+    }
+
+    String decrypt(ByteArray ciphertext) {
+        return keyset().decrypt(ciphertext).toString(StandardCharsets.UTF_8);
+    }
+
+    private Keyset keyset() {
+        try {
+            return store.read("documents");
+        } catch (CryptoException.KeysetNotFoundException ex) {
+            return store.create("my-kek-provider", "my-kek",
+                    KeysetDefinition.of("documents", TinkAlgorithm.AES256_GCM));
+        }
+    }
+
+}
+```
+
+`KeysetDefinition.of(...)` creates a keyset whose primary key rotates every 90 days, with a destruction grace period
+of 30 days. To change these values, see [Rotate keys](#rotate-keys).
+
+The store doesn't check whether a keyset with the same name already exists when you call `create`. Depending on the
+repository, it either replaces the stored keyset or fails with a `KeysetConcurrentModificationException`. Read the
+keyset first, as in the preceding example, and only create it when it's missing.
+
+Confirm that the setup works by encrypting and decrypting a value:
+
+```java
+ByteArray ciphertext = encryptor.encrypt("confidential");
+String plaintext = encryptor.decrypt(ciphertext);
+```
+
+The `plaintext` variable contains `confidential`.
+
+### What's next
+
+- To sign and verify data, create a keyset with a signing algorithm, such as `TinkAlgorithm.ED25519`, and call
+  `sign` and `verify`.
+- To keep keysets across restarts, add the [JDBC module](konfigyr-crypto-jdbc/README.md).
+- To understand the cost of `store.read(...)` before you call it on every request, see
+  [Read keysets efficiently](#read-keysets-efficiently).
+
+## Modules
+
+The following table lists the modules and links to their guides:
 
 | Artifact | Description |
 |---|---|
-| `konfigyr-crypto-api` | Core API — interfaces, autoconfiguration, and `KeysetStore` |
-| `konfigyr-crypto-tink` | [Google Tink](https://github.com/tink-crypto/tink-java) `KeysetFactory` and `KeyEncryptionKey` implementation |
-| `konfigyr-crypto-jose` | [Nimbus JOSE JWT](https://connect2id.com/products/nimbus-jose-jwt) `KeysetFactory` implementation |
-| `konfigyr-crypto-x509` | X.509 certificate `KeysetFactory` implementation, backed by [BouncyCastle](https://www.bouncycastle.org/documentation.html) |
-| `konfigyr-crypto-jdbc` | JDBC-backed `KeysetRepository` |
-| `konfigyr-crypto-test` | Test-support library — AssertJ assertions and base test classes for custom `KeysetFactory` implementations; use in `testImplementation` scope |
-| `konfigyr-crypto-dependencies` | BOM — import this to manage all module versions in one place |
-
----
+| [`konfigyr-crypto-api`](konfigyr-crypto-api/README.md) | Core API, autoconfiguration, `KeysetStore`, and the scheduled maintenance tasks. Its guide is the detailed API reference. |
+| [`konfigyr-crypto-tink`](konfigyr-crypto-tink/README.md) | Keysets and key encryption keys backed by Google Tink. |
+| [`konfigyr-crypto-jose`](konfigyr-crypto-jose/README.md) | Keysets backed by Nimbus JOSE JWT that produce JWS and JWE objects and act as a `JWKSource`. |
+| [`konfigyr-crypto-x509`](konfigyr-crypto-x509/README.md) | Keysets of key pairs bound to self-signed X.509 certificates, for example for SAML 2.0. |
+| [`konfigyr-crypto-jdbc`](konfigyr-crypto-jdbc/README.md) | `KeysetRepository` that stores encrypted keysets in a relational database. |
+| [`konfigyr-crypto-test`](konfigyr-crypto-test/README.md) | AssertJ assertions and a contract test for custom `KeysetFactory` implementations. Use it in test scope only. |
+| `konfigyr-crypto-dependencies` | BOM that manages the versions of all modules. |
 
 ## Key concepts
 
-The goal of this library is not re-implement the wheel when it comes to cryptography, but rather to define a Java API how should a client application encrypt data and manage the keys that are used to encrypt it.
+This section describes the types that you work with. For their complete contracts, see the
+[API reference](konfigyr-crypto-api/README.md).
 
-Let's break down the library into couple of most used types and services:
-* `Keyset` - represents the Data Encryption Key (DEK)
-* `EncryptedKeyset` - represents the encrypted Data Encryption Key (eDEK)
-* `KeyEncryptionKey` - well, the name says it
-* `KeysetFactory` - generates the keysets used to encrypt the data
-* `KeysetStore` - used to generate, read and manipulate keysets or DEKs
-* `KeysetRepository` - used to read and store the encrypted DEKs
+### Keysets and keys
 
-### Keyset and Keyset factories
+A `Keyset` is a non-empty list of `Key` objects. Exactly one key is the primary key. The primary key performs the
+active operation of the keyset, encrypting or signing, and the other keys only perform the passive operation,
+decrypting or verifying data they produced earlier. Each key has an identifier, an algorithm, a `KeyStatus`, and its
+lifecycle timestamps. `Keyset.getKeys()` lists every key regardless of its status.
 
-The `Keyset` is the focal point when working with this library. They represent a collection of keys which are performing certain cryptographic operations that is defined by its `Algorithm`.
+A keyset has one purpose, defined by its algorithm:
 
-Here is an implementation example of Spring `BytesEncryptor` interface that uses a `Keyset`:
+- `KeysetPurpose.ENCRYPTION`: the keyset supports `encrypt` and `decrypt`.
+- `KeysetPurpose.SIGNING`: the keyset supports `sign` and `verify`.
 
-```java
-public class KeysetBytesEncryptor {
+Calling an operation that the purpose doesn't support throws `CryptoException.UnsupportedKeysetOperationException`.
+A keyset never mixes purposes, so a key that encrypts data can't also sign it.
 
-    private final Keyset keyset;
+Data and signatures are passed as `ByteArray` objects, an immutable byte array wrapper from the `com.konfigyr.io`
+package.
 
-    @Override
-    public byte[] encrypt(byte[] byteArray) {
-        return keyset.encrypt(new ByteArray(byteArray)).array();
-    }
-
-    @Override
-    public byte[] decrypt(byte[] encryptedByteArray) {
-        return keyset.decrypt(new ByteArray(encryptedByteArray)).array();
-    }
-
-}
-```
-
-The implementation of the `Keyset` and how the cryptographic operations are performed is the job of the `KeysetFactory`. This interface bridges the gap between the Konfigyr Crypto API and the actual cryptography library that would generate the key material and define how should it be used.
-
-Factories should be able to:
-* generate new keysets based upon the `Algorithm` that they define and support
-* wrap, or encrypt, the keysets before they are stored by the repository
-* unwrap, or decrypt, the encrypted keysets before they can be used
-
-Konfigyr Crypto comes with the following implementations of the `KeysetFactory` which you can use:
- * [Google Tink](konfigyr-crypto-tink)
- * [Nimbus JOSE JWT](konfigyr-crypto-jose)
- * [X.509 certificates](konfigyr-crypto-x509)
+A `Keyset` object is an immutable snapshot of the stored keyset. It doesn't observe changes, such as rotations or
+status changes, that happen after you read it. To see them, read the keyset again. For guidance, see
+[Read keysets efficiently](#read-keysets-efficiently).
 
 ### Algorithms
 
-An `Algorithm` is an immutable value object that declares the identity and capabilities of a cryptographic algorithm:
+An `Algorithm` is an immutable value that declares the following:
 
-* `name()` — a stable, unique identifier that is **persisted** alongside the `EncryptedKeyset`. It must never change once key material has been created with it.
-* `purpose()` — the `KeysetPurpose` (`SIGNING` or `ENCRYPTION`), which determines which operations the keyset supports.
-* `type()` — the `KeyType` of the underlying key material (`EC`, `RSA`, or `OCTET`).
+- `name()`: a stable, unique identifier that is persisted with every key. Never change it after keys have been
+  created with it.
+- `factory()`: the name of the `KeysetFactory` that creates keysets for this algorithm.
+- `purpose()`: the `KeysetPurpose`, which defines the operations that the keyset supports.
+- `type()`: the `KeyType` of the key material: `EC`, `RSA`, or `OCTET`.
 
-The built-in `TinkAlgorithm`, `JoseAlgorithm` and `X509Algorithm` constants follow a naming convention of prefixing names with the library family (`tink:`, `jose:` and `x509:` respectively). Use a similar stable prefix for any custom algorithms to avoid name collisions.
+Each implementation module provides its algorithms as constants: `TinkAlgorithm`, `JoseAlgorithm`, and
+`X509Algorithm`. Their names start with `tink:`, `jose:`, and `x509:`. Each module registers its default algorithms
+automatically. Legacy algorithms, such as RSA PKCS#1 v1.5 signatures, are only registered when you opt in through a
+module property, see the module guides.
 
-#### AlgorithmRegistry
-
-The `AlgorithmRegistry` is a sealed catalog of all algorithms known to the application. It serves two purposes:
-
-1. **Resolution** — converts the algorithm name stored in an `EncryptedKeyset` back to the concrete `Algorithm` instance needed to decrypt it.
-2. **Algorithm confusion prevention** — only algorithms registered at startup can be resolved. An `EncryptedKeyset` referencing an unknown name will fail fast rather than attempting to use an unexpected algorithm.
-
-The registry is sealed after the Spring context finishes initialising all singletons. Any attempt to register an algorithm after that point throws `IllegalStateException`.
-
-#### AlgorithmRegistrar
-
-Algorithms are contributed to the registry via `AlgorithmRegistrar` beans. Each built-in module registers its algorithms during auto-configuration:
-
-```java
-@Bean
-AlgorithmRegistrar joseAlgorithmRegistrar() {
-    return registry -> JoseAlgorithm.DEFAULT_ALGORITHMS.forEach(registry::register);
-}
-```
-
-Declare your own `AlgorithmRegistrar` bean to add custom algorithms alongside the built-in ones.
+Only algorithms that are registered in the `AlgorithmRegistry` can be resolved when a keyset is read. A stored
+keyset that references an unknown algorithm fails to load instead of falling back to an unexpected one. The registry
+is sealed after the application context has created all of its singleton beans, and registering an algorithm after
+that throws an `IllegalStateException`. To register your own algorithms, declare an `AlgorithmRegistrar` bean, see
+[Implement a custom crypto provider](konfigyr-crypto-api/README.md#implement-a-custom-crypto-provider).
 
 ### Key encryption keys and providers
 
-The `KeyEncryptionKey` is provided by the `KeyEncryptionKeyProvider`, there needs to be at least one provider with at least one KEK in order to use this library to generate the `Keyset`.
+A `KeyEncryptionKey` wraps and unwraps the key material of keysets. It's identified by its own identifier and the
+name of the `KeyEncryptionKeyProvider` that owns it. Each stored keyset records both, so the store can find the
+right KEK when it reads the keyset. Provider names must be unique within the application.
 
-Here is an example how you can define a `KeyEncryptionKeyProvider` as Spring Bean which uses a randomly generated Tink based `KeyEncryptionKey`:
-
-```java
-class KeyEncryptionKeyProviderConfiguration {
-
-    @Bean
-    KeyEncryptionKeyProvider myKeyEncryptionKeyProvider() {
-        return KeyEncryptionKeyProvider.of("my-kek-provider", List.of(
-                TinkKeyEncryptionKey.builder("my-kek-provider").generate("my-kek")
-        ));
-    }
-
-}
-```
-
-When using the `konfigyr-crypto-tink`, it is recommended to use a `KmsClient` with envelope encryption as your `KeyEncryptionKey`. Tink comes with Google and AWS KMS client implementations by you can easily create your own implementation of the `KmsClient`. Please refer to the [Google Tink Documentation](https://developers.google.com/tink) how they are used or implemented.
-
-Here is an example of using AWS KMS to declare a `KeyEncryptionKey`:
-
-```java
-class KeyEncryptionKeyProviderConfiguration {
-
-    @Bean
-    KeyEncryptionKeyProvider myKeyEncryptionKeyProvider() {
-        return KeyEncryptionKeyProvider.of("my-kek-provider", List.of(
-                TinkKeyEncryptionKey.builder("my-kek-provider").generate("my-kek")
-        ));
-    }
-
-    @Bean
-    KeyEncryptionKeyProvider kmsKeyEncryptionKeyProvider() {
-        return KeyEncryptionKeyProvider.of("kms-provider", List.of(
-                TinkKeyEncryptionKey.builder("kms-provider").kms(
-                        "aws-kms://arn:aws:kms:us-west-2:account-id:key/key-id", // KEK ID is the same as the key ARN
-                        "AES256_GCM" // algorithm used to create the DEK for the Keyset
-                )
-        ));
-    }
-
-}
-```
-
+The Tink module provides `TinkKeyEncryptionKey`, which can use a local AES key or a KMS, see the
+[Tink module guide](konfigyr-crypto-tink/README.md).
 
 ### Keyset store
 
-Store is a Spring Bean which the application developers would use to interact with their Data Encryption Keys or DEKs. It bridges the actual cryptography and storage implementations in one place.
+The `KeysetStore` is the entry point of the library. It creates, reads, rotates, and removes keysets, and changes the
+status of individual keys. It uses the following collaborators:
 
-When you are retrieving a `Keyset` the store would retrieve the `EncryptedKeyset`, find which `KeyEncryptionKey` was used to wrap it and unwrap and construct it using the responsible `KeysetFactory`.
+- `KeysetFactory`: creates keysets for the algorithms of one cryptography library, and wraps and unwraps them. Each
+  implementation module provides one.
+- `KeyEncryptionKeyProvider`: provides the KEKs, see the preceding section.
+- `KeysetRepository`: stores and loads `EncryptedKeyset` objects, see [Keyset repository](#keyset-repository).
+- `KeysetCache`: caches the `EncryptedKeyset` objects that the repository returns. The cache is disabled unless you
+  declare a `KeysetCache` bean.
 
-Here is an example how to create a `Keyset` based `BytesEncryptor` implementation using the `KeysetStore`
-
-```java
-class KeysetBytesEncryptorFactory {
-    private final KeysetStore store;
-
-    public KeysetBytesEncryptor create(String keysetName) {
-        return new KeysetBytesEncryptor(store.read(keysetName));
-    }
-
-}
-```
-
-The reversed process is applied when you wish to generate or update the `Keyset`, it would wrap the keys using the responsible `KeyEncryptionKey` and store the `KeyEncryptionKey` using the defined `KeysetRepository` implementation.
-
-Here is an example how a new Tink keyset is created, rotated or removed:
+The following example shows the most common store operations:
 
 ```java
-class TinkExample {
+class KeysetOperations {
+
     private final KeysetStore store;
 
-    public Keyset create() {
-        return store.create("my-kek-provider", "my-kek", KeysetDefinition.of(
-                "my-dek", // give a name to your DEK
-                TinkAlgorithm.AES256_GCM // define the Tink algorithm to the DEK
-        ));
+    KeysetOperations(KeysetStore store) {
+        this.store = store;
     }
 
-    public Keyset createWithKek() {
-        final KeyEncryptionKey kek = store.kek("my-kek-provider", "my-kek");
-
-        return store.create(kek, KeysetDefinition.of(
-                "my-dek", // give a name to your DEK
-                TinkAlgorithm.AES256_GCM // define the Tink algorithm to the DEK
-        ));
+    Keyset create() {
+        return store.create("my-kek-provider", "my-kek",
+                KeysetDefinition.of("my-dek", TinkAlgorithm.AES256_GCM));
     }
 
-    public void rotate() {
+    Keyset createWithKek() {
+        KeyEncryptionKey kek = store.kek("my-kek-provider", "my-kek");
+
+        return store.create(kek, KeysetDefinition.of("my-dek", TinkAlgorithm.AES256_GCM));
+    }
+
+    void rotate() {
         store.rotate("my-dek");
     }
 
-    public void remove() {
+    void remove() {
         store.remove("my-dek");
     }
+
 }
 ```
 
-### Key rotation
+`remove` deletes the keyset and all of its keys immediately, regardless of their status. Use it only in an
+emergency or for administration. To remove keys through their lifecycle, see [Manage key status](#manage-key-status).
 
-Rotating a keyset replaces its primary key: the new key starts to sign and encrypt, and the previous one only verifies signatures and decrypts data it produced. Two optional settings control both sides of that switch, and are designed to be used together:
+### Keyset repository
 
-- the [rotation lead time](#rotation-lead-time) creates the next key ahead of the rotation, so third parties that cache your public keys, like the consumers of a JSON Web Key Set or of SAML metadata, already know it when it takes over;
-- the [retirement policy](#retirement-policy) defines how long the previous key remains available after the rotation, and whether it is destroyed afterwards.
+A `KeysetRepository` stores, loads, and removes `EncryptedKeyset` objects. Every stored keyset carries a version
+counter that the repository uses for optimistic locking. When two writers modify the same keyset at the same time,
+only one succeeds, and the other receives a `CryptoException.KeysetConcurrentModificationException`.
+
+The library provides the following repositories:
+
+- `JdbcKeysetRepository` in the [JDBC module](konfigyr-crypto-jdbc/README.md), for production use.
+- `InMemoryKeysetRepository`, which the store uses when no other repository bean exists. It loses all keysets when
+  the application stops, so use it only for tests and local development.
+
+To implement your own repository, see the
+[repository contract](konfigyr-crypto-api/README.md#keysetrepository) in the API reference.
+
+## Rotate keys
+
+Rotating a keyset makes a different key its primary key. The new primary key starts to encrypt and sign, and the
+previous primary key only decrypts and verifies the data that it produced. Two optional settings control both sides
+of that change, and they're designed to be used together:
+
+- The [rotation lead time](#rotation-lead-time) creates the next key ahead of the rotation. Third parties that cache
+  your public keys, such as the consumers of a JSON Web Key Set or of SAML metadata, then know the key before it
+  takes over.
+- The [retirement policy](#retirement-policy) defines how long the previous primary key stays available after the
+  rotation, and whether it's destroyed afterwards.
+
+The following example creates a signing keyset that uses both settings:
 
 ```java
 store.create("my-kek-provider", "my-kek", KeysetDefinition.builder()
@@ -273,50 +360,76 @@ store.create("my-kek-provider", "my-kek", KeysetDefinition.builder()
         .build());
 ```
 
-The [scheduled maintenance tasks](#scheduled-maintenance-rotation-and-destruction) take care of the rest. For a keyset created on day 0:
+The definition builder validates its values when you call `build()` and throws an `IllegalArgumentException` for
+invalid ones. The following table lists the settings, their defaults, and their allowed values:
 
-| Day | What the tasks do | Primary key (signs) | Next key (does not sign yet) | Retired key (verifies only) |
+| Setting | Default | Allowed values |
+|---|---|---|
+| `rotationInterval` | 90 days | 30 to 365 days. Call `disableAutomaticKeyRotation()` to turn automatic rotation off. |
+| `rotationLeadTime` | Not set | Positive and shorter than the rotation interval. Requires a rotation interval. |
+| `destructionGracePeriod` | 30 days | 7 to 120 days. Call `disableDestructionGracePeriod()` to destroy keys immediately when their destruction is scheduled. |
+| `retirementPolicy` | `RETAIN` | `RETAIN`, `DESTROY`, or `SCHEDULE_DESTRUCTION`. The last two require a destruction grace period. |
+
+The [scheduled maintenance tasks](#scheduled-maintenance-tasks) perform the rotation. For the keyset in the
+preceding example, created on day 0, the tasks do the following:
+
+| Day | What the tasks do | Primary key (signs) | Next key (doesn't sign yet) | Retired key (verifies only) |
 |---|---|---|---|---|
-| 0   | — | key 1 | — | — |
-| 60  | key 1 expires within 30 days: creates key 2 | key 1 | key 2 | — |
-| 90  | key 1 expired: promotes key 2, retires key 1 | key 2 | — | key 1 |
-| 120 | key 1 grace period elapsed: destroys key 1 | key 2 | — | — |
-| 150 | key 2 expires within 30 days: creates key 3 | key 2 | key 3 | — |
-| 180 | key 2 expired: promotes key 3, retires key 2 | key 3 | — | key 2 |
-| 210 | key 2 grace period elapsed: destroys key 2 | key 3 | — | — |
+| 0 | Nothing | Key 1 | None | None |
+| 60 | Key 1 expires within 30 days, so they create key 2 | Key 1 | Key 2 | None |
+| 90 | Key 1 expired, so they promote key 2 and retire key 1 | Key 2 | None | Key 1 |
+| 120 | The grace period of key 1 elapsed, so they destroy key 1 | Key 2 | None | None |
+| 150 | Key 2 expires within 30 days, so they create key 3 | Key 2 | Key 3 | None |
+| 180 | Key 2 expired, so they promote key 3 and retire key 2 | Key 3 | None | Key 2 |
+| 210 | The grace period of key 2 elapsed, so they destroy key 2 | Key 3 | None | None |
 
-With this configuration, the keyset contains at most three usable keys at any time: the next, the primary and the retired one. All of them are returned by `Keyset.getKeys()` and exposed by the JOSE keyset through its `JWKSource`, so a JSON Web Key Set built from the keyset contains them. The retired key only advertises its verification and decryption operations.
+With this configuration, the keyset contains at most three usable keys at any time: the next key, the primary key,
+and the retired key. `Keyset.getKeys()` returns all of them.
 
-#### Rotation lead time
+### Rotation lead time
 
-The next key is created as a non-primary key once the primary key expires within the lead time, and becomes the primary key when the primary key expires. Use `Keyset.getNextKey()` when you need it explicitly, for instance to list the upcoming certificate in SAML metadata.
+When the primary key expires within the lead time, the rotation task creates the next key as a non-primary key. When
+the primary key expires, the next key becomes the primary key. To get the next key explicitly, for example to list
+the upcoming certificate in SAML metadata, call `Keyset.getNextKey()`.
 
-- **Choose a lead time longer than the refresh interval of your third parties.** If a consumer caches your JSON Web Key Set for a day, a lead time of a few days leaves plenty of margin. The rotation task runs every hour by default, which must be well within the lead time.
-- **The lead time is validated when the definition is built.** It must be positive, requires a rotation interval and must be shorter than it, otherwise an `IllegalArgumentException` is thrown.
+Choose a lead time that's longer than the interval in which your third parties refresh their copy of your public
+keys. For example, if a consumer caches your JSON Web Key Set for a day, a lead time of a few days leaves enough
+margin. The rotation task runs every hour by default, which must be well within the lead time.
 
-#### Retirement policy
+### Retirement policy
 
-The retirement policy defines what happens to the previous primary key once it is demoted:
+The retirement policy defines what happens to the previous primary key when a rotation demotes it. The following
+table describes the policies:
 
 | Policy | After the rotation | After the destruction grace period |
 |---|---|---|
-| `RETAIN` (default) | stays `ENABLED` | nothing, the key is kept until you disable or destroy it |
-| `DESTROY` | `RETIRED`: verifies and decrypts, never signs or encrypts | `DESTROYED` |
-| `SCHEDULE_DESTRUCTION` | `RETIRED` | `PENDING_DESTRUCTION` for another grace period, then `DESTROYED` |
+| `RETAIN` (default) | The key stays `ENABLED`. | Nothing happens. The key is kept until you disable or destroy it. |
+| `DESTROY` | The key becomes `RETIRED`: it verifies and decrypts, but never signs or encrypts. | The key is `DESTROYED`. |
+| `SCHEDULE_DESTRUCTION` | The key becomes `RETIRED`. | The key is `PENDING_DESTRUCTION` for another grace period, then `DESTROYED`. |
 
-> **Warning:** never use `DESTROY` or `SCHEDULE_DESTRUCTION` for keysets that encrypt data at rest. Data encrypted by a previous key becomes permanently unreadable once that key is destroyed. These policies are meant for keysets whose output is short-lived, like signed tokens or SAML assertions.
+> **Warning:** Never use `DESTROY` or `SCHEDULE_DESTRUCTION` for keysets that encrypt data at rest. Data that a
+> previous key encrypted becomes permanently unreadable after that key is destroyed. These policies are meant for
+> keysets whose output is short-lived, such as signed tokens or SAML assertions.
 
-- **The destruction grace period is the time a retired key keeps verifying and decrypting.** Choose it longer than the lifetime of the tokens or assertions the keyset signs. Both policies require a grace period, otherwise an `IllegalArgumentException` is thrown when the definition is built.
-- **`SCHEDULE_DESTRUCTION` gives you more time to cancel.** After the grace period the key is no longer usable, but its destruction can still be cancelled for another grace period, see [Key lifecycle management](#key-lifecycle-management).
-- **A retired key can be restored** with `store.enable(keysetName, keyId)`, which also cancels its scheduled destruction.
-- **Only keys demoted while the policy is active are retired.** Keys demoted before the policy was changed keep their status. When a keyset is switched back to `RETAIN`, its retired keys are left untouched until you enable or destroy them.
+Keep the following in mind when you choose a policy:
 
-#### Rotating manually
+- The destruction grace period is the time during which a retired key still verifies and decrypts. Choose it longer
+  than the lifetime of the tokens or assertions that the keyset signs.
+- `SCHEDULE_DESTRUCTION` gives you more time to change your mind. After the first grace period, the key no longer
+  verifies or decrypts, but you can still cancel its destruction during the second grace period, see
+  [Manage key status](#manage-key-status).
+- To restore a retired key, call `store.enable(keysetName, keyId)`. This also cancels its scheduled destruction.
+- A rotation only retires keys while the policy is active. Keys that were demoted before you changed the policy keep
+  their status. When you switch a keyset back to `RETAIN`, its retired keys stay retired until you enable or destroy
+  them.
 
-You can also prepare and promote the next key yourself, for instance when the scheduled tasks are disabled:
+### Rotate manually
+
+You can also prepare and promote the next key yourself, for example when the scheduled tasks are disabled. The
+following example creates the next key and then promotes it:
 
 ```java
-// create the next key as a non-primary key, it does not sign yet
+// create the next key as a non-primary key, it doesn't sign yet
 store.rotate("my-jwks", KeyDefinition.builder()
         .algorithm(JoseAlgorithm.ES256)
         .rotationInterval(Duration.ofDays(90))
@@ -327,41 +440,60 @@ store.rotate("my-jwks", KeyDefinition.builder()
 store.rotate("my-jwks");
 ```
 
-When a keyset is rotated, its next key becomes the primary key. A new primary key is generated instead, exactly like for keysets without a lead time, when:
+When you rotate a keyset that has a next key, the next key becomes the primary key. The store generates a new primary
+key instead, as it does for keysets without a lead time, in the following cases:
 
-- there is no next key, because the keyset was not prepared yet. The new key then signs before third parties could obtain it.
-- the current primary key is not `ENABLED`, for instance after it was [compromised](#key-lifecycle-management). The next key may have been exposed as well, so it is not trusted to take over. Compromise it too if that is the case.
-- you rotate to a different algorithm than the one of the next key.
+- The keyset has no next key, because it wasn't prepared. The new key then signs before third parties could obtain
+  it.
+- The current primary key isn't `ENABLED`, for example because it was compromised. The next key might have been
+  exposed as well, so it isn't trusted to take over. If it was, mark it as compromised too.
+- You rotate to a different algorithm than the one that the next key uses.
 
-The previous primary key is retired according to the retirement policy, unless it is no longer `ENABLED`: a compromised primary key keeps its status.
+The previous primary key is retired according to the retirement policy, unless it's no longer `ENABLED`: a
+compromised primary key keeps its status.
 
-### Key lifecycle management
+## Manage key status
 
-Each `EncryptedKey` within a keyset carries a `KeyStatus` that describes its position in the lifecycle state machine:
+Each key carries a `KeyStatus` that describes where it is in its lifecycle. The following table lists the statuses
+that you work with:
 
 | Status | Description |
 |---|---|
-| `ENABLED` | Active; participates in cryptographic operations |
-| `DISABLED` | Administratively deactivated; no cryptographic operations permitted |
-| `RETIRED` | Former primary key demoted by a rotation; only verifies and decrypts, during the destruction grace period |
-| `COMPROMISED` | Key material suspected or confirmed exposed; permanently blocked |
-| `PENDING_DESTRUCTION` | Scheduled for erasure; currently in its grace period |
-| `COMPROMISED_PENDING_DESTRUCTION` | Compromised key scheduled for erasure; permanently blocked, currently in its grace period |
-| `DESTROYED` | Key material permanently erased; row retained for audit |
+| `ENABLED` | Active. The key performs every operation that its purpose allows. |
+| `DISABLED` | Deactivated by an administrator. The key performs no operations. |
+| `RETIRED` | A former primary key that a rotation demoted. The key only verifies and decrypts, during the destruction grace period. |
+| `COMPROMISED` | The key material is suspected or confirmed to be exposed. The key is permanently blocked. |
+| `PENDING_DESTRUCTION` | The key is scheduled for destruction and is in its grace period. It performs no operations. |
+| `COMPROMISED_PENDING_DESTRUCTION` | A compromised key that is scheduled for destruction. It's permanently blocked. |
+| `DESTROYED` | The key material is erased. The key record is retained for audit. |
 
-`KeysetStore` exposes methods to drive each transition:
+Three more statuses, `INITIALIZING`, `INITIALIZATION_FAILED`, and `DESTRUCTION_FAILED`, describe key material that
+isn't ready or couldn't be erased. For the complete state machine, see the
+[API reference](konfigyr-crypto-api/README.md#key-status-lifecycle).
 
-- `disable(keysetName, keyId)` — `ENABLED` → `DISABLED`
-- `enable(keysetName, keyId)` — `DISABLED` or `RETIRED` → `ENABLED`; cancels the scheduled destruction of a retired key
-- `compromise(keysetName, keyId)` — `ENABLED` or `DISABLED` → `COMPROMISED`, `RETIRED` or `PENDING_DESTRUCTION` → `COMPROMISED_PENDING_DESTRUCTION` (keeps the scheduled destruction time); emergency transition that permanently blocks the key for all cryptographic operations
-- `scheduleDestruction(keysetName, keyId)` — `DISABLED` or `RETIRED` → `PENDING_DESTRUCTION` or `COMPROMISED` → `COMPROMISED_PENDING_DESTRUCTION`, using the keyset's configured grace period (destroys immediately when no grace period is set)
-- `scheduleDestruction(keysetName, keyId, Instant)` — same, with an explicit destruction time
-- `cancelDestruction(keysetName, keyId)` — `PENDING_DESTRUCTION` → `DISABLED` or `COMPROMISED_PENDING_DESTRUCTION` → `COMPROMISED`
-- `destroy(keysetName, keyId)` — `RETIRED`, `PENDING_DESTRUCTION` or `COMPROMISED_PENDING_DESTRUCTION` → `DESTROYED`; erases key material but retains the row for audit
+The `KeysetStore` provides the following methods to change the status of a key:
 
-Keys only become `RETIRED` when a rotation demotes the primary key, as defined by the [retirement policy](#retirement-policy). An `ENABLED` key can never be scheduled for destruction or destroyed directly, it must first be disabled, retired or marked as compromised. Once a key is compromised it can never be disabled or re-enabled again.
+- `disable(keysetName, keyId)`: `ENABLED` to `DISABLED`.
+- `enable(keysetName, keyId)`: `DISABLED` or `RETIRED` to `ENABLED`. This cancels the scheduled destruction of a
+  retired key.
+- `compromise(keysetName, keyId)`: `ENABLED` or `DISABLED` to `COMPROMISED`, and `RETIRED` or `PENDING_DESTRUCTION`
+  to `COMPROMISED_PENDING_DESTRUCTION`, keeping the scheduled destruction time. This is an emergency transition that
+  permanently blocks the key for all operations.
+- `scheduleDestruction(keysetName, keyId)`: `DISABLED` or `RETIRED` to `PENDING_DESTRUCTION`, and `COMPROMISED` to
+  `COMPROMISED_PENDING_DESTRUCTION`, using the destruction grace period of the keyset. When the keyset has no grace
+  period, the key is destroyed immediately.
+- `scheduleDestruction(keysetName, keyId, destructionTime)`: the same transitions, with an explicit destruction
+  time that must be in the future.
+- `cancelDestruction(keysetName, keyId)`: `PENDING_DESTRUCTION` to `DISABLED`, and
+  `COMPROMISED_PENDING_DESTRUCTION` to `COMPROMISED`.
+- `destroy(keysetName, keyId)`: `RETIRED`, `PENDING_DESTRUCTION`, or `COMPROMISED_PENDING_DESTRUCTION` to
+  `DESTROYED`. This erases the key material but retains the key record for audit.
 
-> **Warning:** `compromise` updates the repository and evicts the keyset only from the `KeysetCache` of the instance that performed the call. Other application instances with their own, non-shared cache, as well as any `Keyset` obtained before the call, keep using the compromised key until their cached entry expires or is evicted. Make sure the keyset is evicted on every instance as part of your incident response.
+A transition that the current status doesn't allow throws `CryptoException.InvalidKeyStatusTransitionException`. You
+can't schedule the destruction of an `ENABLED` key or destroy it directly: disable it, let a rotation retire it, or
+mark it as compromised first. After a key is compromised, you can never disable or enable it again.
+
+The following example disables the previous primary key after a rotation and schedules its destruction:
 
 ```java
 // disable the old primary key after rotating to a new one
@@ -371,63 +503,53 @@ store.disable("my-dek", oldKey.getId());
 store.scheduleDestruction("my-dek", oldKey.getId());
 ```
 
-### Keyset repository
+> **Warning:** `compromise` updates the repository and evicts the keyset only from the `KeysetCache` of the
+> application instance that made the call. Other instances, and every `Keyset` object read before the call, keep
+> using the compromised key until they read the keyset again. Make sure that every instance reads the keyset again as
+> part of your incident response, see [Run on multiple instances](#run-on-multiple-instances).
 
-Keyset repository is a simple interface which goal is to implement how should an `EncryptedKeyset` be stored, retrieved or removed.
+## Scheduled maintenance tasks
 
-Every `EncryptedKeyset` carries a version counter managed by the repository. Both `write()` and `updateKeyStatus()` check this counter and throw `CryptoException.KeysetConcurrentModificationException` when a concurrent modification is detected. Always cache and use the `EncryptedKeyset` returned by `write()` — not the input — so that the correct version is carried into the next write.
-
-Konfigyr Crypto comes with the following implementations of the `KeysetRepository` which you can use:
-* [JDBC](konfigyr-crypto-jdbc)
-
-### Scheduled maintenance: rotation and destruction
-
-`KeysetRepository` exposes three query methods designed for use in scheduled maintenance tasks.
-
-`findPendingPreparation()` returns partial keysets (metadata only, empty key list) that have a [rotation lead time](#rotation-lead-time), whose primary key expires within it, and that have no next key yet. Create the next key for each result as a non-primary key.
-
-`findPendingRotation()` returns partial keysets (metadata only, empty key list) whose primary key's expiry time has elapsed. Call `store.rotate(name)` for each result, which promotes the next key of prepared keysets:
-
-```java
-for (EncryptedKeyset keyset : repository.findPendingRotation()) {
-    store.rotate(keyset.name());
-}
-```
-
-`findPendingDestruction()` returns partial keysets (metadata and only the eligible retired and pending-destruction keys) where `destructionScheduledAt` is in the past. Call `store.destroy(name, keyId)` for each key pending destruction, and destroy or schedule the destruction of retired keys according to the [retirement policy](#retirement-policy) of their keyset:
-
-```java
-for (EncryptedKeyset keyset : repository.findPendingDestruction()) {
-    for (EncryptedKey key : keyset) {
-        store.destroy(keyset.name(), key.id());
-    }
-}
-```
-
-All methods return an empty list by default; repositories that can issue an efficient query — such as `JdbcKeysetRepository` — override them.
-
-When both a `KeysetStore` and a `KeysetRepository` bean are present in the application context, `KeysetTaskAutoConfiguration` registers both tasks automatically and enables Spring scheduling. Each task runs on a fixed-rate trigger every **1 hour** by default.
+When the application context contains both a `KeysetStore` and a `KeysetRepository` bean, the library registers two
+maintenance tasks and enables Spring scheduling. Each task runs every hour by default.
 
 The `keyset-rotation` task runs in two steps:
 
-1. It creates the next key of every keyset returned by `findPendingPreparation()`.
-2. It rotates every keyset returned by `findPendingRotation()`, which promotes their next keys.
+1. It creates the next key of every keyset whose primary key expires within its rotation lead time and that has no
+   next key yet.
+2. It rotates every keyset whose primary key has expired. Keysets that were prepared in step 1 promote their next
+   key.
 
-When a keyset misses its whole lead time, for instance because the application was down, both steps run for it in the same run. Its next key then takes over before third parties could obtain it, and the task logs a warning.
+When a keyset misses its whole lead time, for example because the application was down, both steps run for it in
+the same run. Its next key then takes over before third parties could obtain it, and the task logs a warning.
 
-The `keyset-destruction` task destroys every key returned by `findPendingDestruction()` that is pending destruction. Retired keys are destroyed when their keyset uses the `DESTROY` policy, scheduled for destruction when it uses the `SCHEDULE_DESTRUCTION` policy, and left untouched when the keyset was switched back to `RETAIN`.
+The `keyset-destruction` task processes every key whose scheduled destruction time has passed:
 
-When the tasks run on several application instances, they may try to modify the same keyset at the same time. Only one of them succeeds, the others detect the concurrent modification, skip the keyset and log it at debug level.
+- Keys that are `PENDING_DESTRUCTION` or `COMPROMISED_PENDING_DESTRUCTION` are destroyed.
+- `RETIRED` keys are destroyed when their keyset uses the `DESTROY` policy, and scheduled for destruction when it
+  uses the `SCHEDULE_DESTRUCTION` policy. Retired keys of keysets that were switched back to `RETAIN` are left
+  untouched.
 
-Tasks are configured under the `konfigyr.crypto.tasks` prefix. Each task name is a key in the map (`keyset-rotation` or `keyset-destruction`) and supports three properties:
+When the tasks run on several application instances, they might modify the same keyset at the same time. Only one
+instance succeeds. The others detect the concurrent modification, skip the keyset, and log it at debug level.
+
+The tasks use the `findPendingPreparation()`, `findPendingRotation()`, and `findPendingDestruction()` queries of the
+repository. `JdbcKeysetRepository` and `InMemoryKeysetRepository` implement them. A custom repository that doesn't
+override them returns empty lists, so the tasks never do anything.
+
+### Configure the tasks
+
+You configure the tasks under the `konfigyr.crypto.tasks` prefix, using the task name, `keyset-rotation` or
+`keyset-destruction`, as the key. The following table lists the properties of each task:
 
 | Property | Type | Default | Description |
 |---|---|---|---|
-| `enabled` | `boolean` | `true` | Set to `false` to disable the task entirely |
-| `interval` | `Duration` | `PT1H` | Fixed-rate period between executions |
-| `cron` | `String` | — | Cron expression; when set, takes precedence over `interval` |
+| `enabled` | `boolean` | `true` | Set to `false` to turn the task off. |
+| `interval` | `Duration` | `PT1H` | The fixed-rate period between runs. |
+| `cron` | `String` | Not set | A Spring cron expression. When set, it takes precedence over `interval`, and a warning is logged if both are set. |
 
-When both `cron` and `interval` are configured for the same task, `cron` takes precedence and a warning is logged at startup.
+The following example runs the rotation every night at 02:00, runs the destruction every 30 minutes, and shows how
+to turn off rotation:
 
 ```properties
 # run rotation every night at 02:00
@@ -436,150 +558,81 @@ konfigyr.crypto.tasks.keyset-rotation.cron=0 0 2 * * *
 # run destruction every 30 minutes
 konfigyr.crypto.tasks.keyset-destruction.interval=PT30M
 
-# disable rotation scheduling entirely (e.g. handled externally)
-konfigyr.crypto.tasks.keyset-rotation.enabled=false
+# turn off rotation scheduling, for example when an external job rotates the keysets
+#konfigyr.crypto.tasks.keyset-rotation.enabled=false
 ```
 
-## Implementing a custom crypto provider
+## Operate in production
 
-To integrate a new cryptography library or add a custom algorithm, you need three things:
+### Read keysets efficiently
 
-1. An `Algorithm` implementation that declares the algorithm's identity.
-2. A `Keyset` implementation that performs the actual cryptographic operations.
-3. A `KeysetFactory` implementation that creates `Keyset` instances from definitions and encrypted data.
+Every call to `store.read(...)` unwraps all the keys of the keyset with its KEK. With a KMS-backed KEK, that's at
+least one remote call to the KMS for each key in the keyset. The `KeysetCache` doesn't avoid this cost, because it
+caches the encrypted keyset, not the unwrapped one.
 
-Wire them as Spring beans and register your algorithms via `AlgorithmRegistrar`.
+Don't read a keyset for every request when your KEK is remote. Instead, keep the `Keyset` object in the component that
+uses it, and read it again on a fixed interval. Choose the interval with the following limits in mind:
 
-### Step 1: Define your algorithm
+- A `Keyset` object doesn't observe rotations or status changes. Until you read it again, it keeps encrypting or
+  signing with the key that was primary when you read it.
+- Keep the interval well below the destruction grace period of the keyset. Otherwise, a component might keep signing
+  with a key that the rest of the system has already retired and destroyed.
+- The interval is also the time that a component keeps using a compromised key, see the following section.
 
-```java
-public final class MyAlgorithm implements Algorithm {
+### Run on multiple instances
 
-    public static final MyAlgorithm MY_SIGNING = new MyAlgorithm(
-        "my-lib:EC_SIGNING", KeysetPurpose.SIGNING, KeyType.EC
-    );
+When several application instances share one repository, the time that an instance keeps using a key after its
+status changed, for example after it was compromised, is at most the sum of the following:
 
-    private final String name;
-    private final KeysetPurpose purpose;
-    private final KeyType type;
+- The interval at which the instance reads its `Keyset` objects again, see the preceding section.
+- The time that the `EncryptedKeyset` stays in the `KeysetCache` of the instance, if the instance has its own cache.
 
-    public MyAlgorithm(String name, KeysetPurpose purpose, KeyType type) {
-        this.name = name;
-        this.purpose = purpose;
-        this.type = type;
-    }
+By default, no cache is configured, so every read reaches the repository and only the read interval counts. If you
+declare a `KeysetCache` bean, for example a `SpringKeysetCache` that wraps a Spring `Cache`, use one of the following:
 
-    @Override public String name()           { return name; }
-    @Override public KeysetPurpose purpose() { return purpose; }
-    @Override public KeyType type()          { return type; }
-}
-```
+- A cache that all instances share, so that the eviction done by `compromise` and the other status changes reaches
+  every instance.
+- A local cache whose entries expire after a short time to live. A local cache without expiration keeps a compromised
+  key in use on the other instances until they restart.
 
-The `name` is persisted in the `EncryptedKeyset` row and used to look up the algorithm at load time. Choose a stable prefix unique to your library (e.g. `my-lib:`) and never rename an algorithm once key material has been created with it.
+## Build from source
 
-### Step 2: Implement KeysetFactory
+Konfigyr Crypto uses a Gradle build. The `./gradlew` wrapper in the root of the repository bootstraps the build on
+every platform.
 
-```java
-public class MyKeysetFactory implements KeysetFactory {
+Before you begin, install Git and JDK 21.
 
-    public static final String NAME = "my-lib";
+1. Clone the repository:
 
-    private final AlgorithmRegistry registry;
+   ```shell
+   git clone git@github.com:konfigyr/konfigyr-crypto.git
+   ```
 
-    public MyKeysetFactory(AlgorithmRegistry registry) {
-        this.registry = registry;
-    }
+2. Compile, check, and test all modules:
 
-    @Override
-    public boolean supports(KeysetDefinition definition) {
-        // the definition carries the Algorithm object directly
-        return definition.getAlgorithm() instanceof MyAlgorithm;
-    }
+   ```shell
+   ./gradlew build
+   ```
 
-    @Override
-    public boolean supports(EncryptedKeyset encryptedKeyset) {
-        // match by the factory name stored in the encrypted keyset
-        return NAME.equals(encryptedKeyset.getFactory());
-    }
+3. Optional: Publish the modules to your local Maven repository:
 
-    @Override
-    public Keyset create(KeyEncryptionKey kek, KeysetDefinition definition) {
-        MyAlgorithm algorithm = (MyAlgorithm) definition.getAlgorithm();
-        // generate key material using your library, return a Keyset implementation
-    }
+   ```shell
+   ./gradlew publishToMavenLocal
+   ```
 
-    @Override
-    public EncryptedKeyset create(Keyset keyset) throws IOException {
-        final List<EncryptedKey> encryptedKeys = new ArrayList<>();
-        for (Key key : keyset) {
-            final ByteArray serialized = // serialize this key to bytes using your library
-            final ByteArray wrapped = keyset.getKeyEncryptionKey().wrap(serialized);
-            encryptedKeys.add(EncryptedKey.from(key, WrappedKeyMaterial.of(wrapped)));
-        }
-        return EncryptedKeyset.from(keyset, encryptedKeys);
-    }
+To list the other available tasks, run `./gradlew tasks`.
 
-    @Override
-    public Keyset create(KeyEncryptionKey kek, EncryptedKeyset encryptedKeyset) throws IOException {
-        for (EncryptedKey key : encryptedKeyset) {
-            final MyAlgorithm algorithm = (MyAlgorithm) registry.resolve(key.getAlgorithm());
-            // unwrap key.getData() using kek, then deserialize into your Keyset
-        }
-        // return a Keyset implementation
-    }
-}
-```
+## Get support
 
-`supports(EncryptedKeyset)` identifies ownership by the factory name stored on the keyset. `supports(KeysetDefinition)` can use `instanceof` because the definition already holds the `Algorithm` object directly.
+Reach out to the maintainers in the [Gitter chat](https://gitter.im/konfigyr/konfigyr-crypt). Commercial support is
+also available.
 
-### Step 3: Register and wire as Spring beans
+## Contribute
 
-```java
-@Configuration
-class MyLibAutoConfiguration {
-
-    @Bean
-    AlgorithmRegistrar myAlgorithmRegistrar() {
-        return registry -> registry.register(MyAlgorithm.MY_SIGNING);
-    }
-
-    @Bean
-    MyKeysetFactory myKeysetFactory(AlgorithmRegistry registry) {
-        return new MyKeysetFactory(registry);
-    }
-}
-```
-
-The `KeysetStore` auto-configuration picks up all `KeysetFactory` beans automatically. Once these beans are declared, `store.create(kek, KeysetDefinition.of("my-key", MyAlgorithm.MY_SIGNING))` will delegate to your factory without any further wiring.
-
-## Building from Source
-Konfigyr Crypto uses a Gradle-based build system. In the instructions below, `./gradlew` is invoked from the root of the source tree and serves as a cross-platform, self-contained bootstrap mechanism for the build.
-
-### Prerequisites
-Git and JDK 21.
-
-### Check out sources
-```shell
-git clone git@github.com:konfigyr/konfigyr-crypto.git
-```
-
-### Publish to your local Maven repository
-```shell
-./gradlew publishToMavenLocal
-```
-
-### Compile and test
-```shell
-./gradlew build
-```
-
-Discover more commands with `./gradlew tasks`.
-
-## Getting Support
-Try reaching out to the maintainers in our [Gitter chat](https://gitter.im/konfigyr/konfigyr-crypt). Commercial support is available too.
-
-## Contributing
-[Pull requests](https://help.github.com/articles/creating-a-pull-request) are more than welcome; see the [contributor](CONTRIBUTING.md) guidelines for details.
+[Pull requests](https://help.github.com/articles/creating-a-pull-request) are welcome. For details, see the
+[contributor guidelines](CONTRIBUTING.md).
 
 ## License
-Konfigyr Crypto library is Open Source software released under the [Apache 2.0 license](https://www.apache.org/licenses/LICENSE-2.0.html).
+
+Konfigyr Crypto is open source software released under the
+[Apache 2.0 license](https://www.apache.org/licenses/LICENSE-2.0.html).

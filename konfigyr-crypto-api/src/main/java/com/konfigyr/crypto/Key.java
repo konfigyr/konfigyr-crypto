@@ -61,13 +61,15 @@ public interface Key {
 	/**
 	 * Checks if this key is in a state where it can be used for cryptographic operations.
 	 * <p>
-	 * This is the single rule that decides whether the key material may be used by any
+	 * This is the rule that decides whether the key material may be used by every
 	 * {@link KeysetOperation}. Certain operations additionally require the key to be
-	 * {@link #isPrimary() primary}. Keys handed out to third-party libraries, such as through a
-	 * Nimbus {@code JWKSource}, must also pass this check.
+	 * {@link #isPrimary() primary}. The only exception are {@link KeyStatus#RETIRED retired} keys, which
+	 * may still perform the passive {@link KeysetOperation#VERIFY} and {@link KeysetOperation#DECRYPT}
+	 * operations, but never sign or encrypt. Keys handed out to third-party libraries, such as through a
+	 * Nimbus {@code JWKSource}, must pass this check, or be retired and limited to these passive operations.
 	 * <p>
-	 * Currently only keys in the {@link KeyStatus#ENABLED} status are usable. Keys in any other
-	 * status must not take part in cryptographic operations:
+	 * Only keys in the {@link KeyStatus#ENABLED} status are fully usable. Keys in any other
+	 * status, apart from retired keys, must not take part in cryptographic operations:
 	 * <ul>
 	 * 		<li>{@link KeyStatus#INITIALIZING} and {@link KeyStatus#INITIALIZATION_FAILED}: key material
 	 * 		is not, or will never be, ready for use.</li>

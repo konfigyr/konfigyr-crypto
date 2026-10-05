@@ -37,14 +37,14 @@ public interface AlgorithmRegistry {
 	 * Registers the given {@link Algorithm} with this registry.
 	 * <p>
 	 * This method must only be called during application context initialization before
-	 * the registry is sealed. Registering the same {@link Algorithm} instance more than
-	 * once is idempotent. Registering a different instance under an already-used name
-	 * will throw {@link IllegalArgumentException}.
+	 * the registry is sealed. Each algorithm name can only be registered once, registering
+	 * any algorithm, including the same instance, under an already-used name will throw
+	 * {@link IllegalArgumentException}.
 	 *
 	 * @param algorithm algorithm to register, can't be {@literal null}
 	 * @throws IllegalStateException when the registry has been sealed after context startup
-	 * @throws IllegalArgumentException when a different algorithm with the same name is
-	 * already registered
+	 * @throws IllegalArgumentException when an algorithm with the same name is already
+	 * registered
 	 */
 	void register(Algorithm algorithm);
 

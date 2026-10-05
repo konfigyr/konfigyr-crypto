@@ -14,7 +14,7 @@ import java.util.Optional;
 
 /**
  * Interface that defines how management of cryptographic keys within an application should be performed
- * securely. It focuses on these four main aspects of key management:
+ * securely. It focuses on these three main aspects of key management:
  * <ul>
  * <li>Key selection</li>
  * <li>Key storage</li>
@@ -255,17 +255,18 @@ public interface KeysetStore {
 
 	/**
 	 * Transitions the specified {@link Key} within the named {@link Keyset} from
-	 * {@link KeyStatus#DISABLED} back to {@link KeyStatus#ENABLED}.
+	 * {@link KeyStatus#DISABLED} or {@link KeyStatus#RETIRED} back to {@link KeyStatus#ENABLED}.
 	 * <p>
-	 * Re-enabling a key makes it eligible to be promoted to primary for active cryptographic
-	 * operations on the next rotation.
+	 * Enabling a {@link KeyStatus#RETIRED retired} key restores it after it was demoted by a rotation and
+	 * cancels its scheduled destruction. The key remains a non-primary key, it may verify signatures and
+	 * decrypt data, but it does not sign or encrypt until it becomes the primary key again.
 	 *
 	 * @param keysetName the name of the keyset containing the key, can't be {@literal null}
 	 * @param keyId      the identifier of the key to enable, can't be {@literal null}
 	 * @throws CryptoException.KeysetNotFoundException when no keyset exists with the given name
 	 * @throws CryptoException.KeyNotFoundException when no key with the given identifier exists in the keyset
 	 * @throws CryptoException.InvalidKeyStatusTransitionException when the key is not currently
-	 *         in {@link KeyStatus#DISABLED} state
+	 *         in {@link KeyStatus#DISABLED} or {@link KeyStatus#RETIRED} state
 	 */
 	void enable(String keysetName, String keyId);
 
@@ -278,8 +279,8 @@ public interface KeysetStore {
 	 * The key must be in {@link KeyStatus#ENABLED} or {@link KeyStatus#DISABLED} state,
 	 * re-enabling a disabled key solely to mark it compromised is never required.
 	 * <p>
-	 * A key that is already in {@link KeyStatus#PENDING_DESTRUCTION} state can also be marked
-	 * as compromised, in which case it is transitioned to
+	 * A key that is already in {@link KeyStatus#RETIRED} or {@link KeyStatus#PENDING_DESTRUCTION} state
+	 * can also be marked as compromised, in which case it is transitioned to
 	 * {@link KeyStatus#COMPROMISED_PENDING_DESTRUCTION} and keeps its existing scheduled
 	 * destruction time.
 	 * <p>
@@ -305,7 +306,7 @@ public interface KeysetStore {
 	 * @throws CryptoException.KeysetNotFoundException when no keyset exists with the given name
 	 * @throws CryptoException.KeyNotFoundException when no key with the given identifier exists in the keyset
 	 * @throws CryptoException.InvalidKeyStatusTransitionException when the key is not currently
-	 *         in {@link KeyStatus#ENABLED}, {@link KeyStatus#DISABLED} or
+	 *         in {@link KeyStatus#ENABLED}, {@link KeyStatus#DISABLED}, {@link KeyStatus#RETIRED} or
 	 *         {@link KeyStatus#PENDING_DESTRUCTION} state
 	 * @throws CryptoException.KeysetCompromisedException when a keyset whose primary key is
 	 *         {@link KeyStatus#COMPROMISED} is subsequently accessed for cryptographic operations
@@ -318,9 +319,9 @@ public interface KeysetStore {
 	 * {@link Keyset#getDestructionGracePeriod() destruction grace period} to compute the
 	 * scheduled destruction time.
 	 * <p>
-	 * The key must be in {@link KeyStatus#DISABLED} or {@link KeyStatus#COMPROMISED} state, an
-	 * {@link KeyStatus#ENABLED} key must first be deactivated via {@link #disable(String, String)}
-	 * or {@link #compromise(String, String)}. A {@link KeyStatus#COMPROMISED} key is transitioned to
+	 * The key must be in {@link KeyStatus#DISABLED}, {@link KeyStatus#RETIRED} or {@link KeyStatus#COMPROMISED}
+	 * state, an {@link KeyStatus#ENABLED} key must first be deactivated via {@link #disable(String, String)}
+	 * or {@link #compromise(String, String)}, or retired by a rotation. A {@link KeyStatus#COMPROMISED} key is transitioned to
 	 * {@link KeyStatus#COMPROMISED_PENDING_DESTRUCTION} instead, so it keeps its compromised marker
 	 * during the grace period. Accepting {@link KeyStatus#COMPROMISED} directly satisfies
 	 * NIST SP 800-57 §8.2.9 — compromised key material must be destroyable without requiring
@@ -341,7 +342,7 @@ public interface KeysetStore {
 	 * @throws CryptoException.KeysetNotFoundException when no keyset exists with the given name
 	 * @throws CryptoException.KeyNotFoundException when no key with the given identifier exists in the keyset
 	 * @throws CryptoException.InvalidKeyStatusTransitionException when the key is not currently
-	 *         in {@link KeyStatus#DISABLED} or {@link KeyStatus#COMPROMISED} state
+	 *         in {@link KeyStatus#DISABLED}, {@link KeyStatus#RETIRED} or {@link KeyStatus#COMPROMISED} state
 	 */
 	void scheduleDestruction(String keysetName, String keyId);
 
@@ -349,9 +350,9 @@ public interface KeysetStore {
 	 * Transitions the specified {@link Key} within the named {@link Keyset} to
 	 * {@link KeyStatus#PENDING_DESTRUCTION}, with an explicit scheduled destruction time.
 	 * <p>
-	 * The key must be in {@link KeyStatus#DISABLED} or {@link KeyStatus#COMPROMISED} state, an
-	 * {@link KeyStatus#ENABLED} key must first be deactivated via {@link #disable(String, String)}
-	 * or {@link #compromise(String, String)}. A {@link KeyStatus#COMPROMISED} key is transitioned to
+	 * The key must be in {@link KeyStatus#DISABLED}, {@link KeyStatus#RETIRED} or {@link KeyStatus#COMPROMISED}
+	 * state, an {@link KeyStatus#ENABLED} key must first be deactivated via {@link #disable(String, String)}
+	 * or {@link #compromise(String, String)}, or retired by a rotation. A {@link KeyStatus#COMPROMISED} key is transitioned to
 	 * {@link KeyStatus#COMPROMISED_PENDING_DESTRUCTION} instead, so it keeps its compromised marker
 	 * during the grace period. Accepting {@link KeyStatus#COMPROMISED} directly satisfies
 	 * NIST SP 800-57 §8.2.9 — compromised key material must be destroyable without requiring
@@ -363,7 +364,7 @@ public interface KeysetStore {
 	 * @throws CryptoException.KeysetNotFoundException when no keyset exists with the given name
 	 * @throws CryptoException.KeyNotFoundException when no key with the given identifier exists in the keyset
 	 * @throws CryptoException.InvalidKeyStatusTransitionException when the key is not currently
-	 *         in {@link KeyStatus#DISABLED} or {@link KeyStatus#COMPROMISED} state
+	 *         in {@link KeyStatus#DISABLED}, {@link KeyStatus#RETIRED} or {@link KeyStatus#COMPROMISED} state
 	 */
 	void scheduleDestruction(String keysetName, String keyId, Instant destructionTime);
 
@@ -394,7 +395,7 @@ public interface KeysetStore {
 	 * The key row is retained for audit purposes but its {@link EncryptedKey#data() data} is
 	 * set to {@literal null} and can never be recovered. This is a soft-delete of the key material.
 	 * <p>
-	 * Requires the key to be in {@link KeyStatus#PENDING_DESTRUCTION} or
+	 * Requires the key to be in {@link KeyStatus#RETIRED}, {@link KeyStatus#PENDING_DESTRUCTION} or
 	 * {@link KeyStatus#COMPROMISED_PENDING_DESTRUCTION} state, keys in any other state must first
 	 * be scheduled for destruction via {@link #scheduleDestruction(String, String)}. To destroy
 	 * without going through the lifecycle, use the emergency {@link #remove(String)} instead.
@@ -404,7 +405,8 @@ public interface KeysetStore {
 	 * @throws CryptoException.KeysetNotFoundException when no keyset exists with the given name
 	 * @throws CryptoException.KeyNotFoundException when no key with the given identifier exists in the keyset
 	 * @throws CryptoException.InvalidKeyStatusTransitionException when the key is not currently
-	 *         in {@link KeyStatus#PENDING_DESTRUCTION} or {@link KeyStatus#COMPROMISED_PENDING_DESTRUCTION} state
+	 *         in {@link KeyStatus#RETIRED}, {@link KeyStatus#PENDING_DESTRUCTION} or
+	 *         {@link KeyStatus#COMPROMISED_PENDING_DESTRUCTION} state
 	 */
 	void destroy(String keysetName, String keyId);
 
