@@ -16,6 +16,12 @@ repositories {
 allprojects {
     group = "com.konfigyr"
 	version = "1.1.0"
+
+    pluginManager.withPlugin("checkstyle") {
+        configure<CheckstyleExtension> {
+            toolVersion = "14.3.0"
+        }
+    }
 }
 
 subprojects {
@@ -40,10 +46,6 @@ subprojects {
         toolchain {
             languageVersion = JavaLanguageVersion.of(21)
         }
-    }
-
-    checkstyle {
-        toolVersion = "14.3.0"
     }
 
 	dependencies {
