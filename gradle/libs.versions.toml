@@ -1,5 +1,5 @@
 [versions]
-spring-boot = "4.1.1"
+spring-boot = "4.1.2"
 
 [libraries]
 spring-dependencies = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "spring-boot" }
@@ -11,6 +11,6 @@ spring-starter-validation = { module = "org.springframework.boot:spring-boot-sta
 spring-starter-test = { module = "org.springframework.boot:spring-boot-starter-test", version.ref = "spring-boot" }
 spring-starter-jdbc-test = { module = "org.springframework.boot:spring-boot-starter-jdbc-test", version.ref = "spring-boot" }
 
-jose-jwt = { module = "com.nimbusds:nimbus-jose-jwt", version = "10.9.1" }
-tink = { module = "com.google.crypto.tink:tink", version = "1.23.0" }
+jose-jwt = { module = "com.nimbusds:nimbus-jose-jwt", version = "10.10" }
+tink = { module = "com.google.crypto.tink:tink", version = "1.24.0" }
 bcpkix = { module = "org.bouncycastle:bcpkix-jdk18on", version =  "1.86" }
